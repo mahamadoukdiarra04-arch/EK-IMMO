@@ -62,10 +62,10 @@ const searchToneByType = {
 };
 
 const assets = {
-  villa: "/assets/bamako-villa.png",
-  residence: "/assets/bamako-residence.png",
-  office: "/assets/bamako-office.png",
-  duplex: "/assets/bamako-duplex.png",
+  villa: "/assets/bamako-villa.jpg",
+  residence: "/assets/bamako-residence.jpg",
+  office: "/assets/bamako-office.jpg",
+  duplex: "/assets/bamako-duplex.jpg",
   agentA: "/assets/agent-rakib.jpg",
   agentB: "/assets/agent-megan.jpg",
   agentC: "/assets/agent-william.jpg",

@@ -756,6 +756,7 @@ a {
   pointer-events: none;
   transform: translate(-50%, 5px);
   transition: opacity 0.12s ease, transform 0.12s ease;
+  visibility: hidden;
   white-space: nowrap;
 }
 
@@ -767,6 +768,7 @@ a {
 .legend-list button:focus-visible .chart-flyout {
   opacity: 1;
   transform: translate(-50%, 0);
+  visibility: visible;
 }
 
 .dashboard-shell .bar-button {
@@ -2140,9 +2142,9 @@ td:last-child {
 
 .pipeline-columns {
   display: grid;
-  grid-template-columns: repeat(6, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 18px;
-  overflow-x: auto;
+  overflow-x: visible;
   padding-bottom: 8px;
 }
 
