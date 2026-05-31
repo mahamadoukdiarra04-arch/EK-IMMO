@@ -2847,8 +2847,16 @@ td:last-child {
 
   .nav-tabs {
     width: 100%;
-    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 2px 18px;
+    overflow: visible;
     padding-bottom: 0;
+  }
+
+  .nav-tabs button {
+    min-height: 36px;
+    font-size: 0.95rem;
   }
 
   .global-search {
