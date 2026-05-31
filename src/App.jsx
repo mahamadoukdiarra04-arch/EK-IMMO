@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Archive,
@@ -39,6 +39,7 @@ import {
   Settings,
   ShieldCheck,
   SlidersHorizontal,
+  Sparkles,
   Upload,
   UserCog,
   UserRound,
@@ -50,6 +51,166 @@ import {
 } from "lucide-react";
 
 const navItems = ["Dashboard", "Biens", "Clients", "Contrats", "Finance", "Rapports", "Plus"];
+
+const demoSteps = [
+  {
+    page: "Dashboard",
+    target: "demo-button",
+    title: "Bienvenue dans le mode DEMO",
+    body: "Ce parcours accompagne le client pas à pas. Il met en lumière chaque zone importante sans bloquer l'interface, et peut être arrêté à tout moment.",
+  },
+  {
+    page: "Dashboard",
+    target: "main-nav",
+    title: "Navigation métier complète",
+    body: "Les onglets donnent accès aux modules clés : biens, clients, contrats, finance, rapports et administration.",
+  },
+  {
+    page: "Dashboard",
+    target: "dashboard-kpis",
+    title: "Vue de pilotage",
+    body: "Le dashboard synthétise les volumes de biens, loyers, impayés, charges et reversements attendus pour EK IMMO.",
+  },
+  {
+    page: "Dashboard",
+    target: "dashboard-charts",
+    title: "Suivi visuel de l'activité",
+    body: "Les graphiques montrent les loyers attendus et le pipeline commercial pour comprendre rapidement l'état du portefeuille.",
+  },
+  {
+    page: "Dashboard",
+    target: "dashboard-alerts",
+    title: "Actions prioritaires",
+    body: "Les alertes orientent l'équipe vers les retards, visites, contrats à échéance, maintenances et documents manquants.",
+  },
+  {
+    page: "Biens",
+    propertyView: "list",
+    target: "property-filters",
+    title: "Recherche et filtres des biens",
+    body: "Le portefeuille peut être recherché par référence, quartier, statut, type, propriétaire, occupant ou critères avancés.",
+  },
+  {
+    page: "Biens",
+    propertyView: "list",
+    target: "property-grid",
+    title: "Cartes du portefeuille immobilier",
+    body: "Chaque bien présente son statut, son adresse à Bamako, son loyer, son propriétaire et un accès direct à la fiche.",
+  },
+  {
+    page: "Biens",
+    propertyView: "detail",
+    propertyTab: "Résumé",
+    target: "property-hero",
+    title: "Fiche bien détaillée",
+    body: "La fiche centralise le bien, son propriétaire, son occupant, son statut, ses conditions financières et ses documents.",
+  },
+  {
+    page: "Biens",
+    propertyView: "detail",
+    propertyTab: "Résumé",
+    target: "property-actions",
+    title: "Actions depuis la fiche",
+    body: "Depuis une fiche, EK IMMO peut modifier le bien, planifier une visite, créer un contrat, enregistrer un paiement ou générer des documents.",
+  },
+  {
+    page: "Biens",
+    propertyView: "detail",
+    propertyTab: "Documents",
+    target: "property-detail-tabs",
+    title: "Toutes les rubriques du bien",
+    body: "Les sous-onglets donnent accès au propriétaire, locataire, contrats, paiements, charges, documents et historique du bien.",
+  },
+  {
+    page: "Clients",
+    clientTab: "Propriétaires",
+    target: "client-tabs",
+    title: "Gestion clients structurée",
+    body: "Les clients sont séparés en propriétaires, locataires, prospects et visites pour clarifier les responsabilités de l'agence.",
+  },
+  {
+    page: "Clients",
+    clientTab: "Propriétaires",
+    target: "owner-workspace",
+    title: "Fiches propriétaires",
+    body: "La fiche propriétaire affiche les biens confiés, loyers encaissés, commissions, charges et soldes à reverser.",
+  },
+  {
+    page: "Clients",
+    clientTab: "Prospects",
+    target: "prospect-workspace",
+    title: "Pipeline prospects",
+    body: "Les prospects avancent de nouveau contact jusqu'à conclusion, avec besoins, budget, visites et prochaine action commerciale.",
+  },
+  {
+    page: "Clients",
+    clientTab: "Visites",
+    target: "visits-workspace",
+    title: "Suivi des visites",
+    body: "Les visites indiquent la date, le bien, l'agent, le retour client et l'action suivante pour convertir les dossiers.",
+  },
+  {
+    page: "Contrats",
+    contractTab: "Contrats",
+    target: "contracts-workspace",
+    title: "Contrats et échéances",
+    body: "La liste et la fiche contrat donnent une vue complète des baux, mandats, dates, documents signés et actions de renouvellement.",
+  },
+  {
+    page: "Contrats",
+    contractTab: "Génération de document",
+    target: "document-generation",
+    title: "Génération documentaire",
+    body: "Les modèles permettent de produire contrats, quittances, mandats et documents propriétaires avec aperçu avant export.",
+  },
+  {
+    page: "Finance",
+    financeTab: "Loyers",
+    target: "finance-tabs",
+    title: "Finance métier EK IMMO",
+    body: "Le module finance regroupe loyers, paiements, impayés, factures, commissions, charges, entretiens et reversements.",
+  },
+  {
+    page: "Finance",
+    financeTab: "Paiements",
+    target: "payment-workspace",
+    title: "Encaissement et reçus",
+    body: "La fiche paiement rapproche locataire, bien, propriétaire, montant payé, solde, mode de paiement et reçu généré.",
+  },
+  {
+    page: "Finance",
+    financeTab: "Charges",
+    target: "charges-workspace",
+    title: "Charges et justificatifs",
+    body: "Les charges sont affectées à un bien ou propriétaire, avec prise en charge, justificatif, validation et intégration aux situations.",
+  },
+  {
+    page: "Finance",
+    financeTab: "Reversements",
+    target: "reversals-workspace",
+    title: "Reversements propriétaires",
+    body: "EK IMMO suit les loyers encaissés, commissions, charges, montants déjà reversés et soldes nets à payer.",
+  },
+  {
+    page: "Rapports",
+    target: "reports-layout",
+    title: "Rapports et exports",
+    body: "Les rapports filtrables couvrent portefeuille, loyers, impayés, commissions, charges, visites, échéances et états propriétaires.",
+  },
+  {
+    page: "Plus",
+    adminTab: "Utilisateurs",
+    target: "admin-workspace",
+    title: "Administration",
+    body: "Le module Plus regroupe utilisateurs, rôles, droits, paramètres, modèles de documents et historique des opérations.",
+  },
+  {
+    page: "Dashboard",
+    target: "demo-button",
+    title: "Fin du parcours",
+    body: "La démonstration a parcouru les écrans et fonctionnalités principales. Le client peut maintenant naviguer librement ou relancer le mode DEMO.",
+  },
+];
 
 const searchToneByType = {
   Bien: "purple",
@@ -1073,6 +1234,9 @@ function App() {
   const [activePage, setActivePage] = useState("Dashboard");
   const [showLogin, setShowLogin] = useState(false);
   const [modal, setModal] = useState(null);
+  const [demoActive, setDemoActive] = useState(false);
+  const [demoIndex, setDemoIndex] = useState(0);
+  const [demoRect, setDemoRect] = useState(null);
   const [globalQuery, setGlobalQuery] = useState("");
   const [selectedProperty, setSelectedProperty] = useState(properties[0]);
   const [propertyView, setPropertyView] = useState("list");
@@ -1085,8 +1249,34 @@ function App() {
   const [financeTab, setFinanceTab] = useState("Loyers");
   const [adminTab, setAdminTab] = useState("Utilisateurs");
   const [reportType, setReportType] = useState(reports[0][0]);
+  const demoStep = demoSteps[demoIndex];
 
   const openAction = (label) => setModal(label);
+
+  const startDemo = () => {
+    setDemoIndex(0);
+    setDemoActive(true);
+  };
+
+  const stopDemo = () => {
+    setDemoActive(false);
+    setDemoRect(null);
+  };
+
+  const previousDemoStep = () => {
+    setDemoIndex((index) => Math.max(index - 1, 0));
+  };
+
+  const nextDemoStep = () => {
+    setDemoIndex((index) => {
+      if (index >= demoSteps.length - 1) {
+        setDemoActive(false);
+        setDemoRect(null);
+        return index;
+      }
+      return index + 1;
+    });
+  };
 
   const handleNav = (item) => {
     setActivePage(item);
@@ -1101,6 +1291,80 @@ function App() {
     setActivePage("Biens");
   };
 
+  useEffect(() => {
+    if (!demoActive) return;
+
+    const step = demoSteps[demoIndex];
+    setModal(null);
+    setGlobalQuery("");
+
+    if (step.page) setActivePage(step.page);
+    if (step.page === "Biens") {
+      setPropertyView(step.propertyView ?? "list");
+      setSelectedProperty(properties[1]);
+      setPropertyTab(step.propertyTab ?? "Résumé");
+    }
+    if (step.clientTab) setClientTab(step.clientTab);
+    if (step.contractTab) setContractTab(step.contractTab);
+    if (step.financeTab) setFinanceTab(step.financeTab);
+    if (step.adminTab) setAdminTab(step.adminTab);
+    if (step.reportType) setReportType(step.reportType);
+  }, [demoActive, demoIndex]);
+
+  useEffect(() => {
+    if (!demoActive) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") stopDemo();
+      if (event.key === "ArrowLeft") previousDemoStep();
+      if (event.key === "ArrowRight") nextDemoStep();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [demoActive]);
+
+  useEffect(() => {
+    if (!demoActive || !demoStep) return undefined;
+
+    const targetSelector = `[data-demo="${demoStep.target}"]`;
+
+    const measureTarget = () => {
+      const target = document.querySelector(targetSelector);
+      if (!target) {
+        setDemoRect(null);
+        return;
+      }
+      const rect = target.getBoundingClientRect();
+      setDemoRect({
+        top: Math.max(rect.top, 0),
+        left: Math.max(rect.left, 0),
+        width: rect.width,
+        height: rect.height,
+      });
+    };
+
+    const focusTarget = () => {
+      const target = document.querySelector(targetSelector);
+      if (!target) {
+        setDemoRect(null);
+        return;
+      }
+      target.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+      window.setTimeout(measureTarget, 260);
+    };
+
+    const timer = window.setTimeout(focusTarget, 120);
+    window.addEventListener("resize", measureTarget);
+    window.addEventListener("scroll", measureTarget, true);
+
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("resize", measureTarget);
+      window.removeEventListener("scroll", measureTarget, true);
+    };
+  }, [demoActive, demoStep, activePage, propertyView, propertyTab, clientTab, contractTab, financeTab, adminTab, reportType]);
+
   if (showLogin) {
     return <LoginScreen onLogin={() => setShowLogin(false)} />;
   }
@@ -1113,6 +1377,8 @@ function App() {
         onQueryChange={setGlobalQuery}
         onNav={handleNav}
         onProfile={() => setShowLogin(true)}
+        onStartDemo={startDemo}
+        demoActive={demoActive}
       />
 
       <main className={activePage === "Dashboard" ? "page-shell dashboard-shell" : "page-shell"}>
@@ -1152,6 +1418,17 @@ function App() {
       </main>
 
       <Footer />
+      {demoActive && demoStep && (
+        <DemoTour
+          step={demoStep}
+          index={demoIndex}
+          total={demoSteps.length}
+          rect={demoRect}
+          onNext={nextDemoStep}
+          onPrevious={previousDemoStep}
+          onStop={stopDemo}
+        />
+      )}
       {modal && (["Ajouter un bien", "Modifier le bien"].includes(modal) ? (
         <PropertyFormModal title={modal} onClose={() => setModal(null)} />
       ) : modal === "Créer contrat" ? (
@@ -1163,7 +1440,109 @@ function App() {
   );
 }
 
-function Topbar({ activePage, globalQuery, onQueryChange, onNav, onProfile }) {
+function getDemoCardPosition(rect) {
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const cardWidth = Math.min(410, viewportWidth - 28);
+  const cardHeight = 245;
+
+  if (!rect) {
+    return {
+      left: Math.max(14, viewportWidth - cardWidth - 22),
+      top: 88,
+      width: cardWidth,
+      arrowPath: "",
+    };
+  }
+
+  const centerX = rect.left + rect.width / 2;
+  const belowTop = rect.top + rect.height + 18;
+  const aboveTop = rect.top - cardHeight - 18;
+  const top = belowTop + cardHeight < viewportHeight ? belowTop : Math.max(16, aboveTop);
+  const left = Math.min(Math.max(14, centerX - cardWidth / 2), viewportWidth - cardWidth - 14);
+  const startX = left + cardWidth / 2;
+  const startY = top < rect.top ? top + cardHeight : top;
+  const endX = centerX;
+  const endY = rect.top + rect.height / 2;
+  const controlY = (startY + endY) / 2;
+
+  return {
+    left,
+    top,
+    width: cardWidth,
+    arrowPath: `M ${startX} ${startY} C ${startX} ${controlY}, ${endX} ${controlY}, ${endX} ${endY}`,
+  };
+}
+
+function DemoTour({ step, index, total, rect, onNext, onPrevious, onStop }) {
+  const position = getDemoCardPosition(rect);
+  const spotlightStyle = rect
+    ? {
+        left: `${Math.max(rect.left - 10, 8)}px`,
+        top: `${Math.max(rect.top - 10, 8)}px`,
+        width: `${rect.width + 20}px`,
+        height: `${rect.height + 20}px`,
+      }
+    : undefined;
+  const isLast = index === total - 1;
+
+  return (
+    <div className="demo-tour" role="dialog" aria-label="Mode démonstration EK IMMO">
+      {rect && <div className="demo-spotlight" style={spotlightStyle} />}
+      {rect && position.arrowPath && (
+        <svg className="demo-arrow" aria-hidden="true">
+          <defs>
+            <marker id="demo-arrow-tip" markerWidth="11" markerHeight="11" refX="8" refY="5.5" orient="auto">
+              <path d="M1 1 L9 5.5 L1 10 Z" />
+            </marker>
+          </defs>
+          <path d={position.arrowPath} />
+        </svg>
+      )}
+      <article
+        className="demo-card"
+        style={{ left: `${position.left}px`, top: `${position.top}px`, width: `${position.width}px` }}
+      >
+        <div className="demo-card-head">
+          <span>
+            <Sparkles size={16} />
+            Mode DEMO
+          </span>
+          <button onClick={onStop} aria-label="Arrêter le mode démo">
+            <XCircle size={18} />
+            Arrêter
+          </button>
+        </div>
+        <h2>{step.title}</h2>
+        <p>{step.body}</p>
+        <div className="demo-progress" aria-label={`Étape ${index + 1} sur ${total}`}>
+          <span>Étape {index + 1} / {total}</span>
+          <div>
+            <i style={{ width: `${((index + 1) / total) * 100}%` }} />
+          </div>
+        </div>
+        <div className="demo-controls">
+          <button className="button secondary compact" onClick={onPrevious} disabled={index === 0}>
+            <ArrowLeft size={15} /> Précédent
+          </button>
+          <button className="button primary compact" onClick={onNext}>
+            {isLast ? (
+              <>
+                <CheckCircle2 size={15} /> Terminer
+              </>
+            ) : (
+              <>
+                Suivant <ArrowRight size={15} />
+              </>
+            )}
+          </button>
+        </div>
+      </article>
+    </div>
+  );
+}
+
+function Topbar({ activePage, globalQuery, onQueryChange, onNav, onProfile, onStartDemo, demoActive }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const results = useMemo(() => getSearchResults(globalQuery), [globalQuery]);
   const hasQuery = globalQuery.trim().length > 0;
@@ -1179,7 +1558,7 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onProfile }) {
         Ek-immo
       </button>
 
-      <nav className="nav-tabs" aria-label="Navigation principale">
+      <nav className="nav-tabs" aria-label="Navigation principale" data-demo="main-nav">
         {navItems.map((item) => (
           <button className={activePage === item ? "active" : ""} key={item} onClick={() => onNav(item)}>
             {item}
@@ -1188,6 +1567,10 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onProfile }) {
       </nav>
 
       <div className="topbar-actions">
+        <button className={demoActive ? "demo-launch active" : "demo-launch"} onClick={onStartDemo} data-demo="demo-button">
+          <Sparkles size={18} />
+          <span>Mode DEMO</span>
+        </button>
         <div className="search-menu">
           <button
             className={searchOpen ? "icon-only active" : "icon-only"}
@@ -1279,13 +1662,13 @@ function DashboardPage({ onAction, onOpenProperty }) {
         }
       />
 
-      <section className="kpi-grid">
+      <section className="kpi-grid" data-demo="dashboard-kpis">
         {kpis.map((item) => (
           <StatCard item={item} key={item.label} />
         ))}
       </section>
 
-      <section className="two-grid">
+      <section className="two-grid" data-demo="dashboard-charts">
         <Panel title="Suivi des loyers">
           <RentBars period={kpiPeriod} />
         </Panel>
@@ -1310,7 +1693,7 @@ function DashboardPage({ onAction, onOpenProperty }) {
           </div>
         </Panel>
 
-        <Panel title="Alertes importantes" toolbar={<span className="counter">5</span>}>
+        <Panel title="Alertes importantes" toolbar={<span className="counter">5</span>} data-demo="dashboard-alerts">
           <div className="alert-list">
             {alerts.map(([title, text, action, tone]) => (
               <div className={`alert-row ${tone}`} key={title}>
@@ -1505,7 +1888,7 @@ function PropertiesPage({
         }
       />
 
-      <Panel className="filter-panel">
+      <Panel className="filter-panel" data-demo="property-filters">
         <div className="filters-row">
           <label className="field search-field">
             <Search size={19} />
@@ -1582,7 +1965,7 @@ function PropertiesPage({
       </Panel>
 
       {display === "cartes" ? (
-        <section className="property-grid">
+        <section className="property-grid" data-demo="property-grid">
           {filteredProperties.map((property) => (
             <PropertyCard property={property} onSelect={onSelect} key={property.code} />
           ))}
@@ -1614,7 +1997,7 @@ function PropertiesPage({
 
 function PropertyCard({ property, onSelect }) {
   return (
-    <article className="property-card">
+    <article className="property-card" data-demo="property-card">
       <button className="property-image-button" onClick={() => onSelect(property)}>
         <img src={property.image} alt={property.name} />
         <Badge label={property.status} />
@@ -1646,7 +2029,7 @@ function PropertyDetail({ property, activeTab, onTab, onBack, onAction }) {
 
   return (
     <>
-      <article className="property-hero-card">
+      <article className="property-hero-card" data-demo="property-hero">
         <div className="property-hero-image">
           <img src={property.image} alt={property.name} />
           <div>
@@ -1676,7 +2059,7 @@ function PropertyDetail({ property, activeTab, onTab, onBack, onAction }) {
             <small>Locataire : {property.tenant}</small>
           </div>
         </div>
-        <div className="action-row">
+        <div className="action-row" data-demo="property-actions">
           <Button variant="primary" onClick={() => onAction("Modifier le bien")}>
             <Pencil size={17} /> Modifier
           </Button>
@@ -1721,7 +2104,7 @@ function PropertyDetail({ property, activeTab, onTab, onBack, onAction }) {
         ]}
       />
 
-      <Tabs tabs={tabs} active={activeTab} onChange={onTab} />
+      <Tabs tabs={tabs} active={activeTab} onChange={onTab} demo="property-detail-tabs" />
       {activeTab === "Résumé" && <PropertySummary property={property} />}
       {activeTab === "Propriétaire" && <PropertyOwner property={property} />}
       {activeTab === "Locataire" && <PropertyTenant property={property} />}
@@ -2042,7 +2425,7 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, selectedTenant,
           </Button>
         }
       />
-      <Tabs tabs={tabs} active={activeTab} onChange={onTab} />
+      <Tabs tabs={tabs} active={activeTab} onChange={onTab} demo="client-tabs" />
       <Panel className="filter-panel">
         <div className="filters-row">
           <label className="field search-field mid">
@@ -2068,7 +2451,7 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, selectedTenant,
 
 function OwnersView({ selected, onSelect, onAction }) {
   return (
-    <section className="master-detail">
+    <section className="master-detail" data-demo="owner-workspace">
       <Panel title="Liste des propriétaires" toolbar={<span className="muted">124 propriétaires</span>}>
         <div className="owner-list">
           <div className="owner-list-header" aria-hidden="true">
@@ -2358,7 +2741,7 @@ function ProspectsView({ onAction }) {
   const [selected, setSelected] = useState(prospects[0]);
   const stages = ["Nouveau", "Contacté", "Visite prévue", "Intéressé", "Conclu", "Perdu"];
   return (
-    <section className="prospect-workspace">
+    <section className="prospect-workspace" data-demo="prospect-workspace">
       <div className="pipeline-columns">
         {stages.map((stage) => (
           <Panel title={stage} key={stage}>
@@ -2460,7 +2843,7 @@ function ProspectProfilePanel({ prospect, onAction }) {
 function VisitsView({ onAction }) {
   const [selected, setSelected] = useState(visits[0]);
   return (
-    <section className="master-detail">
+    <section className="master-detail" data-demo="visits-workspace">
       <Panel title="Visites programmées et réalisées" toolbar={<Button compact onClick={() => onAction("Planifier une visite")}><Plus size={16} /> Planifier</Button>}>
         <DataTable
           columns={["Date & heure", "Prospect / client", "Bien", "Agent", "Statut", "Retour client", "Prochaine action", "Action"]}
@@ -2536,7 +2919,7 @@ function ContractsPage({ activeTab, onTab, onAction }) {
           </Button>
         }
       />
-      <Tabs tabs={tabs} active={activeTab} onChange={onTab} />
+      <Tabs tabs={tabs} active={activeTab} onChange={onTab} demo="contract-tabs" />
       {activeTab === "Contrats" && <ContractsList onAction={onAction} />}
       {activeTab === "Génération de document" && <DocumentGeneration onAction={onAction} />}
       {activeTab === "Factures & reçus" && <InvoicesView onAction={onAction} />}
@@ -2564,7 +2947,7 @@ function ContractsList({ onAction }) {
           <Button><Filter size={17} /> Filtres</Button>
         </div>
       </Panel>
-      <section className="master-detail">
+      <section className="master-detail" data-demo="contracts-workspace">
         <Panel title="Liste des contrats">
           <DataTable
             columns={["Numéro contrat", "Type", "Bien", "Propriétaire", "Locataire / client", "Date début", "Date fin", "Statut", "Échéance", "Action"]}
@@ -2672,7 +3055,7 @@ function getContractDueLabel(contract) {
 function DocumentGeneration({ onAction }) {
   const [template, setTemplate] = useState(templates[0]);
   return (
-    <section className="document-layout">
+    <section className="document-layout" data-demo="document-generation">
       <Panel title="Modèles disponibles">
         <div className="template-list">
           {templates.map((item) => (
@@ -2814,7 +3197,7 @@ function FinancePage({ activeTab, onTab, onAction }) {
       <PageIntro
         title="Finance métier"
       />
-      <Tabs tabs={tabs} active={activeTab} onChange={onTab} />
+      <Tabs tabs={tabs} active={activeTab} onChange={onTab} demo="finance-tabs" />
       {activeTab === "Loyers" && <FinanceTable title="Loyers attendus par EK IMMO" rows={agencyRentRows.map((row) => [row.period, row.tenant, row.property, row.owner, row.expected, row.paid, row.balance, <Badge label={row.status} />, <RentActions row={row} onAction={onAction} />])} columns={["Période", "Locataire", "Bien", "Propriétaire", "Attendu", "Payé", "Solde", "Statut", "Actions"]} />}
       {activeTab === "Paiements" && <PaymentForm onAction={onAction} />}
       {activeTab === "Impayés" && <ArrearsView onAction={onAction} />}
@@ -2944,7 +3327,7 @@ function ChargesView({ onAction }) {
   const [selected, setSelected] = useState(charges[0]);
 
   return (
-    <section className="master-detail">
+    <section className="master-detail" data-demo="charges-workspace">
       <Panel title="Charges enregistrées">
         <DataTable
           columns={["Date", "Type", "Bien", "Propriétaire", "Montant", "Prise en charge", "Justificatif", "Statut", "Action"]}
@@ -3091,7 +3474,7 @@ function ReversalsView({ onAction }) {
   const [selected, setSelected] = useState(reversals[0]);
 
   return (
-    <section className="master-detail">
+    <section className="master-detail" data-demo="reversals-workspace">
       <Panel title="Reversements propriétaires">
         <DataTable
           columns={["Propriétaire", "Loyers encaissés", "Commissions", "Charges", "Déjà reversé", "Solde", "Statut", "Action"]}
@@ -3156,7 +3539,7 @@ function PaymentForm({ onAction }) {
   const paymentRows = paymentRecords.filter((payment) => isAgencyCollectedProperty(payment.property));
 
   return (
-    <section className="payment-layout">
+    <section className="payment-layout" data-demo="payment-workspace">
       <Panel title="Enregistrer un paiement">
         <div className="form-grid">
           <label>Locataire<select>{tenants.map((tenant) => <option key={tenant.id}>{tenant.name}</option>)}</select></label>
@@ -3285,7 +3668,7 @@ function ReportsPage({ selected, onSelect, onAction }) {
           </Button>
         }
       />
-      <section className="reports-layout">
+      <section className="reports-layout" data-demo="reports-layout">
         <div className="report-grid">
           {reports.map(([title, text, Icon]) => (
             <button className={selected === title ? "report-card active" : "report-card"} key={title} onClick={() => onSelect(title)}>
@@ -3353,7 +3736,7 @@ function AdminPage({ activeTab, onTab, onAction }) {
           </Button>
         }
       />
-      <Tabs tabs={tabs} active={activeTab} onChange={onTab} />
+      <Tabs tabs={tabs} active={activeTab} onChange={onTab} demo="admin-tabs" />
       {activeTab === "Utilisateurs" && <UsersAdmin onAction={onAction} />}
       {activeTab === "Rôles & permissions" && <RolesAdmin onAction={onAction} />}
       {activeTab === "Paramètres" && <SettingsAdmin />}
@@ -3367,7 +3750,7 @@ function UsersAdmin({ onAction }) {
   const [selected, setSelected] = useState(users[0]);
 
   return (
-    <section className="master-detail">
+    <section className="master-detail" data-demo="admin-workspace">
       <Panel title="Utilisateurs">
         <DataTable
           columns={["Nom", "Email", "Rôle", "Statut", "Dernière connexion", "Action"]}
@@ -3674,9 +4057,9 @@ function PipelineChart({ data }) {
   );
 }
 
-function Panel({ title, toolbar, children, className = "" }) {
+function Panel({ title, toolbar, children, className = "", ...props }) {
   return (
-    <section className={`panel ${className}`}>
+    <section className={`panel ${className}`} {...props}>
       {(title || toolbar) && (
         <div className="panel-heading">
           {title && <h2>{title}</h2>}
@@ -3701,9 +4084,9 @@ function PageIntro({ eyebrow, title, subtitle, actions }) {
   );
 }
 
-function Tabs({ tabs, active, onChange }) {
+function Tabs({ tabs, active, onChange, demo }) {
   return (
-    <div className="sub-tabs" role="tablist">
+    <div className="sub-tabs" role="tablist" data-demo={demo}>
       {tabs.map((tab) => (
         <button className={active === tab ? "active" : ""} onClick={() => onChange(tab)} key={tab}>
           {tab}
