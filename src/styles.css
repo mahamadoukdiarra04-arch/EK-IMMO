@@ -161,16 +161,22 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 9px;
-  min-height: 42px;
-  padding: 0 16px;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 12px;
   border: 1px solid var(--purple);
-  border-radius: 10px;
+  border-radius: 8px;
   color: #fff;
   background: linear-gradient(135deg, var(--purple), #0a487f 58%, var(--gold));
+  font-size: 0.88rem;
   font-weight: 850;
   white-space: nowrap;
-  box-shadow: 0 12px 24px rgba(5, 47, 95, 0.22);
+  box-shadow: 0 8px 18px rgba(5, 47, 95, 0.18);
+}
+
+.demo-launch svg {
+  width: 16px;
+  height: 16px;
 }
 
 .demo-launch.active {
@@ -3476,10 +3482,10 @@ td:last-child {
   }
 
   .demo-launch {
-    min-height: 38px;
-    padding: 0 10px;
-    border-radius: 9px;
-    font-size: 0.88rem;
+    min-height: 32px;
+    padding: 0 9px;
+    border-radius: 8px;
+    font-size: 0.8rem;
   }
 
   .search-menu {
