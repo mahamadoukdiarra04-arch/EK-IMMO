@@ -2998,6 +2998,193 @@ td:last-child {
   resize: vertical;
 }
 
+.charges-screen {
+  display: grid;
+  gap: 24px;
+}
+
+.charges-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.charges-header h2 {
+  margin: 0 0 6px;
+  font-size: 1.75rem;
+}
+
+.charges-header p {
+  max-width: 780px;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.charge-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.charge-stat-card {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px 12px;
+  min-height: 118px;
+  padding: 18px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.charge-stat-card > span {
+  display: grid;
+  grid-row: 1 / span 2;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  color: var(--purple);
+  background: var(--purple-soft);
+}
+
+.charge-stat-card small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 780;
+  line-height: 1.22;
+  text-transform: uppercase;
+}
+
+.charge-stat-card strong {
+  min-width: 0;
+  font-size: 1.3rem;
+  line-height: 1.12;
+  overflow-wrap: anywhere;
+}
+
+.charge-filter-panel {
+  margin-bottom: 0;
+}
+
+.charge-filters {
+  align-items: stretch;
+}
+
+.charge-filters select {
+  min-width: 210px;
+}
+
+.quick-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.quick-filter-row button {
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  color: var(--muted);
+  background: #fff;
+  font-weight: 780;
+}
+
+.quick-filter-row button.active,
+.quick-filter-row button:hover,
+.quick-filter-row button:focus-visible {
+  border-color: var(--purple);
+  color: #fff;
+  background: var(--purple);
+}
+
+.charges-detail-layout > .panel table {
+  min-width: 1320px;
+}
+
+.proof-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.proof-cell svg {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.proof-cell span,
+.proof-cell strong,
+.proof-cell small {
+  display: block;
+  min-width: 0;
+}
+
+.proof-cell strong,
+.proof-cell small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.proof-cell small {
+  color: var(--muted);
+}
+
+.charge-headline {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border-left: 4px solid var(--gold);
+  border-radius: 8px;
+  color: #302b40;
+  background: var(--gold-soft);
+  font-weight: 820;
+  line-height: 1.35;
+}
+
+.charge-profile > .badge {
+  margin: 0 0 18px;
+}
+
+.impact-card {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.impact-card strong {
+  font-size: 1.02rem;
+}
+
+.impact-card span {
+  color: var(--muted);
+  line-height: 1.38;
+}
+
+.empty-state {
+  margin: 18px 0 0;
+  padding: 18px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  color: var(--muted);
+  background: var(--surface-soft);
+  font-weight: 720;
+}
+
 .payment-layout {
   grid-template-columns: minmax(0, 1fr) 380px;
   align-items: start;
@@ -3502,6 +3689,10 @@ td:last-child {
     grid-template-columns: 1fr;
   }
 
+  .charge-stat-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .document-template-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3598,6 +3789,7 @@ td:last-child {
 
   .property-grid,
   .report-grid,
+  .charge-stat-grid,
   .advanced-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3631,6 +3823,7 @@ td:last-child {
   }
 
   .page-intro,
+  .charges-header,
   .property-hero-copy,
   .footer {
     display: flex;
@@ -3773,7 +3966,14 @@ td:last-child {
     flex: 1 1 0;
   }
 
+  .charge-filters select,
+  .charge-filters > .button {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
   .kpi-grid,
+  .charge-stat-grid,
   .property-grid,
   .report-grid,
   .info-grid,

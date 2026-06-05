@@ -808,36 +808,200 @@ const commissions = [
 
 const charges = [
   {
+    id: "CHG-2026-051",
     date: "17/05/2026",
     type: "Plomberie",
+    category: "Réparation",
+    description: "Réparation fuite salle d'eau et remplacement flexible",
     property: "Studio Badalabougou",
     owner: "Moussa Touré",
+    tenant: "Adama Sangaré",
     amount: "95 000 FCFA",
     payer: "Propriétaire",
-    proof: "Reçu artisan",
     status: "À valider",
+    proof: "Reçu artisan plomberie",
+    proofStatus: "Présent",
+    period: "Mai 2026",
+    agent: "Cheick Camara",
+    paymentMode: "Espèces",
+    paymentRef: "ESP-CHG-051",
+    linkedMaintenance: "Réparation fuite",
+    impact: "À déduire du reversement propriétaire",
+    ownerCollection: false,
+    createdBy: "Mariam Traoré",
+    modifiedBy: "Cheick Camara",
+    validatedBy: "À confirmer",
+    validationDate: "À valider",
+    history: ["Créée le 17/05/2026", "Justificatif ajouté le 18/05/2026", "En attente validation responsable"],
   },
   {
+    id: "CHG-2026-052",
     date: "20/05/2026",
     type: "Gardiennage",
+    category: "Gardiennage",
+    description: "Gardiennage mensuel résidence et contrôle accès",
     property: "Résidence ACI Baobab",
     owner: "Sira Coulibaly",
+    tenant: "Oumar Sidibé",
     amount: "180 000 FCFA",
     payer: "Agence",
     proof: "Facture mensuelle",
-    status: "Payé",
+    proofStatus: "Présent",
+    status: "Payée",
+    period: "Mai 2026",
+    agent: "Aïssata Diarra",
+    paymentMode: "Mobile money",
+    paymentRef: "OM-2026-052",
+    linkedMaintenance: "Non lié",
+    impact: "Supportée par l'agence",
+    ownerCollection: false,
+    createdBy: "Aïssata Diarra",
+    modifiedBy: "Aïssata Diarra",
+    validatedBy: "Admin EK IMMO",
+    validationDate: "21/05/2026",
+    history: ["Créée le 20/05/2026", "Validée le 21/05/2026", "Payée par agence"],
   },
   {
+    id: "CHG-2026-053",
     date: "25/05/2026",
     type: "Climatisation",
+    category: "Entretien",
+    description: "Recharge gaz et nettoyage split salon principal",
     property: "Villa Koulouba",
     owner: "Mamadou Keita",
+    tenant: "Awa Traoré",
     amount: "240 000 FCFA",
-    payer: "Refacturable au locataire",
+    payer: "Locataire / refacturable",
     proof: "Devis signé",
-    status: "En cours",
+    proofStatus: "Présent",
+    status: "Refacturable",
+    period: "Mai 2026",
+    agent: "Mariam Traoré",
+    paymentMode: "Virement",
+    paymentRef: "VIR-CHG-053",
+    linkedMaintenance: "Maintenance climatisation",
+    impact: "À refacturer au locataire",
+    ownerCollection: false,
+    createdBy: "Mariam Traoré",
+    modifiedBy: "Mariam Traoré",
+    validatedBy: "Admin EK IMMO",
+    validationDate: "26/05/2026",
+    history: ["Créée le 25/05/2026", "Rattachée au locataire", "À intégrer dans la prochaine facture"],
+  },
+  {
+    id: "CHG-2026-054",
+    date: "12/06/2026",
+    type: "Nettoyage",
+    category: "Nettoyage",
+    description: "Nettoyage complet avant nouvelle visite locative",
+    property: "Villa Sotuba Jardin",
+    owner: "Fatoumata Diallo",
+    tenant: "Libre",
+    amount: "25 000 FCFA",
+    payer: "Propriétaire",
+    proof: "Reçu prestataire",
+    proofStatus: "Manquant",
+    status: "À déduire",
+    period: "Juin 2026",
+    agent: "Cheick Camara",
+    paymentMode: "Espèces",
+    paymentRef: "À compléter",
+    linkedMaintenance: "Non lié",
+    impact: "À déduire du reversement propriétaire",
+    ownerCollection: false,
+    createdBy: "Cheick Camara",
+    modifiedBy: "Cheick Camara",
+    validatedBy: "À confirmer",
+    validationDate: "À valider",
+    history: ["Créée le 12/06/2026", "Justificatif demandé au prestataire"],
+  },
+  {
+    id: "CHG-2026-055",
+    date: "13/06/2026",
+    type: "Publicité",
+    category: "Publicité",
+    description: "Annonce sponsorisée et visuels pour appartement ACI",
+    property: "Résidence ACI Baobab",
+    owner: "Sira Coulibaly",
+    tenant: "Libre",
+    amount: "15 000 FCFA",
+    payer: "Agence",
+    proof: "Capture campagne",
+    proofStatus: "Présent",
+    status: "Validée",
+    period: "Juin 2026",
+    agent: "Aïssata Diarra",
+    paymentMode: "Carte agence",
+    paymentRef: "PUB-ACI-055",
+    linkedMaintenance: "Non lié",
+    impact: "Supportée par l'agence",
+    ownerCollection: false,
+    createdBy: "Aïssata Diarra",
+    modifiedBy: "Aïssata Diarra",
+    validatedBy: "Admin EK IMMO",
+    validationDate: "13/06/2026",
+    history: ["Créée le 13/06/2026", "Validée le 13/06/2026"],
+  },
+  {
+    id: "CHG-2026-056",
+    date: "14/06/2026",
+    type: "Peinture",
+    category: "Travaux",
+    description: "Retouches peinture bureaux avant remise en exploitation",
+    property: "Plateau Office Center",
+    owner: "Foncière Mandé",
+    tenant: "Cabinet Diarra & Associés",
+    amount: "420 000 FCFA",
+    payer: "Suivi interne uniquement",
+    proof: "Facture entrepreneur",
+    proofStatus: "Présent",
+    status: "Brouillon",
+    period: "Juin 2026",
+    agent: "Issa Maïga",
+    paymentMode: "Virement propriétaire",
+    paymentRef: "MANDÉ-TRV-056",
+    linkedMaintenance: "Peinture intérieure",
+    impact: "Suivi interne sans impact sur encaissement agence",
+    ownerCollection: true,
+    createdBy: "Issa Maïga",
+    modifiedBy: "Issa Maïga",
+    validatedBy: "Non validée",
+    validationDate: "À confirmer",
+    history: ["Créée le 14/06/2026", "Bien en encaissement propriétaire", "À confirmer avec Foncière Mandé"],
+  },
+  {
+    id: "CHG-2026-057",
+    date: "15/06/2026",
+    type: "Frais administratif",
+    category: "Frais administratif",
+    description: "Copies légalisées, dossier bail et déplacement mairie",
+    property: "Villa Koulouba",
+    owner: "Mamadou Keita",
+    tenant: "Awa Traoré",
+    amount: "35 000 FCFA",
+    payer: "Locataire / refacturable",
+    proof: "Reçu mairie",
+    proofStatus: "Présent",
+    status: "En attente",
+    period: "Juin 2026",
+    agent: "Mariam Traoré",
+    paymentMode: "Espèces",
+    paymentRef: "ADM-057",
+    linkedMaintenance: "Non lié",
+    impact: "À refacturer au locataire",
+    ownerCollection: false,
+    createdBy: "Mariam Traoré",
+    modifiedBy: "Mariam Traoré",
+    validatedBy: "À confirmer",
+    validationDate: "À valider",
+    history: ["Créée le 15/06/2026", "Attente validation avant facturation locataire"],
   },
 ];
+
+const chargeTypes = ["Nettoyage", "Réparation", "Plomberie", "Électricité", "Peinture", "Travaux", "Gardiennage", "Publicité", "Déplacement", "Frais administratif", "Entretien", "Autre"];
+const chargePayers = ["Agence", "Propriétaire", "Locataire / refacturable", "Suivi interne uniquement"];
+const chargeStatuses = ["Brouillon", "À valider", "Validée", "Payée", "À déduire", "Refacturable", "Déduite", "En attente", "Annulée"];
+const chargeQuickFilters = ["Toutes les charges", "Charges agence", "Charges propriétaire", "Refacturable locataire", "À valider", "Avec justificatif manquant"];
 
 const maintenances = [
   {
@@ -1478,7 +1642,9 @@ function App() {
           onStop={stopDemo}
         />
       )}
-      {modal && (["Ajouter un bien", "Modifier le bien"].includes(modal) ? (
+      {modal && (["Ajouter une charge"].includes(modal) || modal.startsWith("Modifier charge") ? (
+        <ChargeFormModal title={modal} onClose={() => setModal(null)} />
+      ) : ["Ajouter un bien", "Modifier le bien"].includes(modal) ? (
         <PropertyFormModal title={modal} onClose={() => setModal(null)} />
       ) : modal === "Créer contrat" ? (
         <ContractFormModal onClose={() => setModal(null)} />
@@ -3833,74 +3999,293 @@ function CommissionProfilePanel({ commission, onAction }) {
   );
 }
 
+function parseFCFA(value) {
+  return Number(String(value).replace(/[^\d]/g, "")) || 0;
+}
+
+function formatFCFA(value) {
+  return `${new Intl.NumberFormat("fr-FR").format(value)} FCFA`;
+}
+
+function chargeMatchesQuickFilter(charge, filter) {
+  if (filter === "Charges agence") return charge.payer === "Agence";
+  if (filter === "Charges propriétaire") return charge.payer === "Propriétaire";
+  if (filter === "Refacturable locataire") return charge.payer.includes("Locataire");
+  if (filter === "À valider") return ["À valider", "En attente", "Brouillon"].includes(charge.status);
+  if (filter === "Avec justificatif manquant") return charge.proofStatus === "Manquant";
+  return true;
+}
+
+function getChargeImpactLabel(charge) {
+  if (charge.payer === "Agence") return "Supportée par l'agence";
+  if (charge.payer === "Propriétaire") return "À déduire du propriétaire";
+  if (charge.payer.includes("Locataire")) return "À refacturer au locataire";
+  return "Suivi interne uniquement";
+}
+
 function ChargesView({ onAction }) {
   const [selected, setSelected] = useState(charges[0]);
+  const [query, setQuery] = useState("");
+  const [period, setPeriod] = useState("Toutes périodes");
+  const [type, setType] = useState("Tous types");
+  const [property, setProperty] = useState("Tous biens");
+  const [owner, setOwner] = useState("Tous propriétaires");
+  const [tenant, setTenant] = useState("Tous locataires");
+  const [payer, setPayer] = useState("Toutes prises en charge");
+  const [status, setStatus] = useState("Tous statuts");
+  const [amountRange, setAmountRange] = useState("Tous montants");
+  const [agent, setAgent] = useState("Tous agents");
+  const [quickFilter, setQuickFilter] = useState("Toutes les charges");
+
+  const filteredCharges = useMemo(() => {
+    const normalizedQuery = normalizeSearch(query);
+    return charges.filter((charge) => {
+      const amount = parseFCFA(charge.amount);
+      const matchesAmount =
+        amountRange === "Tous montants" ||
+        (amountRange === "Moins de 50 000 FCFA" && amount < 50000) ||
+        (amountRange === "50 000 à 200 000 FCFA" && amount >= 50000 && amount <= 200000) ||
+        (amountRange === "Plus de 200 000 FCFA" && amount > 200000);
+      const haystack = normalizeSearch(`${charge.date} ${charge.type} ${charge.description} ${charge.property} ${charge.owner} ${charge.tenant} ${charge.amount} ${charge.payer} ${charge.status} ${charge.agent}`);
+      return (
+        (!normalizedQuery || haystack.includes(normalizedQuery)) &&
+        (period === "Toutes périodes" || charge.period === period) &&
+        (type === "Tous types" || charge.type === type || charge.category === type) &&
+        (property === "Tous biens" || charge.property === property) &&
+        (owner === "Tous propriétaires" || charge.owner === owner) &&
+        (tenant === "Tous locataires" || charge.tenant === tenant) &&
+        (payer === "Toutes prises en charge" || charge.payer === payer) &&
+        (status === "Tous statuts" || charge.status === status) &&
+        matchesAmount &&
+        (agent === "Tous agents" || charge.agent === agent) &&
+        chargeMatchesQuickFilter(charge, quickFilter)
+      );
+    });
+  }, [agent, amountRange, owner, payer, period, property, query, quickFilter, status, tenant, type]);
+
+  useEffect(() => {
+    if (filteredCharges.length === 0) return;
+    if (!filteredCharges.some((charge) => charge.id === selected.id)) {
+      setSelected(filteredCharges[0]);
+    }
+  }, [filteredCharges, selected.id]);
+
+  const chargeStats = useMemo(() => {
+    const currentMonthCharges = charges.filter((charge) => charge.period === "Juin 2026");
+    return [
+      ["Total charges du mois", formatFCFA(currentMonthCharges.reduce((sum, charge) => sum + parseFCFA(charge.amount), 0)), ReceiptText],
+      ["Charges agence", formatFCFA(charges.filter((charge) => charge.payer === "Agence").reduce((sum, charge) => sum + parseFCFA(charge.amount), 0)), Banknote],
+      ["Charges propriétaires", formatFCFA(charges.filter((charge) => charge.payer === "Propriétaire").reduce((sum, charge) => sum + parseFCFA(charge.amount), 0)), HandCoins],
+      ["Charges refacturables", formatFCFA(charges.filter((charge) => charge.payer.includes("Locataire")).reduce((sum, charge) => sum + parseFCFA(charge.amount), 0)), WalletCards],
+      ["Charges à valider", String(charges.filter((charge) => ["À valider", "En attente", "Brouillon"].includes(charge.status)).length), AlertTriangle],
+    ];
+  }, []);
 
   return (
-    <section className="master-detail" data-demo="charges-workspace">
-      <Panel title="Charges enregistrées">
-        <DataTable
-          columns={["Date", "Type", "Bien", "Propriétaire", "Montant", "Prise en charge", "Justificatif", "Statut", "Action"]}
-          rows={charges.map((row) => [
-            row.date,
-            row.type,
-            row.property,
-            row.owner,
-            row.amount,
-            row.payer,
-            row.proof,
-            <Badge label={row.status} />,
-            <Button compact onClick={() => setSelected(row)}><Eye size={16} /> Fiche</Button>,
-          ])}
-        />
+    <section className="charges-screen" data-demo="charges-workspace">
+      <div className="charges-header">
+        <div>
+          <h2>Charges & dépenses</h2>
+          <p>Suivi opérationnel des sorties liées aux biens, entretiens, propriétaires, locataires et frais internes EK IMMO.</p>
+        </div>
+        <Button variant="primary" onClick={() => onAction("Ajouter une charge")}><Plus size={17} /> Ajouter une charge</Button>
+      </div>
+
+      <div className="charge-stat-grid">
+        {chargeStats.map(([label, value, Icon]) => (
+          <article className="charge-stat-card" key={label}>
+            <span><Icon size={19} /></span>
+            <small>{label}</small>
+            <strong>{value}</strong>
+          </article>
+        ))}
+      </div>
+
+      <Panel className="filter-panel charge-filter-panel">
+        <div className="filters-row charge-filters">
+          <label className="field search-field">
+            <Search size={19} />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Rechercher une charge, un bien, un agent..." />
+          </label>
+          <select value={period} onChange={(event) => setPeriod(event.target.value)}><option>Toutes périodes</option>{uniqueValues(charges.map((charge) => charge.period)).map((item) => <option key={item}>{item}</option>)}</select>
+          <select value={type} onChange={(event) => setType(event.target.value)}><option>Tous types</option>{chargeTypes.map((item) => <option key={item}>{item}</option>)}</select>
+          <select value={property} onChange={(event) => setProperty(event.target.value)}><option>Tous biens</option>{uniqueValues(charges.map((charge) => charge.property)).map((item) => <option key={item}>{item}</option>)}</select>
+          <select value={owner} onChange={(event) => setOwner(event.target.value)}><option>Tous propriétaires</option>{uniqueValues(charges.map((charge) => charge.owner)).map((item) => <option key={item}>{item}</option>)}</select>
+          <select value={tenant} onChange={(event) => setTenant(event.target.value)}><option>Tous locataires</option>{uniqueValues(charges.map((charge) => charge.tenant)).map((item) => <option key={item}>{item}</option>)}</select>
+          <select value={payer} onChange={(event) => setPayer(event.target.value)}><option>Toutes prises en charge</option>{chargePayers.map((item) => <option key={item}>{item}</option>)}</select>
+          <select value={status} onChange={(event) => setStatus(event.target.value)}><option>Tous statuts</option>{chargeStatuses.map((item) => <option key={item}>{item}</option>)}</select>
+          <select value={amountRange} onChange={(event) => setAmountRange(event.target.value)}><option>Tous montants</option><option>Moins de 50 000 FCFA</option><option>50 000 à 200 000 FCFA</option><option>Plus de 200 000 FCFA</option></select>
+          <select value={agent} onChange={(event) => setAgent(event.target.value)}><option>Tous agents</option>{uniqueValues(charges.map((charge) => charge.agent)).map((item) => <option key={item}>{item}</option>)}</select>
+          <Button onClick={() => {
+            setQuery("");
+            setPeriod("Toutes périodes");
+            setType("Tous types");
+            setProperty("Tous biens");
+            setOwner("Tous propriétaires");
+            setTenant("Tous locataires");
+            setPayer("Toutes prises en charge");
+            setStatus("Tous statuts");
+            setAmountRange("Tous montants");
+            setAgent("Tous agents");
+            setQuickFilter("Toutes les charges");
+          }}><RefreshCw size={17} /> Réinitialiser</Button>
+          <Button onClick={() => onAction("Exporter charges Excel")}><Download size={17} /> Excel</Button>
+          <Button onClick={() => onAction("Exporter état charges PDF")}><FileText size={17} /> PDF</Button>
+        </div>
+        <div className="quick-filter-row" role="group" aria-label="Filtres rapides charges">
+          {chargeQuickFilters.map((item) => (
+            <button className={quickFilter === item ? "active" : ""} key={item} onClick={() => setQuickFilter(item)}>
+              {item}
+            </button>
+          ))}
+        </div>
       </Panel>
-      <ChargeProfilePanel charge={selected} onAction={onAction} />
+
+      <section className="master-detail charges-detail-layout">
+        <Panel title="Tableau des charges" toolbar={<span className="filter-count">{filteredCharges.length}</span>}>
+          <DataTable
+            columns={["Date", "Type de charge", "Description courte", "Bien concerné", "Propriétaire", "Montant", "Prise en charge", "Statut", "Justificatif", "Action"]}
+            rows={filteredCharges.map((row) => [
+              row.date,
+              row.type,
+              row.description,
+              row.property,
+              row.owner,
+              row.amount,
+              getChargeImpactLabel(row),
+              <Badge label={row.status} />,
+              <ChargeProofCell charge={row} />,
+              <ChargeActions charge={row} selected={selected} onSelect={setSelected} onAction={onAction} />,
+            ])}
+          />
+          {filteredCharges.length === 0 && <p className="empty-state">Aucune charge ne correspond aux filtres sélectionnés.</p>}
+        </Panel>
+        <ChargeProfilePanel charge={selected} onAction={onAction} />
+      </section>
     </section>
+  );
+}
+
+function ChargeProofCell({ charge }) {
+  return (
+    <span className="proof-cell">
+      <FileText size={15} />
+      <span>
+        <strong>{charge.proof}</strong>
+        <small>{charge.proofStatus}</small>
+      </span>
+    </span>
+  );
+}
+
+function ChargeActions({ charge, selected, onSelect, onAction }) {
+  return (
+    <div className="table-actions">
+      <Button compact onClick={() => onSelect(charge)}><Eye size={15} /> Fiche</Button>
+      <Button compact onClick={() => onAction(`Modifier charge ${charge.id}`)}><Pencil size={15} /> Modifier</Button>
+      {selected.id === charge.id && <Badge label="Ouverte" />}
+    </div>
   );
 }
 
 function ChargeProfilePanel({ charge, onAction }) {
   const property = getPropertyByName(charge.property) ?? properties[0];
+  const grossRents = "300 000 FCFA";
+  const commission = "30 000 FCFA";
+  const ownerCharge = charge.payer === "Propriétaire" ? charge.amount : "0 FCFA";
+  const ownerNet = charge.payer === "Propriétaire" ? formatFCFA(300000 - 30000 - parseFCFA(charge.amount)) : "Non impacté";
 
   return (
-    <Panel title="Fiche charge" className="profile-panel">
-      <ProfileHeader person={{ name: charge.type, id: charge.property }} />
+    <Panel title="Fiche charge" className="profile-panel charge-profile">
+      <ProfileHeader person={{ name: charge.type, id: `${charge.amount} · ${charge.property}` }} />
+      <p className="charge-headline">
+        {charge.type} — {charge.amount} — {charge.property} — {getChargeImpactLabel(charge)}
+      </p>
       <DetailMetrics
         items={[
           ["Montant", charge.amount],
           ["Prise en charge", charge.payer],
           ["Statut", charge.status],
           ["Bien", charge.property],
+          ["Agent", charge.agent],
         ]}
       />
-      <div className="simple-list">
-        <p><span>Date</span><strong>{charge.date}</strong></p>
-        <p><span>Type de dépense</span><strong>{charge.type}</strong></p>
-        <p><span>Description</span><strong>Dépense liée à {charge.property}</strong></p>
-        <p><span>Bien concerné</span><strong>{charge.property}</strong></p>
-        <p><span>Adresse</span><strong>{property.address}</strong></p>
-        <p><span>Propriétaire</span><strong>{charge.owner}</strong></p>
-        <p><span>Locataire concerné</span><strong>{property.tenant}</strong></p>
-        <p><span>Montant</span><strong>{charge.amount}</strong></p>
-        <p><span>Prise en charge</span><strong>{charge.payer}</strong></p>
-        <p><span>Justificatif</span><strong>{charge.proof}</strong></p>
-        <p><span>Statut</span><Badge label={charge.status} /></p>
-        <p><span>Période</span><strong>Mai 2026</strong></p>
+
+      {charge.ownerCollection && <Badge label="Encaissement propriétaire" />}
+
+      <div className="profile-section">
+        <h3>Informations</h3>
+        <div className="simple-list">
+          <p><span>Date</span><strong>{charge.date}</strong></p>
+          <p><span>Type</span><strong>{charge.type}</strong></p>
+          <p><span>Description</span><strong>{charge.description}</strong></p>
+          <p><span>Montant</span><strong>{charge.amount}</strong></p>
+          <p><span>Statut</span><Badge label={charge.status} /></p>
+          <p><span>Agent responsable</span><strong>{charge.agent}</strong></p>
+        </div>
       </div>
-      <div className="timeline compact-timeline">
-        <p><strong>Observation</strong><span>Dépense rattachée au bien et visible dans la situation propriétaire.</span></p>
-        <p><strong>Contrôle</strong><span>Vérifier la prise en charge avant reversement propriétaire.</span></p>
+
+      <div className="profile-section">
+        <h3>Rattachement</h3>
+        <div className="simple-list">
+          <p><span>Bien</span><strong>{charge.property}</strong></p>
+          <p><span>Adresse</span><strong>{property.address}</strong></p>
+          <p><span>Propriétaire</span><strong>{charge.owner}</strong></p>
+          <p><span>Locataire</span><strong>{charge.tenant}</strong></p>
+          <p><span>Entretien lié</span><strong>{charge.linkedMaintenance}</strong></p>
+        </div>
       </div>
+
+      <div className="profile-section impact-section">
+        <h3>Traitement financier métier</h3>
+        <div className="impact-card">
+          <strong>{charge.impact}</strong>
+          <span>{charge.payer === "Agence" && "La dépense apparaît dans les charges agence et ne réduit pas le reversement propriétaire."}</span>
+          <span>{charge.payer === "Propriétaire" && "La dépense peut être déduite du montant net à reverser au propriétaire."}</span>
+          <span>{charge.payer.includes("Locataire") && "La dépense doit être réclamée au locataire via facture, relance ou situation locataire."}</span>
+          <span>{charge.payer === "Suivi interne uniquement" && "La dépense reste suivie par l'agence sans impact direct sur les encaissements EK IMMO."}</span>
+        </div>
+        {charge.payer === "Propriétaire" && (
+          <div className="simple-list">
+            <p><span>Loyers encaissés</span><strong>{grossRents}</strong></p>
+            <p><span>Commission agence</span><strong>{commission}</strong></p>
+            <p><span>Charge propriétaire</span><strong>{ownerCharge}</strong></p>
+            <p><span>Net à reverser</span><strong>{ownerNet}</strong></p>
+          </div>
+        )}
+      </div>
+
+      <div className="profile-section">
+        <h3>Paiement / justificatifs</h3>
+        <div className="simple-list">
+          <p><span>Mode de paiement</span><strong>{charge.paymentMode}</strong></p>
+          <p><span>Référence paiement</span><strong>{charge.paymentRef}</strong></p>
+          <p><span>Facture / reçu</span><strong>{charge.proof}</strong></p>
+          <p><span>Photo ou PDF</span><Badge label={charge.proofStatus === "Manquant" ? "Justificatif manquant" : "Justificatif joint"} /></p>
+          <p><span>Observation</span><strong>{charge.impact}</strong></p>
+        </div>
+      </div>
+
+      <div className="profile-section">
+        <h3>Historique</h3>
+        <div className="timeline compact-timeline">
+          <p><strong>Créée par</strong><span>{charge.createdBy}</span></p>
+          <p><strong>Modifiée par</strong><span>{charge.modifiedBy}</span></p>
+          <p><strong>Validée par</strong><span>{charge.validatedBy} · {charge.validationDate}</span></p>
+          {charge.history.map((item) => <p key={item}><strong>Suivi</strong><span>{item}</span></p>)}
+        </div>
+      </div>
+
       <div className="stack-actions">
-        <Button onClick={() => onAction("Créer charge")}><Plus size={17} /> Créer charge</Button>
-        <Button variant="primary" onClick={() => onAction(`Modifier charge ${charge.type}`)}><Pencil size={17} /> Modifier</Button>
-        <Button onClick={() => onAction(`Ajouter justificatif ${charge.type}`)}><Upload size={17} /> Justificatif</Button>
-        <Button onClick={() => onAction(`Affecter charge à un bien`)}><Home size={17} /> Affecter bien</Button>
-        <Button onClick={() => onAction(`Affecter charge à un propriétaire`)}><UserRound size={17} /> Affecter propriétaire</Button>
-        <Button onClick={() => onAction(`Lier charge à entretien`)}><Wrench size={17} /> Lier entretien</Button>
-        <Button onClick={() => onAction(`Valider charge ${charge.type}`)}><CheckCircle2 size={17} /> Valider</Button>
-        <Button onClick={() => onAction(`Intégrer charge situation propriétaire`)}><HandCoins size={17} /> Situation</Button>
-        <Button onClick={() => onAction(`Archiver charge ${charge.type}`)}><Archive size={17} /> Archiver</Button>
+        <Button variant="primary" onClick={() => onAction(`Modifier charge ${charge.id}`)}><Pencil size={17} /> Modifier</Button>
+        <Button onClick={() => onAction(`Valider charge ${charge.id}`)}><CheckCircle2 size={17} /> Valider</Button>
+        <Button onClick={() => onAction(`Annuler charge ${charge.id}`)}><XCircle size={17} /> Annuler</Button>
+        <Button onClick={() => onAction(`Ajouter justificatif ${charge.id}`)}><Upload size={17} /> Justificatif</Button>
+        <Button onClick={() => onAction(`Lier charge à un bien`)}><Home size={17} /> Lier bien</Button>
+        <Button onClick={() => onAction(`Lier charge à un propriétaire`)}><UserRound size={17} /> Propriétaire</Button>
+        <Button onClick={() => onAction(`Lier charge à un locataire`)}><UsersRound size={17} /> Locataire</Button>
+        <Button onClick={() => onAction(`Lier charge à entretien`)}><Wrench size={17} /> Entretien</Button>
+        <Button onClick={() => onAction(`Historique charge ${charge.id}`)}><History size={17} /> Historique</Button>
       </div>
     </Panel>
   );
@@ -4645,11 +5030,11 @@ function Badge({ label }) {
 }
 
 function statusTone(label) {
-  if (["Disponible", "Actif", "À jour", "Payé", "Conclu", "Archivé", "Imprimé", "Généré", "Réalisée"].includes(label)) return "success";
-  if (["Loué", "Visite prévue", "Prévue", "Contacté", "Réservé", "Planifié", "À payer", "À reverser"].includes(label)) return "purple";
-  if (["En travaux", "Partiel", "À valider", "À échéance", "En cours", "Reportée", "Relancé", "Client intéressé"].includes(label)) return "warning";
-  if (["Impayé", "En retard", "Litige", "Perdu", "Suspendu"].includes(label)) return "danger";
-  if (["Inactif", "Indisponible", "Vendu"].includes(label)) return "muted";
+  if (["Disponible", "Actif", "À jour", "Payé", "Payée", "Validée", "Déduite", "Conclu", "Archivé", "Imprimé", "Généré", "Réalisée", "Présent", "Justificatif joint"].includes(label)) return "success";
+  if (["Loué", "Visite prévue", "Prévue", "Contacté", "Réservé", "Planifié", "À payer", "À reverser", "Refacturable", "Ouverte"].includes(label)) return "purple";
+  if (["En travaux", "Partiel", "À valider", "À échéance", "À déduire", "En attente", "En cours", "Reportée", "Relancé", "Client intéressé", "Brouillon", "Encaissement propriétaire"].includes(label)) return "warning";
+  if (["Impayé", "En retard", "Litige", "Perdu", "Suspendu", "Annulée", "Justificatif manquant"].includes(label)) return "danger";
+  if (["Inactif", "Indisponible", "Vendu", "Manquant"].includes(label)) return "muted";
   return "default";
 }
 
@@ -4760,6 +5145,69 @@ function DocumentActions() {
       <Button compact><Eye size={15} /> Voir</Button>
       <Button compact><Download size={15} /> PDF</Button>
       <Button compact><Send size={15} /> Envoyer</Button>
+    </div>
+  );
+}
+
+function ChargeFormModal({ title, onClose }) {
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <h2>{title}</h2>
+        <p>Enregistrement d'une dépense métier sans transformer l'écran en comptabilité complète.</p>
+
+        <div className="form-section">
+          <h3>Informations générales</h3>
+          <div className="form-grid compact-form">
+            <label>Date de la dépense<input defaultValue="15/06/2026" /></label>
+            <label>Type de charge<select>{chargeTypes.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <label>Montant<input defaultValue="45 000" /></label>
+            <label>Devise<select><option>FCFA</option></select></label>
+            <label>Statut initial<select>{chargeStatuses.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <label className="full">Description<textarea defaultValue="Décrire la dépense, le contexte et la décision attendue." /></label>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Rattachement</h3>
+          <div className="form-grid compact-form">
+            <label>Bien concerné<select>{properties.map((property) => <option key={property.code}>{property.name}</option>)}</select></label>
+            <label>Propriétaire concerné<select>{owners.map((owner) => <option key={owner.id}>{owner.name}</option>)}</select></label>
+            <label>Locataire concerné<select><option>Non applicable</option>{tenants.map((tenant) => <option key={tenant.id}>{tenant.name}</option>)}</select></label>
+            <label>Entretien lié<select><option>Non lié</option>{maintenances.map((maintenance) => <option key={`${maintenance.property}-${maintenance.type}`}>{maintenance.type} · {maintenance.property}</option>)}</select></label>
+            <label>Agent responsable<select><option>Mariam Traoré</option><option>Aïssata Diarra</option><option>Issa Maïga</option><option>Cheick Camara</option></select></label>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Prise en charge</h3>
+          <div className="form-grid compact-form">
+            <label>Qui supporte la dépense ?<select>{chargePayers.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <label>Impact métier<select><option>Supportée par l'agence</option><option>À déduire du propriétaire</option><option>À refacturer au locataire</option><option>Suivi interne uniquement</option></select></label>
+            <label>Badge spécifique<select><option>Aucun</option><option>Encaissement propriétaire</option></select></label>
+            <label className="full">Observation métier<textarea defaultValue="Préciser si la charge doit réduire un reversement propriétaire ou être réclamée au locataire." /></label>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Paiement / justificatif</h3>
+          <div className="form-grid compact-form">
+            <label>Mode de paiement<select><option>Espèces</option><option>Mobile money</option><option>Virement</option><option>Carte agence</option><option>Virement propriétaire</option></select></label>
+            <label>Référence paiement<input defaultValue="CHG-2026-NEW" /></label>
+            <label>Justificatif<input type="file" /></label>
+            <label>Photo ou PDF<input type="file" multiple /></label>
+            <label className="full">Observation<textarea defaultValue="Ajouter une note utile au contrôle ou à la validation." /></label>
+          </div>
+        </div>
+
+        <div className="action-row compact-row">
+          <Button variant="primary" onClick={onClose}><CheckCircle2 size={17} /> Enregistrer</Button>
+          <Button onClick={onClose}><Archive size={17} /> Enregistrer brouillon</Button>
+          <Button onClick={onClose}><ShieldCheck size={17} /> Valider</Button>
+          <Button onClick={onClose}><XCircle size={17} /> Annuler</Button>
+        </div>
+      </section>
     </div>
   );
 }
