@@ -89,9 +89,13 @@ a {
   min-height: 44px;
   color: var(--purple);
   background: transparent;
-  font-size: 1.72rem;
-  font-weight: 900;
   white-space: nowrap;
+}
+
+.brand-link img {
+  display: block;
+  width: 156px;
+  height: auto;
 }
 
 .nav-tabs {
@@ -2261,6 +2265,24 @@ td:last-child {
   align-items: start;
 }
 
+.document-workspace {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.document-studio {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr) 280px;
+  gap: 20px;
+  align-items: start;
+}
+
+.document-studio.locked {
+  grid-template-columns: minmax(0, 1fr) 260px;
+}
+
 .template-list {
   display: grid;
   gap: 8px;
@@ -2270,18 +2292,66 @@ td:last-child {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 42px;
-  padding: 0 12px;
+  min-height: 58px;
+  padding: 10px 12px;
   border-radius: 8px;
   color: var(--text);
   background: transparent;
   text-align: left;
 }
 
+.template-list button span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.template-list button small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .template-list button.active {
   color: var(--purple);
   background: var(--purple-soft);
   font-weight: 800;
+}
+
+.document-list {
+  display: grid;
+  gap: 10px;
+}
+
+.document-list button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 76px;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  color: var(--text);
+  background: #fff;
+  text-align: left;
+}
+
+.document-list button.active {
+  border-color: var(--purple);
+  box-shadow: 0 0 0 3px rgba(101, 23, 232, 0.08);
+}
+
+.document-list button span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.document-list button small {
+  color: var(--muted);
 }
 
 .form-grid {
@@ -2348,6 +2418,409 @@ td:last-child {
   margin: 28px 0;
   border: 1px dashed var(--border);
   border-radius: 8px;
+}
+
+.fillable-document {
+  overflow: hidden;
+  padding: 18px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: #f6f4fb;
+}
+
+.fillable-document.digital {
+  overflow: visible;
+  background: linear-gradient(180deg, #f7f5fd 0%, #f1eff9 100%);
+}
+
+.digital-page {
+  display: grid;
+  gap: 22px;
+  width: min(100%, 920px);
+  margin: 0 auto;
+  padding: clamp(22px, 3vw, 38px);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  color: var(--text);
+  background: #fff;
+  box-shadow: 0 16px 34px rgba(17, 10, 35, 0.12);
+}
+
+.digital-doc-header {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr) 210px;
+  gap: 20px;
+  align-items: start;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.digital-doc-header img {
+  width: 170px;
+  max-width: 100%;
+  height: auto;
+}
+
+.company-info,
+.digital-doc-title,
+.digital-field,
+.digital-box,
+.digital-totals {
+  min-width: 0;
+}
+
+.company-info {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.83rem;
+  line-height: 1.35;
+}
+
+.company-info strong {
+  color: var(--text);
+  font-size: 1.05rem;
+}
+
+.digital-doc-title {
+  display: grid;
+  gap: 10px;
+  text-align: right;
+}
+
+.digital-doc-title > span {
+  color: var(--purple);
+  font-size: 0.78rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.digital-doc-title h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: clamp(1.45rem, 2.4vw, 2.05rem);
+  line-height: 1;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.receipt-page .digital-doc-title h3,
+.statement-page .digital-doc-title h3 {
+  font-size: clamp(1.2rem, 2vw, 1.72rem);
+}
+
+.digital-meta-grid,
+.digital-grid,
+.digital-footer-grid,
+.signature-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.digital-meta-grid {
+  grid-template-columns: 1fr;
+}
+
+.digital-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.digital-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.digital-footer-grid {
+  grid-template-columns: minmax(0, 1fr) 270px;
+  align-items: start;
+}
+
+.digital-box {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: #fbfaff;
+}
+
+.digital-box h4,
+.lease-clauses h4 {
+  margin: 0;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.digital-field {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.digital-field input,
+.digital-field textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 9px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  outline: 0;
+  color: var(--text);
+  background: #fff;
+  font: inherit;
+  font-size: 0.94rem;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.digital-field textarea {
+  min-height: 78px;
+  resize: vertical;
+}
+
+.digital-field input:focus,
+.digital-field textarea:focus {
+  border-color: var(--purple);
+  box-shadow: 0 0 0 3px rgba(101, 23, 232, 0.1);
+}
+
+.digital-field.hide-label {
+  gap: 0;
+}
+
+.digital-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+}
+
+.digital-table {
+  width: 100%;
+  min-width: 0;
+  border-collapse: collapse;
+  table-layout: fixed;
+  background: #fff;
+}
+
+.digital-table th {
+  padding: 12px 10px;
+  color: var(--text);
+  background: #efedf8;
+  font-size: 0.8rem;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.digital-table td {
+  padding: 8px;
+  border-top: 1px solid var(--border-soft);
+  vertical-align: top;
+}
+
+.digital-table .digital-field input,
+.digital-table .digital-field textarea {
+  border-color: transparent;
+  background: #fbfaff;
+}
+
+.digital-table .digital-field textarea {
+  min-height: 76px;
+}
+
+.invoice-table th:first-child {
+  width: 40%;
+}
+
+.statement-table th:first-child {
+  width: 30%;
+}
+
+.digital-totals {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: #f7f5fd;
+}
+
+.digital-totals .digital-field:last-child input {
+  color: var(--purple);
+  font-size: 1.08rem;
+}
+
+.payment-methods {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: #fbfaff;
+}
+
+.payment-methods > span {
+  margin-right: 6px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.digital-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: #fff;
+  font-weight: 800;
+}
+
+.digital-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--purple);
+}
+
+.signature-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.lease-page .signature-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.signature-grid div {
+  min-height: 84px;
+  padding: 14px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.signature-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.signature-grid strong {
+  display: block;
+  margin-top: 26px;
+}
+
+.lease-clauses {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: #fbfaff;
+}
+
+.lease-clauses p {
+  margin: 0;
+  color: #403b4d;
+  line-height: 1.5;
+}
+
+.document-source-card {
+  display: grid;
+  gap: 12px;
+}
+
+.document-source-card img {
+  width: 100%;
+  max-width: 220px;
+  height: auto;
+}
+
+.document-source-card p {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.document-source-card span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.document-source-card a,
+.document-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  color: var(--purple);
+  font-weight: 800;
+}
+
+.document-links {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.contract-sheet {
+  width: min(100%, 760px);
+  margin: 0 auto;
+  padding: 38px;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 16px 34px rgba(17, 10, 35, 0.14);
+}
+
+.contract-sheet img {
+  width: 180px;
+  height: auto;
+}
+
+.contract-sheet h3 {
+  margin: 30px 0 22px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.contract-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.contract-fields label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-weight: 750;
+}
+
+.contract-fields .full {
+  grid-column: 1 / -1;
+}
+
+.contract-fields input,
+.contract-fields textarea {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: 0;
+  background: var(--surface-soft);
+}
+
+.contract-fields textarea {
+  min-height: 120px;
+  resize: vertical;
 }
 
 .payment-layout {
@@ -2920,6 +3393,9 @@ td:last-child {
   .master-detail,
   .prospect-workspace,
   .document-layout,
+  .document-workspace,
+  .document-studio,
+  .document-studio.locked,
   .payment-layout,
   .reports-layout,
   .settings-grid {
@@ -2980,7 +3456,10 @@ td:last-child {
 
   .brand-link {
     min-height: 40px;
-    font-size: 1.55rem;
+  }
+
+  .brand-link img {
+    width: 128px;
   }
 
   .topbar-actions {
@@ -3108,8 +3587,42 @@ td:last-child {
   .summary-strip,
   .pipeline-layout,
   .form-grid,
+  .contract-fields,
   .advanced-filters {
     grid-template-columns: 1fr;
+  }
+
+  .fillable-document {
+    padding: 10px;
+  }
+
+  .digital-page {
+    padding: 18px;
+  }
+
+  .digital-doc-header,
+  .digital-grid.two,
+  .digital-grid.three,
+  .digital-footer-grid,
+  .signature-grid,
+  .lease-page .signature-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .digital-doc-title {
+    text-align: left;
+  }
+
+  .digital-doc-header img {
+    width: 150px;
+  }
+
+  .digital-table {
+    min-width: 620px;
+  }
+
+  .contract-sheet {
+    padding: 22px;
   }
 
   .role-toolbar {

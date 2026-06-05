@@ -232,6 +232,47 @@ const assets = {
   agentC: "/assets/agent-william.jpg",
 };
 
+const ekimmoAssets = {
+  logo: "/assets/ekimmo/ekimmo-logo.png",
+  facturePdf: "/assets/ekimmo/exemple-facture.pdf",
+  recuPdf: "/assets/ekimmo/exemple-recu-encaissement.pdf",
+  bordereauPdf: "/assets/ekimmo/bordereau-commissions-lafia-t1-2026.pdf",
+  bailDocx: "/assets/ekimmo/exemple-contrat-de-bail.docx",
+  factureDocx: "/assets/ekimmo/facture-lafia-t1-2026.docx",
+  courrierCommissionDocx: "/assets/ekimmo/courrier-commission-lafia-t1-2026.docx",
+};
+
+const documentTemplates = [
+  {
+    key: "facture",
+    label: "Facture",
+    source: "EXEMPLE_FACTURE.pdf",
+    file: ekimmoAssets.facturePdf,
+    format: "PDF",
+  },
+  {
+    key: "recu",
+    label: "Reçu d'encaissement",
+    source: "Exemple Reçu d'encaissement.pdf",
+    file: ekimmoAssets.recuPdf,
+    format: "PDF",
+  },
+  {
+    key: "bordereau",
+    label: "Bordereau commissions",
+    source: "BORDEREAU COMMISSIONS LAFIA T1 2026.pdf",
+    file: ekimmoAssets.bordereauPdf,
+    format: "PDF",
+  },
+  {
+    key: "bail",
+    label: "Contrat de bail",
+    source: "EXEMPLE_CONTRAT_DE_BAIL.docx",
+    file: ekimmoAssets.bailDocx,
+    format: "DOCX",
+  },
+];
+
 const properties = [
   {
     code: "EKM-VIL-042",
@@ -1555,7 +1596,7 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onProfile, onSt
   return (
     <header className="topbar">
       <button className="brand-link" onClick={() => onNav("Dashboard")} aria-label="Retour au dashboard">
-        Ek-immo
+        <img src={ekimmoAssets.logo} alt="EK IMMO" />
       </button>
 
       <nav className="nav-tabs" aria-label="Navigation principale" data-demo="main-nav">
@@ -3053,86 +3094,505 @@ function getContractDueLabel(contract) {
 }
 
 function DocumentGeneration({ onAction }) {
-  const [template, setTemplate] = useState(templates[0]);
   return (
-    <section className="document-layout" data-demo="document-generation">
-      <Panel title="Modèles disponibles">
-        <div className="template-list">
-          {templates.map((item) => (
-            <button className={template === item ? "active" : ""} key={item} onClick={() => setTemplate(item)}>
-              <FileText size={17} /> {item}
-            </button>
-          ))}
-        </div>
-      </Panel>
-      <Panel title="Formulaire de génération">
-        <div className="form-grid">
-          <label>Modèle<select value={template} onChange={(event) => setTemplate(event.target.value)}>{templates.map((item) => <option key={item}>{item}</option>)}</select></label>
-          <label>Bien<select>{properties.map((item) => <option key={item.code}>{item.name}</option>)}</select></label>
-          <label>Propriétaire<select>{owners.map((item) => <option key={item.id}>{item.name}</option>)}</select></label>
-          <label>Locataire / client<select>{tenants.map((item) => <option key={item.id}>{item.name}</option>)}</select></label>
-          <label>Période<input defaultValue="Mai 2026" /></label>
-          <label>Montant<input defaultValue="2 750 000 FCFA" /></label>
-          <label className="full">Conditions particulières<textarea defaultValue="Paiement au plus tard le 05 de chaque mois. Caution conservée selon l'état des lieux." /></label>
-          <label className="full">Observations<textarea defaultValue="Document généré pour archivage dans la fiche liée." /></label>
-        </div>
-        <div className="action-row compact-row">
-          <Button variant="primary" onClick={() => onAction("Prévisualiser document")}><Eye size={17} /> Prévisualiser</Button>
-          <Button onClick={() => onAction("Exporter PDF")}><Download size={17} /> Exporter PDF</Button>
-          <Button onClick={() => onAction("Imprimer")}><Printer size={17} /> Imprimer</Button>
-          <Button onClick={() => onAction("Archiver")}><Archive size={17} /> Archiver</Button>
-          <Button onClick={() => onAction("Annuler document")}><XCircle size={17} /> Annuler</Button>
-        </div>
-      </Panel>
-      <Panel title="Aperçu du document">
-        <div className="document-preview">
-          <strong>EK IMMO</strong>
-          <h3>{template}</h3>
-          <p>Référence : DOC-2026-089</p>
-          <p>Bien : Villa Koulouba, Koulouba, Bamako</p>
-          <p>Propriétaire : Mamadou Keita</p>
-          <p>Montant : 2 750 000 FCFA</p>
-          <div />
-        </div>
-      </Panel>
-    </section>
+    <DocumentStudio
+      initialTemplate="facture"
+      title="Atelier de génération documentaire"
+      onAction={onAction}
+      data={{
+        invoice: invoices[0],
+        payment: paymentRecords[0],
+        commission: commissions[0],
+        property: properties[0],
+        owner: owners[0],
+        tenant: tenants[0],
+      }}
+    />
   );
 }
 
 function InvoicesView({ onAction }) {
   const [selected, setSelected] = useState(invoices[0]);
+  const selectedPayment = paymentRecords.find((item) => item.property === selected.property || item.receipt === selected.number) ?? paymentRecords[0];
+  const selectedProperty = properties.find((item) => item.name === selected.property) ?? properties[0];
+  const selectedOwner = owners.find((item) => item.name === selectedProperty.owner) ?? owners[0];
+  const selectedTenant = tenants.find((item) => item.name === selected.client) ?? tenants[0];
+  const templateKey = selected.type === "Reçu" ? "recu" : "facture";
 
   return (
-    <section className="master-detail">
+    <section className="document-workspace">
       <Panel
-        title="Factures, reçus et quittances"
-        toolbar={
-          <div className="table-actions">
-            <Button compact onClick={() => onAction("Créer facture")}><Plus size={16} /> Facture</Button>
-            <Button compact onClick={() => onAction("Générer reçu")}><ReceiptText size={16} /> Reçu</Button>
-          </div>
-        }
+        title="Documents émis"
+        toolbar={<span className="muted">{invoices.length} modèles</span>}
       >
-        <DataTable
-          columns={["Numéro", "Type", "Client / locataire", "Bien", "Montant", "Date", "Statut", "Action"]}
-          rows={invoices.map((invoice) => [
-            invoice.number,
-            invoice.type,
-            invoice.client,
-            invoice.property,
-            invoice.amount,
-            invoice.date,
-            <Badge label={invoice.status} />,
-            <div className="table-actions">
-              <Button compact onClick={() => setSelected(invoice)}><Eye size={15} /> Fiche</Button>
-              <InvoiceActions invoice={invoice} onAction={onAction} />
-            </div>,
-          ])}
-        />
+        <div className="document-list">
+          {invoices.map((invoice) => (
+            <button className={selected.number === invoice.number ? "active" : ""} key={invoice.number} onClick={() => setSelected(invoice)}>
+              <span>
+                <strong>{invoice.number}</strong>
+                <small>{invoice.type} · {invoice.client}</small>
+              </span>
+              <Badge label={invoice.status} />
+            </button>
+          ))}
+        </div>
       </Panel>
-      <InvoiceProfilePanel invoice={selected} onAction={onAction} />
+      <DocumentStudio
+        initialTemplate={templateKey}
+        lockedTemplate={templateKey}
+        title="Document à remplir"
+        onAction={onAction}
+        data={{
+          invoice: selected,
+          payment: selectedPayment,
+          property: selectedProperty,
+          owner: selectedOwner,
+          tenant: selectedTenant,
+          commission: commissions[0],
+        }}
+      />
     </section>
   );
+}
+
+function DocumentStudio({ initialTemplate = "facture", lockedTemplate, title, data, onAction }) {
+  const [templateKey, setTemplateKey] = useState(lockedTemplate ?? initialTemplate);
+
+  useEffect(() => {
+    setTemplateKey(lockedTemplate ?? initialTemplate);
+  }, [initialTemplate, lockedTemplate]);
+
+  const template = documentTemplates.find((item) => item.key === templateKey) ?? documentTemplates[0];
+  const relatedFiles = getRelatedDocumentFiles(template.key);
+
+  return (
+    <section className={lockedTemplate ? "document-studio locked" : "document-studio"} data-demo="document-generation">
+      {!lockedTemplate && (
+        <Panel title="Modèles EK IMMO">
+          <div className="template-list">
+            {documentTemplates.map((item) => (
+              <button className={template.key === item.key ? "active" : ""} key={item.key} onClick={() => setTemplateKey(item.key)}>
+                <FileText size={17} />
+                <span>
+                  <strong>{item.label}</strong>
+                  <small>{item.source}</small>
+                </span>
+              </button>
+            ))}
+          </div>
+        </Panel>
+      )}
+
+      <Panel title={title}>
+        <FillableDocument template={template} data={data} />
+        <div className="action-row compact-row">
+          <Button variant="primary" onClick={() => onAction(`Générer ${template.label}`)}><Download size={17} /> Générer PDF</Button>
+          <Button onClick={() => onAction(`Imprimer ${template.label}`)}><Printer size={17} /> Imprimer</Button>
+          <Button onClick={() => onAction(`Archiver ${template.label}`)}><Archive size={17} /> Archiver</Button>
+        </div>
+      </Panel>
+
+      <Panel title="Sources">
+        <div className="document-source-card">
+          <img src={ekimmoAssets.logo} alt="EK IMMO" />
+          <p><span>Modèle actif</span><strong>{template.label}</strong></p>
+          <p><span>Format</span><strong>{template.format}</strong></p>
+          <p><span>Fichier</span><strong>{template.source}</strong></p>
+          <a href={template.file} target="_blank" rel="noreferrer">
+            <Eye size={16} /> Ouvrir le modèle original
+          </a>
+        </div>
+        {relatedFiles.length > 0 && (
+          <div className="document-links">
+            {relatedFiles.map((file) => (
+              <a href={file.href} target="_blank" rel="noreferrer" key={file.href}>
+                <Download size={15} /> {file.label}
+              </a>
+            ))}
+          </div>
+        )}
+      </Panel>
+    </section>
+  );
+}
+
+function FillableDocument({ template, data }) {
+  const defaults = useMemo(() => getDocumentDefaults(template.key, data), [template.key, data]);
+  const [values, setValues] = useState(defaults);
+
+  useEffect(() => {
+    setValues(defaults);
+  }, [defaults]);
+
+  const updateField = (name, value) => {
+    setValues((current) => ({ ...current, [name]: value }));
+  };
+
+  if (template.key === "bail") {
+    return <FillableBail values={values} onChange={updateField} />;
+  }
+
+  return (
+    <div className={`fillable-document digital ${template.key}`}>
+      {template.key === "recu" && <DigitalReceipt values={values} onChange={updateField} />}
+      {template.key === "bordereau" && <DigitalCommissionStatement values={values} onChange={updateField} />}
+      {template.key === "facture" && <DigitalInvoice values={values} onChange={updateField} />}
+    </div>
+  );
+}
+
+function DigitalDocumentHeader({ title, subtitle, children }) {
+  return (
+    <header className="digital-doc-header">
+      <img src={ekimmoAssets.logo} alt="EK IMMO" />
+      <div className="company-info">
+        <strong>EK IMMO SAS</strong>
+        <span>Société immobilière</span>
+        <span>Niaréla, face mairie - Bamako, Mali</span>
+        <span>Contact : +223 72 77 71 77 / +223 44 44 13 31</span>
+        <span>RCCM : MA BKO 2022 B-2224</span>
+      </div>
+      <div className="digital-doc-title">
+        <span>{subtitle}</span>
+        <h3>{title}</h3>
+        {children}
+      </div>
+    </header>
+  );
+}
+
+function DigitalField({ name, label, values, onChange, multiline = false, className = "", hideLabel = false }) {
+  const fieldClass = `digital-field ${className} ${hideLabel ? "hide-label" : ""}`.trim();
+
+  return (
+    <label className={fieldClass}>
+      <span className={hideLabel ? "sr-only" : ""}>{label}</span>
+      {multiline ? (
+        <textarea value={values[name] ?? ""} onChange={(event) => onChange(name, event.target.value)} />
+      ) : (
+        <input value={values[name] ?? ""} onChange={(event) => onChange(name, event.target.value)} />
+      )}
+    </label>
+  );
+}
+
+function DigitalCheck({ name, label, values, onChange }) {
+  return (
+    <label className="digital-check">
+      <input type="checkbox" checked={Boolean(values[name])} onChange={(event) => onChange(name, event.target.checked)} />
+      <span>{label}</span>
+    </label>
+  );
+}
+
+function DigitalInvoice({ values, onChange }) {
+  return (
+    <div className="digital-page invoice-page">
+      <DigitalDocumentHeader title="Facture" subtitle="Document digital">
+        <div className="digital-meta-grid">
+          <DigitalField name="numero" label="Numéro" values={values} onChange={onChange} />
+          <DigitalField name="date" label="Date" values={values} onChange={onChange} />
+        </div>
+      </DigitalDocumentHeader>
+
+      <section className="digital-grid two">
+        <div className="digital-box">
+          <h4>Facturé à</h4>
+          <DigitalField name="client" label="Client / adresse" values={values} onChange={onChange} multiline hideLabel />
+        </div>
+        <div className="digital-box">
+          <h4>Bien concerné</h4>
+          <DigitalField name="bien" label="Bien" values={values} onChange={onChange} />
+          <DigitalField name="adresse" label="Adresse" values={values} onChange={onChange} />
+        </div>
+      </section>
+
+      <div className="digital-table-wrap">
+        <table className="digital-table invoice-table">
+          <thead>
+            <tr>
+              <th>Désignation</th>
+              <th>Loyer mensuel</th>
+              <th>Qté</th>
+              <th>Montant FCFA</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><DigitalField name="designation" label="Désignation" values={values} onChange={onChange} multiline hideLabel /></td>
+              <td><DigitalField name="loyer" label="Loyer mensuel" values={values} onChange={onChange} hideLabel /></td>
+              <td><DigitalField name="quantite" label="Quantité" values={values} onChange={onChange} hideLabel /></td>
+              <td><DigitalField name="montant" label="Montant" values={values} onChange={onChange} hideLabel /></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <section className="digital-footer-grid">
+        <div className="digital-box">
+          <h4>Montant arrêté</h4>
+          <DigitalField name="montantLettres" label="Montant en lettres" values={values} onChange={onChange} multiline hideLabel />
+        </div>
+        <div className="digital-totals">
+          <DigitalField name="totalHt" label="Total HT" values={values} onChange={onChange} />
+          <DigitalField name="tva" label="TVA" values={values} onChange={onChange} />
+          <DigitalField name="totalTtc" label="Total TTC" values={values} onChange={onChange} />
+        </div>
+      </section>
+
+      <section className="signature-grid">
+        <div><span>EK IMMO</span><strong>Cachet & signature</strong></div>
+        <div><span>Client</span><strong>Bon pour accord</strong></div>
+      </section>
+    </div>
+  );
+}
+
+function DigitalReceipt({ values, onChange }) {
+  return (
+    <div className="digital-page receipt-page">
+      <DigitalDocumentHeader title="Reçu d'encaissement" subtitle="Encaissement loyer">
+        <div className="digital-meta-grid">
+          <DigitalField name="numero" label="N° reçu" values={values} onChange={onChange} />
+          <DigitalField name="date" label="Date" values={values} onChange={onChange} />
+        </div>
+      </DigitalDocumentHeader>
+
+      <section className="digital-grid three">
+        <DigitalField name="nom" label="Nom et prénom" values={values} onChange={onChange} />
+        <DigitalField name="structure" label="Fonction / structure" values={values} onChange={onChange} />
+        <DigitalField name="telephone" label="Téléphone" values={values} onChange={onChange} />
+      </section>
+
+      <section className="digital-grid two">
+        <DigitalField name="montantChiffres" label="Montant en chiffres" values={values} onChange={onChange} />
+        <DigitalField name="montantLettres" label="Montant en lettres" values={values} onChange={onChange} />
+      </section>
+
+      <section className="payment-methods">
+        <span>Mode de règlement</span>
+        <DigitalCheck name="espece" label="Espèces" values={values} onChange={onChange} />
+        <DigitalCheck name="cheque" label="Chèque" values={values} onChange={onChange} />
+        <DigitalCheck name="virement" label="Virement" values={values} onChange={onChange} />
+      </section>
+
+      <section className="digital-box">
+        <h4>Objet de l'encaissement</h4>
+        <DigitalField name="objet" label="Objet" values={values} onChange={onChange} multiline hideLabel />
+      </section>
+
+      <section className="digital-grid two">
+        <DigitalField name="lieu" label="Lieu" values={values} onChange={onChange} />
+        <DigitalField name="agent" label="Agent EK IMMO" values={values} onChange={onChange} />
+      </section>
+
+      <section className="signature-grid">
+        <div><span>Bénéficiaire</span><strong>Signature</strong></div>
+        <div><span>EK IMMO</span><strong>Signature & cachet</strong></div>
+      </section>
+    </div>
+  );
+}
+
+function DigitalCommissionStatement({ values, onChange }) {
+  const rows = [
+    ["locataire1", "periode1", "encaisse1", "taux1", "commission1"],
+    ["locataire2", "periode2", "encaisse2", "taux2", "commission2"],
+    ["locataire3", "periode3", "encaisse3", "taux3", "commission3"],
+  ];
+
+  return (
+    <div className="digital-page statement-page">
+      <DigitalDocumentHeader title="Bordereau commissions" subtitle="Gestion locative">
+        <div className="digital-meta-grid">
+          <DigitalField name="numero" label="N° bordereau" values={values} onChange={onChange} />
+          <DigitalField name="date" label="Date" values={values} onChange={onChange} />
+        </div>
+      </DigitalDocumentHeader>
+
+      <section className="digital-grid two">
+        <DigitalField name="partenaire" label="Propriétaire / partenaire" values={values} onChange={onChange} />
+        <DigitalField name="periode" label="Période couverte" values={values} onChange={onChange} />
+      </section>
+
+      <div className="digital-table-wrap">
+        <table className="digital-table statement-table">
+          <thead>
+            <tr>
+              <th>Locataire / bien</th>
+              <th>Période</th>
+              <th>Montant encaissé</th>
+              <th>Taux</th>
+              <th>Commission EK IMMO</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(([client, period, collected, rate, commission], index) => (
+              <tr key={client}>
+                <td><DigitalField name={client} label={`Locataire ${index + 1}`} values={values} onChange={onChange} hideLabel /></td>
+                <td><DigitalField name={period} label={`Période ${index + 1}`} values={values} onChange={onChange} hideLabel /></td>
+                <td><DigitalField name={collected} label={`Montant ${index + 1}`} values={values} onChange={onChange} hideLabel /></td>
+                <td><DigitalField name={rate} label={`Taux ${index + 1}`} values={values} onChange={onChange} hideLabel /></td>
+                <td><DigitalField name={commission} label={`Commission ${index + 1}`} values={values} onChange={onChange} hideLabel /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <section className="digital-footer-grid">
+        <div className="digital-box">
+          <h4>Observations</h4>
+          <DigitalField name="observations" label="Observations" values={values} onChange={onChange} multiline hideLabel />
+        </div>
+        <div className="digital-totals">
+          <DigitalField name="total" label="Total encaissé" values={values} onChange={onChange} />
+          <DigitalField name="totalCommission" label="Total commission" values={values} onChange={onChange} />
+          <DigitalField name="netProprietaire" label="Net propriétaire" values={values} onChange={onChange} />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function FillableBail({ values, onChange }) {
+  const fields = [
+    ["bailleur", "Bailleur"],
+    ["locataire", "Locataire"],
+    ["bien", "Bien loué"],
+    ["adresse", "Adresse"],
+    ["loyer", "Loyer mensuel"],
+    ["caution", "Dépôt de garantie"],
+    ["date", "Date de signature"],
+  ];
+
+  return (
+    <div className="fillable-document digital bail">
+      <div className="digital-page lease-page">
+        <DigitalDocumentHeader title="Contrat de bail" subtitle="Usage d'habitation" />
+        <div className="contract-fields">
+          {fields.map(([name, label]) => (
+            <DigitalField name={name} label={label} values={values} onChange={onChange} key={name} />
+          ))}
+          <DigitalField className="full" name="conditions" label="Conditions particulières" values={values} onChange={onChange} multiline />
+        </div>
+        <section className="lease-clauses">
+          <h4>Clauses principales</h4>
+          <p>Le bailleur met à disposition le bien désigné ci-dessus. Le locataire s'engage à respecter les conditions d'occupation, de paiement et d'entretien convenues.</p>
+          <p>Les paiements sont suivis par EK IMMO et les justificatifs sont archivés dans le dossier numérique du bien.</p>
+        </section>
+        <section className="signature-grid">
+          <div><span>Bailleur</span><strong>Lu et approuvé</strong></div>
+          <div><span>Locataire</span><strong>Lu et approuvé</strong></div>
+          <div><span>EK IMMO</span><strong>Cachet agence</strong></div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function getRelatedDocumentFiles(key) {
+  if (key === "facture") {
+    return [
+      { label: "Facture LAFIA T1 2026.docx", href: ekimmoAssets.factureDocx },
+    ];
+  }
+  if (key === "bordereau") {
+    return [
+      { label: "Courrier commission LAFIA T1 2026.docx", href: ekimmoAssets.courrierCommissionDocx },
+    ];
+  }
+  if (key === "bail") {
+    return [
+      { label: "Contrat de bail DOCX", href: ekimmoAssets.bailDocx },
+    ];
+  }
+  return [];
+}
+
+function getDocumentDefaults(key, data = {}) {
+  const invoice = data.invoice ?? invoices[0];
+  const payment = data.payment ?? paymentRecords[0];
+  const property = data.property ?? properties[0];
+  const owner = data.owner ?? owners.find((item) => item.name === property.owner) ?? owners[0];
+  const tenant = data.tenant ?? tenants.find((item) => item.name === invoice.client) ?? tenants[0];
+  const commission = data.commission ?? commissions[0];
+  const amountNumber = invoice.amount.replace(" FCFA", "");
+
+  if (key === "recu") {
+    return {
+      numero: invoice.number.replace("FAC", "REC").replace("QUI", "REC"),
+      date: invoice.date,
+      nom: invoice.client,
+      structure: tenant.id ?? "Locataire",
+      telephone: tenant.phone ?? "+223 72 77 71 77",
+      montantChiffres: invoice.amount,
+      montantLettres: "Quatre cent cinquante mille francs CFA",
+      espece: payment.mode === "Espèces",
+      cheque: payment.mode === "Chèque",
+      virement: payment.mode === "Virement",
+      objet: `Encaissement ${payment.period} - ${invoice.property}`,
+      lieu: "Bamako",
+      agent: "Aïssata Diarra",
+    };
+  }
+
+  if (key === "bordereau") {
+    return {
+      numero: "BOR-2026-017",
+      date: "05/06/2026",
+      partenaire: owner.name,
+      periode: "Janvier 2026 à mars 2026",
+      locataire1: `${tenant.name} - ${property.name}`,
+      locataire2: `${invoice.client} - Résidence ACI Baobab`,
+      locataire3: "Cabinet Diarra & Associés - Plateau Office Center",
+      periode1: "Janvier 2026",
+      periode2: "Février 2026",
+      periode3: "Mars 2026",
+      encaisse1: "1 504 500",
+      encaisse2: "354 000",
+      encaisse3: "442 500",
+      taux1: "10%",
+      taux2: "10%",
+      taux3: "10%",
+      commission1: commission.commission,
+      commission2: "35 400",
+      commission3: "44 250",
+      total: "16 599 920",
+      totalCommission: "1 659 992",
+      netProprietaire: "14 939 928",
+      observations: "Bordereau préparé pour validation propriétaire et reversement trimestriel EK IMMO.",
+    };
+  }
+
+  if (key === "bail") {
+    return {
+      bailleur: owner.name,
+      locataire: tenant.name,
+      bien: property.name,
+      adresse: property.address,
+      loyer: `${property.price} ${property.period}`,
+      caution: property.deposit,
+      date: "05/06/2026",
+      conditions: "Paiement au plus tard le 05 de chaque mois. Caution conservée selon l'état des lieux contradictoire.",
+    };
+  }
+
+  return {
+    numero: invoice.number,
+    date: invoice.date,
+    client: `${invoice.client}\nBamako, Mali`,
+    bien: property.name,
+    adresse: property.address ?? property.location,
+    designation: `Loyer de ${invoice.property}`,
+    loyer: amountNumber,
+    quantite: "1",
+    montant: amountNumber,
+    totalHt: amountNumber,
+    tva: "0",
+    totalTtc: amountNumber,
+    montantLettres: "Arrêté la présente facture à la somme indiquée en francs CFA.",
+  };
 }
 
 function InvoiceProfilePanel({ invoice, onAction }) {
@@ -3896,18 +4356,19 @@ function SettingsAdmin() {
 
 function TemplatesAdmin({ onAction }) {
   return (
-    <Panel title="Modèles de documents" toolbar={<Button compact onClick={() => onAction("Importer modèle")}><Upload size={16} /> Importer</Button>}>
-      <DataTable
-        columns={["Modèle", "Catégorie", "Statut", "Dernière modification", "Actions"]}
-        rows={templates.map((template, index) => [
-          template,
-          index < 4 ? "Contrats" : index < 8 ? "Finance" : "Fiches",
-          <Badge label={index % 5 === 0 ? "Inactif" : "Actif"} />,
-          `${10 + index}/05/2026`,
-          <div className="table-actions"><Button compact onClick={() => onAction(`Prévisualiser ${template}`)}><Eye size={15} /> Prévisualiser</Button><Button compact onClick={() => onAction(`Modifier ${template}`)}><Pencil size={15} /> Modifier</Button><Button compact onClick={() => onAction(`${index % 5 === 0 ? "Activer" : "Désactiver"} ${template}`)}>{index % 5 === 0 ? "Activer" : "Désactiver"}</Button><Button compact onClick={() => onAction(`Supprimer ${template}`)}><XCircle size={15} /> Supprimer</Button></div>,
-        ])}
-      />
-    </Panel>
+    <DocumentStudio
+      initialTemplate="facture"
+      title="Atelier des modèles EK IMMO"
+      onAction={onAction}
+      data={{
+        invoice: invoices[0],
+        payment: paymentRecords[0],
+        commission: commissions[0],
+        property: properties[0],
+        owner: owners[0],
+        tenant: tenants[0],
+      }}
+    />
   );
 }
 
@@ -3932,9 +4393,9 @@ function LoginScreen({ onLogin }) {
     <main className="login-screen">
       <section className="login-card">
         <div className="login-brand">
-          <div className="brand-mark"><Building2 size={26} /></div>
+          <img src={ekimmoAssets.logo} alt="EK IMMO" />
           <div>
-            <strong>Ek-immo</strong>
+            <strong>EK IMMO</strong>
             <span>Gestion immobilière de prestige</span>
           </div>
         </div>
