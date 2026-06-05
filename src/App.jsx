@@ -50,7 +50,15 @@ import {
   XCircle,
 } from "lucide-react";
 
-const navItems = ["Dashboard", "Biens", "Clients", "Contrats", "Finance", "Rapports", "Plus"];
+const navItems = [
+  { page: "Dashboard", label: "Dashboard" },
+  { page: "Biens", label: "Biens" },
+  { page: "Clients", label: "Clients" },
+  { page: "Contrats", label: "Docs" },
+  { page: "Finance", label: "Finance" },
+  { page: "Rapports", label: "Rapports" },
+  { page: "Plus", label: "Plus" },
+];
 
 const demoSteps = [
   {
@@ -1601,8 +1609,8 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onProfile, onSt
 
       <nav className="nav-tabs" aria-label="Navigation principale" data-demo="main-nav">
         {navItems.map((item) => (
-          <button className={activePage === item ? "active" : ""} key={item} onClick={() => onNav(item)}>
-            {item}
+          <button className={activePage === item.page ? "active" : ""} key={item.page} onClick={() => onNav(item.page)}>
+            {item.label}
           </button>
         ))}
       </nav>
@@ -3157,61 +3165,103 @@ function InvoicesView({ onAction }) {
 
 function DocumentStudio({ initialTemplate = "facture", lockedTemplate, title, data, onAction }) {
   const [templateKey, setTemplateKey] = useState(lockedTemplate ?? initialTemplate);
+  const [editingKey, setEditingKey] = useState(lockedTemplate ?? null);
 
   useEffect(() => {
     setTemplateKey(lockedTemplate ?? initialTemplate);
+    setEditingKey(lockedTemplate ?? null);
   }, [initialTemplate, lockedTemplate]);
 
-  const template = documentTemplates.find((item) => item.key === templateKey) ?? documentTemplates[0];
+  const activeKey = lockedTemplate ?? editingKey ?? templateKey;
+  const template = documentTemplates.find((item) => item.key === activeKey) ?? documentTemplates[0];
+
+  if (!lockedTemplate && !editingKey) {
+    return (
+      <section className="document-hub" data-demo="document-generation">
+        <Panel title={title}>
+          <div className="document-template-grid">
+            {documentTemplates.map((item) => {
+              const relatedFiles = getRelatedDocumentFiles(item.key);
+              return (
+                <button
+                  className={templateKey === item.key ? "document-template-card active" : "document-template-card"}
+                  key={item.key}
+                  onClick={() => {
+                    setTemplateKey(item.key);
+                    setEditingKey(item.key);
+                  }}
+                >
+                  <span className="template-card-icon"><FileText size={22} /></span>
+                  <span className="template-card-copy">
+                    <strong>{item.label}</strong>
+                    <small>{item.source}</small>
+                  </span>
+                  <span className="template-card-meta">
+                    <Badge label={item.format} />
+                    <small>{relatedFiles.length + 1} source{relatedFiles.length > 0 ? "s" : ""}</small>
+                  </span>
+                  <span className="template-card-action"><Pencil size={16} /> Modifier</span>
+                </button>
+              );
+            })}
+          </div>
+        </Panel>
+      </section>
+    );
+  }
+
+  return (
+    <DocumentEditor
+      compact={Boolean(lockedTemplate)}
+      data={data}
+      onAction={onAction}
+      onBack={lockedTemplate ? null : () => setEditingKey(null)}
+      template={template}
+      title={title}
+    />
+  );
+}
+
+function DocumentEditor({ compact = false, data, onAction, onBack, template, title }) {
   const relatedFiles = getRelatedDocumentFiles(template.key);
 
   return (
-    <section className={lockedTemplate ? "document-studio locked" : "document-studio"} data-demo="document-generation">
-      {!lockedTemplate && (
-        <Panel title="Modèles EK IMMO">
-          <div className="template-list">
-            {documentTemplates.map((item) => (
-              <button className={template.key === item.key ? "active" : ""} key={item.key} onClick={() => setTemplateKey(item.key)}>
-                <FileText size={17} />
-                <span>
-                  <strong>{item.label}</strong>
-                  <small>{item.source}</small>
-                </span>
-              </button>
-            ))}
-          </div>
-        </Panel>
-      )}
-
-      <Panel title={title}>
-        <FillableDocument template={template} data={data} />
-        <div className="action-row compact-row">
+    <section className={compact ? "document-editor compact" : "document-editor"} data-demo="document-generation">
+      <div className="document-editor-top">
+        {onBack && (
+          <Button onClick={onBack}>
+            <ArrowLeft size={17} /> Modèles
+          </Button>
+        )}
+        <div>
+          <span>{template.format}</span>
+          <h2>{template.label}</h2>
+          <p>{template.source}</p>
+        </div>
+        <div className="document-editor-actions">
           <Button variant="primary" onClick={() => onAction(`Générer ${template.label}`)}><Download size={17} /> Générer PDF</Button>
           <Button onClick={() => onAction(`Imprimer ${template.label}`)}><Printer size={17} /> Imprimer</Button>
           <Button onClick={() => onAction(`Archiver ${template.label}`)}><Archive size={17} /> Archiver</Button>
         </div>
+      </div>
+
+      <Panel title={title}>
+        <FillableDocument template={template} data={data} />
       </Panel>
 
-      <Panel title="Sources">
-        <div className="document-source-card">
-          <img src={ekimmoAssets.logo} alt="EK IMMO" />
-          <p><span>Modèle actif</span><strong>{template.label}</strong></p>
-          <p><span>Format</span><strong>{template.format}</strong></p>
-          <p><span>Fichier</span><strong>{template.source}</strong></p>
-          <a href={template.file} target="_blank" rel="noreferrer">
-            <Eye size={16} /> Ouvrir le modèle original
+      <div className="document-source-strip">
+        <img src={ekimmoAssets.logo} alt="EK IMMO" />
+        <p><span>Modèle actif</span><strong>{template.label}</strong></p>
+        <p><span>Fichier</span><strong>{template.source}</strong></p>
+        <a href={template.file} target="_blank" rel="noreferrer">
+          <Eye size={16} /> Original
+        </a>
+        {relatedFiles.map((file) => (
+          <a href={file.href} target="_blank" rel="noreferrer" key={file.href}>
+            <Download size={15} /> {file.label}
           </a>
-        </div>
-        {relatedFiles.length > 0 && (
-          <div className="document-links">
-            {relatedFiles.map((file) => (
-              <a href={file.href} target="_blank" rel="noreferrer" key={file.href}>
-                <Download size={15} /> {file.label}
-              </a>
-            ))}
-          </div>
-        )}
-      </Panel>
+        ))}
+      </div>
     </section>
   );
 }
