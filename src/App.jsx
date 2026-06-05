@@ -1049,11 +1049,11 @@ const rentTargetByPeriod = {
 };
 
 const pipelineToneColors = {
-  pale: "#e8ebff",
-  soft: "#dfe4ff",
-  purple: "#6517e8",
+  pale: "#eef4f9",
+  soft: "#dce8f3",
+  purple: "#c8a21a",
   silver: "#bfc1c6",
-  dark: "#54565c",
+  dark: "#052f5f",
   red: "#d51419",
 };
 
