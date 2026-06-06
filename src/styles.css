@@ -3372,10 +3372,22 @@ td:last-child {
 }
 
 .login-brand {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 230px) minmax(0, 1fr);
   align-items: center;
   gap: 14px;
   margin-bottom: 30px;
+}
+
+.login-brand img {
+  width: 100%;
+  max-width: 230px;
+  height: auto;
+  object-fit: contain;
+}
+
+.login-brand > div {
+  min-width: 0;
 }
 
 .brand-mark {
@@ -3847,6 +3859,19 @@ td:last-child {
 
   .brand-link img {
     width: 128px;
+  }
+
+  .login-card {
+    padding: 26px;
+  }
+
+  .login-brand {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .login-brand img {
+    max-width: 240px;
   }
 
   .topbar-actions {
