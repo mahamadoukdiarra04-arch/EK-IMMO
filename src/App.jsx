@@ -119,7 +119,7 @@ const demoSteps = [
     propertyTab: "Résumé",
     target: "property-actions",
     title: "Actions depuis la fiche",
-    body: "Depuis une fiche, EK IMMO peut modifier le bien, planifier une visite, créer un contrat, enregistrer un paiement ou générer des documents.",
+    body: "Depuis une fiche, E.K immo peut modifier le bien, planifier une visite, créer un contrat, enregistrer un paiement ou générer des documents.",
   },
   {
     page: "Biens",
@@ -175,7 +175,7 @@ const demoSteps = [
     page: "Finance",
     financeTab: "Loyers",
     target: "finance-tabs",
-    title: "Finance métier EK IMMO",
+    title: "Finance métier E.K immo",
     body: "Le module finance regroupe loyers, paiements, impayés, factures, commissions, charges, entretiens et reversements.",
   },
   {
@@ -197,7 +197,7 @@ const demoSteps = [
     financeTab: "Reversements",
     target: "reversals-workspace",
     title: "Reversements propriétaires",
-    body: "EK IMMO suit les loyers encaissés, commissions, charges, montants déjà reversés et soldes nets à payer.",
+    body: "E.K immo suit les loyers encaissés, commissions, charges, montants déjà reversés et soldes nets à payer.",
   },
   {
     page: "Rapports",
@@ -623,7 +623,7 @@ const contracts = [
     type: "Mandat de gestion",
     property: "Résidence ACI Baobab",
     owner: "Sira Coulibaly",
-    client: "EK IMMO",
+    client: "E.K immo",
     start: "15/03/2026",
     end: "14/03/2027",
     status: "Actif",
@@ -857,7 +857,7 @@ const charges = [
     ownerCollection: false,
     createdBy: "Aïssata Diarra",
     modifiedBy: "Aïssata Diarra",
-    validatedBy: "Admin EK IMMO",
+    validatedBy: "Admin E.K immo",
     validationDate: "21/05/2026",
     history: ["Créée le 20/05/2026", "Validée le 21/05/2026", "Payée par agence"],
   },
@@ -884,7 +884,7 @@ const charges = [
     ownerCollection: false,
     createdBy: "Mariam Traoré",
     modifiedBy: "Mariam Traoré",
-    validatedBy: "Admin EK IMMO",
+    validatedBy: "Admin E.K immo",
     validationDate: "26/05/2026",
     history: ["Créée le 25/05/2026", "Rattachée au locataire", "À intégrer dans la prochaine facture"],
   },
@@ -938,7 +938,7 @@ const charges = [
     ownerCollection: false,
     createdBy: "Aïssata Diarra",
     modifiedBy: "Aïssata Diarra",
-    validatedBy: "Admin EK IMMO",
+    validatedBy: "Admin E.K immo",
     validationDate: "13/06/2026",
     history: ["Créée le 13/06/2026", "Validée le 13/06/2026"],
   },
@@ -1755,7 +1755,7 @@ function DemoTour({ step, index, total, rect, onNext, onPrevious, onStop }) {
   const isLast = index === total - 1;
 
   return (
-    <div className="demo-tour" role="dialog" aria-label="Mode démonstration EK IMMO">
+    <div className="demo-tour" role="dialog" aria-label="Mode démonstration E.K immo">
       {rect && <div className="demo-spotlight" style={spotlightStyle} />}
       {rect && position.arrowPath && (
         <svg className="demo-arrow" aria-hidden="true">
@@ -1823,7 +1823,7 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onProfile, onSt
   return (
     <header className="topbar">
       <button className="brand-link" onClick={() => onNav("Dashboard")} aria-label="Retour au dashboard">
-        <img src={ekimmoAssets.logo} alt="EK IMMO" />
+        <img src={ekimmoAssets.logo} alt="E.K immo" />
       </button>
 
       <nav className="nav-tabs" aria-label="Navigation principale" data-demo="main-nav">
@@ -2407,7 +2407,7 @@ function PropertySummary({ property }) {
             <Info label="Mode financier" value={property.financialMode} />
           </div>
           <div className="property-description">
-            <p><strong>Description</strong><span>{property.type} situé à {property.district}, rattaché au portefeuille EK IMMO.</span></p>
+            <p><strong>Description</strong><span>{property.type} situé à {property.district}, rattaché au portefeuille E.K immo.</span></p>
             <p><strong>Observations</strong><span>{property.lastAction}</span></p>
           </div>
           <div className="tag-row">
@@ -2580,7 +2580,7 @@ function PropertyPayments({ property }) {
       <Panel title="Paiements liés au bien">
         <div className="notice">
           Encaissement effectué directement par le propriétaire. Ce bien reste suivi pour les visites, documents,
-          charges et entretiens, mais il n'apparaît pas comme loyer à encaisser par EK IMMO.
+          charges et entretiens, mais il n'apparaît pas comme loyer à encaisser par E.K immo.
         </div>
       </Panel>
     );
@@ -2633,7 +2633,7 @@ function PropertyMaintenance({ property }) {
             date: "À planifier",
             kind: "Entretien",
             type: "Aucun élément ouvert",
-            manager: "EK IMMO",
+            manager: "E.K immo",
             amount: "0 FCFA",
             payer: "-",
             proof: "-",
@@ -3271,7 +3271,7 @@ function ContractProfilePanel({ contract, onAction }) {
       </div>
       {directOwnerCollection && (
         <div className="notice">
-          Encaissement direct propriétaire : le contrat reste suivi par EK IMMO, mais les loyers ne sont pas ajoutés aux paiements agence à collecter.
+          Encaissement direct propriétaire : le contrat reste suivi par E.K immo, mais les loyers ne sont pas ajoutés aux paiements agence à collecter.
         </div>
       )}
       <div className="profile-section">
@@ -3470,7 +3470,7 @@ function DocumentEditor({ compact = false, data, onAction, onBack, template, tit
       </Panel>
 
       <div className="document-source-strip">
-        <img src={ekimmoAssets.logo} alt="EK IMMO" />
+        <img src={ekimmoAssets.logo} alt="E.K immo" />
         <p><span>Modèle actif</span><strong>{template.label}</strong></p>
         <p><span>Fichier</span><strong>{template.source}</strong></p>
         <a href={template.file} target="_blank" rel="noreferrer">
@@ -3514,9 +3514,9 @@ function FillableDocument({ template, data }) {
 function DigitalDocumentHeader({ title, subtitle, children }) {
   return (
     <header className="digital-doc-header">
-      <img src={ekimmoAssets.logo} alt="EK IMMO" />
+      <img src={ekimmoAssets.logo} alt="E.K immo" />
       <div className="company-info">
-        <strong>EK IMMO SAS</strong>
+        <strong>E.K immo SAS</strong>
         <span>Société immobilière</span>
         <span>Niaréla, face mairie - Bamako, Mali</span>
         <span>Contact : +223 72 77 71 77 / +223 44 44 13 31</span>
@@ -3611,7 +3611,7 @@ function DigitalInvoice({ values, onChange }) {
       </section>
 
       <section className="signature-grid">
-        <div><span>EK IMMO</span><strong>Cachet & signature</strong></div>
+        <div><span>E.K immo</span><strong>Cachet & signature</strong></div>
         <div><span>Client</span><strong>Bon pour accord</strong></div>
       </section>
     </div>
@@ -3653,12 +3653,12 @@ function DigitalReceipt({ values, onChange }) {
 
       <section className="digital-grid two">
         <DigitalField name="lieu" label="Lieu" values={values} onChange={onChange} />
-        <DigitalField name="agent" label="Agent EK IMMO" values={values} onChange={onChange} />
+        <DigitalField name="agent" label="Agent E.K immo" values={values} onChange={onChange} />
       </section>
 
       <section className="signature-grid">
         <div><span>Bénéficiaire</span><strong>Signature</strong></div>
-        <div><span>EK IMMO</span><strong>Signature & cachet</strong></div>
+        <div><span>E.K immo</span><strong>Signature & cachet</strong></div>
       </section>
     </div>
   );
@@ -3693,7 +3693,7 @@ function DigitalCommissionStatement({ values, onChange }) {
               <th>Période</th>
               <th>Montant encaissé</th>
               <th>Taux</th>
-              <th>Commission EK IMMO</th>
+              <th>Commission E.K immo</th>
             </tr>
           </thead>
           <tbody>
@@ -3749,12 +3749,12 @@ function FillableBail({ values, onChange }) {
         <section className="lease-clauses">
           <h4>Clauses principales</h4>
           <p>Le bailleur met à disposition le bien désigné ci-dessus. Le locataire s'engage à respecter les conditions d'occupation, de paiement et d'entretien convenues.</p>
-          <p>Les paiements sont suivis par EK IMMO et les justificatifs sont archivés dans le dossier numérique du bien.</p>
+          <p>Les paiements sont suivis par E.K immo et les justificatifs sont archivés dans le dossier numérique du bien.</p>
         </section>
         <section className="signature-grid">
           <div><span>Bailleur</span><strong>Lu et approuvé</strong></div>
           <div><span>Locataire</span><strong>Lu et approuvé</strong></div>
-          <div><span>EK IMMO</span><strong>Cachet agence</strong></div>
+          <div><span>E.K immo</span><strong>Cachet agence</strong></div>
         </section>
       </div>
     </div>
@@ -3831,7 +3831,7 @@ function getDocumentDefaults(key, data = {}) {
       total: "16 599 920",
       totalCommission: "1 659 992",
       netProprietaire: "14 939 928",
-      observations: "Bordereau préparé pour validation propriétaire et reversement trimestriel EK IMMO.",
+      observations: "Bordereau préparé pour validation propriétaire et reversement trimestriel E.K immo.",
     };
   }
 
@@ -3892,7 +3892,7 @@ function InvoiceProfilePanel({ invoice, onAction }) {
         <p><span>Document PDF</span><Badge label={invoice.status} /></p>
       </div>
       <div className="timeline compact-timeline">
-        <p><strong>Document généré</strong><span>{invoice.date} · EK IMMO</span></p>
+        <p><strong>Document généré</strong><span>{invoice.date} · E.K immo</span></p>
         <p><strong>Historique</strong><span>Lié au paiement {payment.reference}</span></p>
       </div>
       <div className="stack-actions">
@@ -3928,7 +3928,7 @@ function FinancePage({ activeTab, onTab, onAction }) {
         title="Finance métier"
       />
       <Tabs tabs={tabs} active={activeTab} onChange={onTab} demo="finance-tabs" />
-      {activeTab === "Loyers" && <FinanceTable title="Loyers attendus par EK IMMO" rows={agencyRentRows.map((row) => [row.period, row.tenant, row.property, row.owner, row.expected, row.paid, row.balance, <Badge label={row.status} />, <RentActions row={row} onAction={onAction} />])} columns={["Période", "Locataire", "Bien", "Propriétaire", "Attendu", "Payé", "Solde", "Statut", "Actions"]} />}
+      {activeTab === "Loyers" && <FinanceTable title="Loyers attendus par E.K immo" rows={agencyRentRows.map((row) => [row.period, row.tenant, row.property, row.owner, row.expected, row.paid, row.balance, <Badge label={row.status} />, <RentActions row={row} onAction={onAction} />])} columns={["Période", "Locataire", "Bien", "Propriétaire", "Attendu", "Payé", "Solde", "Statut", "Actions"]} />}
       {activeTab === "Paiements" && <PaymentForm onAction={onAction} />}
       {activeTab === "Impayés" && <ArrearsView onAction={onAction} />}
       {activeTab === "Factures & reçus" && <InvoicesView onAction={onAction} />}
@@ -4140,7 +4140,7 @@ function ChargesView({ onAction }) {
       <div className="charges-header">
         <div>
           <h2>Charges & dépenses</h2>
-          <p>Suivi opérationnel des sorties liées aux biens, entretiens, propriétaires, locataires et frais internes EK IMMO.</p>
+          <p>Suivi opérationnel des sorties liées aux biens, entretiens, propriétaires, locataires et frais internes E.K immo.</p>
         </div>
         <Button variant="primary" onClick={() => onAction("Ajouter une charge")}><Plus size={17} /> Ajouter une charge</Button>
       </div>
@@ -4297,7 +4297,7 @@ function ChargeProfilePanel({ charge, onAction }) {
           <span>{charge.payer === "Agence" && "La dépense apparaît dans les charges agence et ne réduit pas le reversement propriétaire."}</span>
           <span>{charge.payer === "Propriétaire" && "La dépense peut être déduite du montant net à reverser au propriétaire."}</span>
           <span>{charge.payer.includes("Locataire") && "La dépense doit être réclamée au locataire via facture, relance ou situation locataire."}</span>
-          <span>{charge.payer === "Suivi interne uniquement" && "La dépense reste suivie par l'agence sans impact direct sur les encaissements EK IMMO."}</span>
+          <span>{charge.payer === "Suivi interne uniquement" && "La dépense reste suivie par l'agence sans impact direct sur les encaissements E.K immo."}</span>
         </div>
         {charge.payer === "Propriétaire" && (
           <div className="simple-list">
@@ -4824,7 +4824,7 @@ function SettingsAdmin() {
     <section className="settings-grid">
       <Panel title="Paramètres généraux">
         <div className="form-grid compact-form">
-          <label>Nom de l'agence<input defaultValue="EK IMMO" /></label>
+          <label>Nom de l'agence<input defaultValue="E.K immo" /></label>
           <label>Ville<input defaultValue="Bamako" /></label>
           <label>Devise<select><option>FCFA</option></select></label>
           <label>Taux commission par défaut<input defaultValue="5%" /></label>
@@ -4847,7 +4847,7 @@ function TemplatesAdmin({ onAction }) {
   return (
     <DocumentStudio
       initialTemplate="facture"
-      title="Atelier des modèles EK IMMO"
+      title="Atelier des modèles E.K immo"
       onAction={onAction}
       data={{
         invoice: invoices[0],
@@ -4882,9 +4882,9 @@ function LoginScreen({ onLogin }) {
     <main className="login-screen">
       <section className="login-card">
         <div className="login-brand">
-          <img src={ekimmoAssets.logo} alt="EK IMMO" />
+          <img src={ekimmoAssets.logo} alt="E.K immo" />
           <div>
-            <strong>EK IMMO</strong>
+            <strong>E.K immo</strong>
             <span>Gestion immobilière de prestige</span>
           </div>
         </div>
@@ -5305,7 +5305,7 @@ function ContractFormModal({ onClose }) {
         </div>
         {preview && (
           <div className="document-preview modal-preview">
-            <strong>EK IMMO</strong>
+            <strong>E.K immo</strong>
             <h3>Contrat de location</h3>
             <p>Bien : Villa Koulouba</p>
             <p>Propriétaire : Mamadou Keita</p>
@@ -5415,8 +5415,8 @@ function DemoModal({ title, onClose }) {
 function Footer() {
   return (
     <footer className="footer">
-      <strong>Ek-immo</strong>
-      <span>© 2026 Ek-immo. Tous droits réservés. Gestion immobilière au Mali.</span>
+      <strong>E.K immo</strong>
+      <span>© 2026 E.K immo. Tous droits réservés. Gestion immobilière au Mali.</span>
       <nav>
         <a>Mentions légales</a>
         <a>Confidentialité</a>
