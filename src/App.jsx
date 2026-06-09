@@ -77,7 +77,7 @@ const demoSteps = [
     page: "Dashboard",
     target: "dashboard-kpis",
     title: "Vue de pilotage",
-    body: "Le dashboard synthétise les volumes de biens, loyers, impayés, charges et reversements attendus pour EK IMMO.",
+    body: "Le dashboard synthétise les biens en gestion locative, les biens suivis en entretien seul, les flux loyers, les flux non-loyer et les alertes financières.",
   },
   {
     page: "Dashboard",
@@ -334,9 +334,9 @@ const properties = [
     address: "Immeuble 6, Hamdallaye ACI, Bamako",
     owner: "Foncière Mandé",
     tenant: "Cabinet Diarra & Associés",
-    status: "En travaux",
-    price: "1 900 000 FCFA",
-    period: "/mois",
+    status: "Entretien seul",
+    price: "420 000 FCFA",
+    period: "/intervention",
     image: assets.office,
     surface: "210 m²",
     rooms: 5,
@@ -344,8 +344,8 @@ const properties = [
     baths: 3,
     deposit: "3 800 000 FCFA",
     commission: "7%",
-    financialMode: "Encaissement direct par le propriétaire",
-    lastAction: "Peinture à valider",
+    financialMode: "Contrat entretien seul",
+    lastAction: "Peinture à valider · flux non-loyer",
     tags: ["Ascenseur", "Parking", "Fibre optique"],
   },
   {
@@ -1144,6 +1144,59 @@ const dashboardKpisByPeriod = {
   "Période personnalisée": ["76", "14", "62", "42.9M FCFA", "1.9M FCFA", "6.8M FCFA", "2.2M FCFA", "24.7M FCFA"],
 };
 
+const dashboardKpiDetailsByPeriod = {
+  Jour: [
+    [["Gestion locative", "14"], ["Entretien seul", "4"]],
+    [["Location", "5"], ["Vente", "1"]],
+    [["Loués", "11"], ["Réservés", "1"]],
+    [["Loyers", "3.4M"], ["Entretien", "420K"]],
+    [["Loyers", "360K"], ["Forfaits", "60K"]],
+    [["Commissions", "520K"], ["Forfaits", "90K"]],
+    [["Entretien", "140K"], ["Refact.", "35K"]],
+    [["Prop.", "2.4M"], ["Déductions", "95K"]],
+  ],
+  Semaine: [
+    [["Gestion locative", "45"], ["Entretien seul", "9"]],
+    [["Location", "8"], ["Vente", "3"]],
+    [["Loués", "39"], ["Réservés", "4"]],
+    [["Loyers", "16.9M"], ["Entretien", "1.7M"]],
+    [["Loyers", "940K"], ["Forfaits", "160K"]],
+    [["Commissions", "1.9M"], ["Forfaits", "420K"]],
+    [["Entretien", "360K"], ["Refact.", "120K"]],
+    [["Prop.", "9.8M"], ["Déductions", "180K"]],
+  ],
+  Mois: [
+    [["Gestion locative", "126"], ["Entretien seul", "16"]],
+    [["Location", "14"], ["Vente", "4"]],
+    [["Loués", "118"], ["Réservés", "6"]],
+    [["Loyers", "81.2M"], ["Entretien", "4.2M"]],
+    [["Loyers", "3.2M"], ["Forfaits", "0.3M"]],
+    [["Commissions", "10.6M"], ["Forfaits", "1.8M"]],
+    [["Entretien", "1.2M"], ["Refact.", "275K"]],
+    [["Prop.", "45.2M"], ["Déductions", "120K"]],
+  ],
+  Année: [
+    [["Gestion locative", "1 096"], ["Entretien seul", "188"]],
+    [["Location", "72"], ["Vente", "24"]],
+    [["Loués", "1 126"], ["Réservés", "62"]],
+    [["Loyers", "862.1M"], ["Entretien", "44.7M"]],
+    [["Loyers", "38.6M"], ["Forfaits", "3.8M"]],
+    [["Commissions", "111.2M"], ["Forfaits", "15.5M"]],
+    [["Entretien", "13.8M"], ["Refact.", "4.9M"]],
+    [["Prop.", "372.4M"], ["Déductions", "8.2M"]],
+  ],
+  "Période personnalisée": [
+    [["Gestion locative", "64"], ["Entretien seul", "12"]],
+    [["Location", "11"], ["Vente", "3"]],
+    [["Loués", "58"], ["Réservés", "4"]],
+    [["Loyers", "40.6M"], ["Entretien", "2.3M"]],
+    [["Loyers", "1.9M"], ["Forfaits", "210K"]],
+    [["Commissions", "5.8M"], ["Forfaits", "1.0M"]],
+    [["Entretien", "780K"], ["Refact.", "180K"]],
+    [["Prop.", "24.7M"], ["Déductions", "95K"]],
+  ],
+};
+
 const rentBarsByIndicator = {
   "Loyers attendus": {
     Jour: [["Lun", 48], ["Mar", 72], ["Mer", 58], ["Jeu", 66], ["Ven", 82], ["Sam", 42]],
@@ -1842,18 +1895,19 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onProfile, onSt
 function DashboardPage({ onAction, onOpenProperty }) {
   const [kpiPeriod, setKpiPeriod] = useState("Mois");
   const kpiValues = dashboardKpisByPeriod[kpiPeriod] ?? dashboardKpisByPeriod.Mois;
+  const kpiDetails = dashboardKpiDetailsByPeriod[kpiPeriod] ?? dashboardKpiDetailsByPeriod.Mois;
   const selectedPipeline = getPipelineData("Commercial & visites", kpiPeriod);
   const summaryValues = financeSummaryByPeriod[kpiPeriod] ?? financeSummaryByPeriod.Mois;
 
   const kpis = [
-    { label: "Biens enregistrés", value: kpiValues[0], icon: Building2, tone: "purple" },
-    { label: "Biens disponibles", value: kpiValues[1], icon: KeyRound, tone: "gray" },
-    { label: "Biens loués", value: kpiValues[2], icon: Home, tone: "purple" },
-    { label: "Loyers attendus", value: kpiValues[3], icon: Banknote, tone: "gray" },
-    { label: "Impayés", value: kpiValues[4], icon: AlertTriangle, tone: "danger" },
-    { label: "Commissions générées", value: kpiValues[5], icon: WalletCards, tone: "gray" },
-    { label: "Charges", value: kpiValues[6], icon: ReceiptText, tone: "gray" },
-    { label: "Reversements en attente", value: kpiValues[7], icon: RefreshCw, tone: "gray" },
+    { label: "Portefeuille suivi", value: kpiValues[0], icon: Building2, tone: "purple", details: kpiDetails[0] },
+    { label: "Biens disponibles", value: kpiValues[1], icon: KeyRound, tone: "gray", details: kpiDetails[1] },
+    { label: "Gestion locative", value: kpiValues[2], icon: Home, tone: "purple", details: kpiDetails[2] },
+    { label: "Flux attendus", value: kpiValues[3], icon: Banknote, tone: "gray", details: kpiDetails[3] },
+    { label: "Impayés", value: kpiValues[4], icon: AlertTriangle, tone: "danger", details: kpiDetails[4] },
+    { label: "Honoraires générés", value: kpiValues[5], icon: WalletCards, tone: "gray", details: kpiDetails[5] },
+    { label: "Charges & interventions", value: kpiValues[6], icon: ReceiptText, tone: "gray", details: kpiDetails[6] },
+    { label: "Reversements en attente", value: kpiValues[7], icon: RefreshCw, tone: "gray", details: kpiDetails[7] },
   ];
 
   const alerts = [
@@ -4850,11 +4904,23 @@ function StatCard({ item }) {
   const Icon = item.icon;
   return (
     <article className={`stat-card ${item.tone}`}>
-      <div className="stat-icon">
-        <Icon size={20} />
+      <div className="stat-card-top">
+        <div className="stat-icon">
+          <Icon size={20} />
+        </div>
+        <span>{item.label}</span>
       </div>
-      <span>{item.label}</span>
       <strong>{item.value}</strong>
+      {item.details && (
+        <div className="stat-breakdown">
+          {item.details.map(([label, value]) => (
+            <p key={label}>
+              <span>{label}</span>
+              <b>{value}</b>
+            </p>
+          ))}
+        </div>
+      )}
     </article>
   );
 }
@@ -5031,7 +5097,7 @@ function Badge({ label }) {
 
 function statusTone(label) {
   if (["Disponible", "Actif", "À jour", "Payé", "Payée", "Validée", "Déduite", "Conclu", "Archivé", "Imprimé", "Généré", "Réalisée", "Présent", "Justificatif joint"].includes(label)) return "success";
-  if (["Loué", "Visite prévue", "Prévue", "Contacté", "Réservé", "Planifié", "À payer", "À reverser", "Refacturable", "Ouverte"].includes(label)) return "purple";
+  if (["Loué", "Visite prévue", "Prévue", "Contacté", "Réservé", "Planifié", "À payer", "À reverser", "Refacturable", "Ouverte", "Entretien seul"].includes(label)) return "purple";
   if (["En travaux", "Partiel", "À valider", "À échéance", "À déduire", "En attente", "En cours", "Reportée", "Relancé", "Client intéressé", "Brouillon", "Encaissement propriétaire"].includes(label)) return "warning";
   if (["Impayé", "En retard", "Litige", "Perdu", "Suspendu", "Annulée", "Justificatif manquant"].includes(label)) return "danger";
   if (["Inactif", "Indisponible", "Vendu", "Manquant"].includes(label)) return "muted";

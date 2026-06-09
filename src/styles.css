@@ -511,15 +511,24 @@ a {
 }
 
 .stat-card {
-  min-height: 146px;
-  padding: 24px;
   display: grid;
-  align-content: space-between;
+  align-content: stretch;
+  gap: 12px;
+  min-height: 164px;
+  padding: 22px;
+}
+
+.stat-card-top {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
 }
 
 .dashboard-shell .stat-card {
-  min-height: 94px;
-  padding: 13px 16px;
+  gap: 7px;
+  min-height: 126px;
+  padding: 12px 14px;
 }
 
 .stat-icon {
@@ -527,7 +536,6 @@ a {
   place-items: center;
   width: 42px;
   height: 42px;
-  margin-bottom: 4px;
   border-radius: 9px;
   color: #6b6680;
   background: var(--gray-bg);
@@ -555,32 +563,81 @@ a {
   background: var(--red-bg);
 }
 
-.stat-card span {
-  min-height: 36px;
+.stat-card-top span {
   color: #222033;
   font-size: 0.85rem;
   font-weight: 780;
+  line-height: 1.18;
   text-transform: uppercase;
   letter-spacing: 0;
+  overflow-wrap: anywhere;
 }
 
-.dashboard-shell .stat-card span {
-  min-height: 22px;
+.dashboard-shell .stat-card-top span {
   font-size: 0.68rem;
 }
 
 .stat-card strong {
-  margin-top: 16px;
   font-size: 2rem;
   line-height: 1;
 }
 
 .dashboard-shell .stat-card strong {
-  margin-top: 7px;
   font-size: 1.38rem;
 }
 
 .stat-card.danger strong {
+  color: var(--red);
+}
+
+.stat-breakdown {
+  display: grid;
+  gap: 5px;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.dashboard-shell .stat-breakdown {
+  gap: 3px;
+  padding-top: 6px;
+}
+
+.stat-breakdown p {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.12;
+}
+
+.dashboard-shell .stat-breakdown p {
+  font-size: 0.63rem;
+}
+
+.stat-breakdown span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stat-breakdown b {
+  flex: 0 0 auto;
+  color: var(--text);
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.stat-card.purple .stat-breakdown b {
+  color: var(--purple);
+}
+
+.stat-card.danger .stat-breakdown b {
   color: var(--red);
 }
 
