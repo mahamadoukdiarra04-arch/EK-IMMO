@@ -281,6 +281,18 @@ const documentTemplates = [
   },
 ];
 
+function makeDocumentNumber(prefix, sequence, year = 2026) {
+  return `${prefix}-${year}-${String(sequence).padStart(3, "0")}`;
+}
+
+function getDocumentPrefix(type) {
+  if (type === "Reçu") return "REC";
+  if (type === "Quittance") return "QUI";
+  if (type === "Bordereau") return "BOR";
+  if (type === "Contrat") return "CON";
+  return "FAC";
+}
+
 const properties = [
   {
     code: "EKM-VIL-042",
@@ -302,7 +314,127 @@ const properties = [
     commission: "5%",
     financialMode: "Encaissement par l'agence",
     lastAction: "Révision prévue le 15/07/2026",
+    focalPoint: {
+      name: "Abdoulaye Keita",
+      role: "Point focal famille",
+      phone: "+223 75 18 20 44",
+      email: "a.keita@keita-family.ml",
+    },
     tags: ["Piscine", "Groupe électrogène", "Garage double", "Jardin"],
+  },
+  {
+    code: "EKM-IMM-210",
+    name: "Immeuble Korofina Terrasses",
+    type: "Immeuble collectif",
+    district: "Korofina Nord, Bamako",
+    address: "Avenue Martin Luther King, Korofina Nord, Bamako",
+    owner: "Foncière Mandé",
+    tenant: "Multi-occupants",
+    status: "Gestion multi-lots",
+    price: "4 650 000 FCFA",
+    period: "/mois total",
+    image: assets.residence,
+    surface: "1 180 m²",
+    rooms: 24,
+    bedrooms: 18,
+    baths: 15,
+    deposit: "Par appartement",
+    commission: "8% gestion immeuble",
+    financialMode: "Encaissement par l'agence",
+    lastAction: "Bloc B · 2 appartements à relouer",
+    focalPoint: {
+      name: "Ousmane Traoré",
+      role: "Gestionnaire du syndic",
+      phone: "+223 76 55 21 04",
+      email: "syndic.korofina@foncieremande.ml",
+    },
+    structure: {
+      kind: "building",
+      blocks: [
+        { name: "Bloc A", floors: 3, units: 6, available: 1 },
+        { name: "Bloc B", floors: 3, units: 6, available: 2 },
+      ],
+      childCodes: ["EKM-APT-A101", "EKM-APT-A203", "EKM-APT-B102"],
+    },
+    tags: ["2 blocs", "12 appartements", "Cour intérieure", "Groupe électrogène"],
+  },
+  {
+    code: "EKM-APT-A101",
+    name: "Appartement A-101 Korofina",
+    type: "Appartement T3",
+    district: "Korofina Nord, Bamako",
+    address: "Bloc A, 1er étage, Immeuble Korofina Terrasses, Bamako",
+    owner: "Foncière Mandé",
+    tenant: "Mariam Sissoko",
+    status: "Loué",
+    price: "375 000 FCFA",
+    period: "/mois",
+    image: assets.residence,
+    surface: "84 m²",
+    rooms: 3,
+    bedrooms: 2,
+    baths: 2,
+    deposit: "750 000 FCFA",
+    commission: "8%",
+    financialMode: "Encaissement par l'agence",
+    lastAction: "Loyer juin attendu le 05/06/2026",
+    parentCode: "EKM-IMM-210",
+    block: "Bloc A",
+    floor: "1er étage",
+    unitNumber: "A-101",
+    tags: ["Balcon", "Cuisine équipée", "Parking"],
+  },
+  {
+    code: "EKM-APT-A203",
+    name: "Appartement A-203 Korofina",
+    type: "Appartement T2",
+    district: "Korofina Nord, Bamako",
+    address: "Bloc A, 2e étage, Immeuble Korofina Terrasses, Bamako",
+    owner: "Foncière Mandé",
+    tenant: "Libre",
+    status: "Disponible",
+    price: "320 000 FCFA",
+    period: "/mois",
+    image: assets.residence,
+    surface: "68 m²",
+    rooms: 2,
+    bedrooms: 1,
+    baths: 1,
+    deposit: "640 000 FCFA",
+    commission: "8%",
+    financialMode: "Encaissement par l'agence",
+    lastAction: "Photos ajoutées · visite à programmer",
+    parentCode: "EKM-IMM-210",
+    block: "Bloc A",
+    floor: "2e étage",
+    unitNumber: "A-203",
+    tags: ["Balcon", "Vue cour", "Gardien"],
+  },
+  {
+    code: "EKM-APT-B102",
+    name: "Appartement B-102 Korofina",
+    type: "Appartement T4",
+    district: "Korofina Nord, Bamako",
+    address: "Bloc B, 1er étage, Immeuble Korofina Terrasses, Bamako",
+    owner: "Foncière Mandé",
+    tenant: "Ibrahima Maïga",
+    status: "Entretien seul",
+    price: "65 000 FCFA",
+    period: "/intervention",
+    image: assets.residence,
+    surface: "96 m²",
+    rooms: 4,
+    bedrooms: 3,
+    baths: 2,
+    deposit: "N/A",
+    commission: "Forfait entretien",
+    financialMode: "Contrat entretien seul",
+    lastAction: "Contrôle climatisation du séjour",
+    parentCode: "EKM-IMM-210",
+    block: "Bloc B",
+    floor: "1er étage",
+    unitNumber: "B-102",
+    tags: ["Entretien climatisation", "Gardien", "Parking"],
   },
   {
     code: "EKM-APP-118",
@@ -499,6 +631,28 @@ const tenants = [
     paymentStatus: "Partiel",
   },
   {
+    id: "LOC-2026-041",
+    name: "Mariam Sissoko",
+    phone: "+223 73 45 12 61",
+    email: "m.sissoko@mail.ml",
+    property: "Appartement A-101 Korofina",
+    rent: "375 000 FCFA",
+    contract: "CON-2026-041",
+    deposit: "750 000 FCFA",
+    paymentStatus: "À jour",
+  },
+  {
+    id: "LOC-2026-044",
+    name: "Ibrahima Maïga",
+    phone: "+223 66 18 72 05",
+    email: "i.maiga@courrier.ml",
+    property: "Appartement B-102 Korofina",
+    rent: "65 000 FCFA",
+    contract: "CON-2026-044",
+    deposit: "N/A",
+    paymentStatus: "Suivi entretien",
+  },
+  {
     id: "LOC-2025-052",
     name: "Adama Sangaré",
     phone: "+223 79 11 08 08",
@@ -629,6 +783,26 @@ const contracts = [
     status: "Actif",
   },
   {
+    number: "CON-2026-041",
+    type: "Contrat de location",
+    property: "Appartement A-101 Korofina",
+    owner: "Foncière Mandé",
+    client: "Mariam Sissoko",
+    start: "01/04/2026",
+    end: "31/03/2027",
+    status: "Actif",
+  },
+  {
+    number: "CON-2026-044",
+    type: "Convention entretien",
+    property: "Appartement B-102 Korofina",
+    owner: "Foncière Mandé",
+    client: "Ibrahima Maïga",
+    start: "01/05/2026",
+    end: "30/04/2027",
+    status: "Suivi",
+  },
+  {
     number: "CON-2025-088",
     type: "Contrat de location",
     property: "Studio Badalabougou",
@@ -670,6 +844,16 @@ const rentRows = [
     paid: "450 000 FCFA",
     balance: "400 000 FCFA",
     status: "Partiel",
+  },
+  {
+    period: "Mai 2026",
+    tenant: "Mariam Sissoko",
+    property: "Appartement A-101 Korofina",
+    owner: "Foncière Mandé",
+    expected: "375 000 FCFA",
+    paid: "375 000 FCFA",
+    balance: "0 FCFA",
+    status: "Payé",
   },
   {
     period: "Mai 2026",
@@ -727,6 +911,22 @@ const paymentRecords = [
     receipt: "REC-2026-088",
     status: "Partiel",
     note: "Paiement partiel reçu, relance prévue pour le solde.",
+  },
+  {
+    reference: "PAY-2026-091",
+    period: "Mai 2026",
+    tenant: "Mariam Sissoko",
+    property: "Appartement A-101 Korofina",
+    owner: "Foncière Mandé",
+    due: "375 000 FCFA",
+    paid: "375 000 FCFA",
+    balance: "0 FCFA",
+    mode: "Moov Money",
+    paymentRef: "MM-250510-A101",
+    date: "10/05/2026",
+    receipt: "REC-2026-091",
+    status: "Payé",
+    note: "Appartement rattaché à l'immeuble Korofina Terrasses.",
   },
   {
     reference: "PAY-2026-096",
@@ -1331,9 +1531,48 @@ function getPropertyByName(name) {
   return properties.find((property) => property.name === name);
 }
 
+function getPropertyByCode(code) {
+  return properties.find((property) => property.code === code);
+}
+
+function isBuildingProperty(property) {
+  return property?.structure?.kind === "building";
+}
+
+function getPropertyChildren(property) {
+  if (!property) return [];
+  return properties.filter((item) => item.parentCode === property.code);
+}
+
+function getPropertyParent(property) {
+  return property?.parentCode ? getPropertyByCode(property.parentCode) : null;
+}
+
+function getPropertyRelationLabel(property) {
+  const parent = getPropertyParent(property);
+  if (parent) return `Rattaché à ${parent.name}`;
+  const children = getPropertyChildren(property);
+  if (children.length > 0) return `${children.length} lots rattachés`;
+  return "";
+}
+
+function getPropertyStructureSummary(property) {
+  if (isBuildingProperty(property)) {
+    const units = property.structure.blocks.reduce((sum, block) => sum + block.units, 0);
+    const available = property.structure.blocks.reduce((sum, block) => sum + block.available, 0);
+    return `${property.structure.blocks.length} blocs · ${units} lots · ${available} libres`;
+  }
+
+  if (property?.parentCode) {
+    return `${property.block} · ${property.floor} · lot ${property.unitNumber}`;
+  }
+
+  return "Bien individuel";
+}
+
 function isAgencyCollectedProperty(name) {
   const property = getPropertyByName(name);
-  return !property || !property.financialMode.includes("direct par le propriétaire");
+  return !property || (!property.financialMode.includes("direct par le propriétaire") && !property.financialMode.includes("entretien seul"));
 }
 
 function getAgencyRentRows() {
@@ -2087,7 +2326,7 @@ function PropertiesPage({
   const filteredProperties = useMemo(() => {
     return properties.filter((property) => {
       const haystack = normalizeSearch(
-        `${property.code} ${property.name} ${property.type} ${property.district} ${property.address} ${property.owner} ${property.tenant} ${property.price} ${property.tags.join(" ")}`
+        `${property.code} ${property.name} ${property.type} ${property.district} ${property.address} ${property.owner} ${property.tenant} ${property.price} ${property.block ?? ""} ${property.unitNumber ?? ""} ${getPropertyRelationLabel(property)} ${property.tags.join(" ")}`
       );
       const queryMatch = !query || haystack.includes(normalizeSearch(query));
       const statusMatch = statusFilter === "Tous statuts" || property.status === statusFilter;
@@ -2141,6 +2380,7 @@ function PropertiesPage({
         activeTab={propertyTab}
         onTab={onTab}
         onBack={onBack}
+        onOpenProperty={onSelect}
         onAction={onAction}
       />
     );
@@ -2168,7 +2408,7 @@ function PropertiesPage({
             />
           </label>
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Statut">
-            {["Tous statuts", "Disponible", "Loué", "Réservé", "Vendu", "En travaux", "Indisponible"].map((option) => (
+            {["Tous statuts", "Disponible", "Loué", "Réservé", "Vendu", "En travaux", "Indisponible", "Entretien seul", "Gestion multi-lots"].map((option) => (
               <option key={option}>{option}</option>
             ))}
           </select>
@@ -2242,11 +2482,12 @@ function PropertiesPage({
       ) : (
         <Panel>
           <DataTable
-            columns={["Photo", "Code", "Type", "Quartier", "Propriétaire", "Locataire actuel", "Prix", "Statut", "Dernière action", "Action"]}
+            columns={["Photo", "Code", "Type", "Structure", "Quartier", "Propriétaire", "Locataire actuel", "Prix", "Statut", "Dernière action", "Action"]}
             rows={filteredProperties.map((property) => [
               <img className="table-thumb" src={property.image} alt="" />,
               property.code,
               property.type,
+              getPropertyStructureSummary(property),
               property.district,
               property.owner,
               property.tenant,
@@ -2265,6 +2506,8 @@ function PropertiesPage({
 }
 
 function PropertyCard({ property, onSelect }) {
+  const relationLabel = getPropertyRelationLabel(property);
+
   return (
     <article className="property-card" data-demo="property-card">
       <button className="property-image-button" onClick={() => onSelect(property)}>
@@ -2282,6 +2525,7 @@ function PropertyCard({ property, onSelect }) {
         <p>
           <MapPin size={16} /> {property.district}
         </p>
+        {relationLabel && <span className="relation-pill">{relationLabel}</span>}
         <div className="card-divider" />
         <div className="owner-line">
           <Avatar name={property.owner} />
@@ -2293,8 +2537,11 @@ function PropertyCard({ property, onSelect }) {
   );
 }
 
-function PropertyDetail({ property, activeTab, onTab, onBack, onAction }) {
-  const tabs = ["Résumé", "Propriétaire", "Locataire", "Contrats", "Paiements", "Charges & entretiens", "Documents", "Historique"];
+function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, onAction }) {
+  const hasHierarchy = isBuildingProperty(property) || Boolean(property.parentCode);
+  const tabs = ["Résumé", ...(hasHierarchy ? ["Lots & blocs"] : []), "Propriétaire", "Locataire", "Contrats", "Paiements", "Charges & entretiens", "Documents", "Historique"];
+  const effectiveTab = tabs.includes(activeTab) ? activeTab : "Résumé";
+  const relationLabel = getPropertyRelationLabel(property);
 
   return (
     <>
@@ -2318,13 +2565,16 @@ function PropertyDetail({ property, activeTab, onTab, onBack, onAction }) {
             <div className="property-hero-facts">
               <span>{property.type}</span>
               <span>{property.district}</span>
+              <span>{getPropertyStructureSummary(property)}</span>
               <span>{property.financialMode}</span>
             </div>
+            {relationLabel && <span className="relation-pill hero-relation">{relationLabel}</span>}
           </div>
           <div className="price-block">
             <strong>{property.price}</strong>
             <span>{property.period}</span>
             <small>Propriétaire : {property.owner}</small>
+            {property.focalPoint && <small>Point focal : {property.focalPoint.name}</small>}
             <small>Locataire : {property.tenant}</small>
           </div>
         </div>
@@ -2367,26 +2617,31 @@ function PropertyDetail({ property, activeTab, onTab, onBack, onAction }) {
           ["Loyer / prix", `${property.price} ${property.period}`],
           ["Statut", property.status],
           ["Contrat", contracts.find((contract) => contract.property === property.name)?.status ?? "À créer"],
+          ["Structure", getPropertyStructureSummary(property)],
           ["Dernier paiement", paymentRecords.find((payment) => payment.property === property.name)?.paid ?? "N/A"],
           ["Prochaine action", property.lastAction],
           ["Documents", "8 pièces"],
         ]}
       />
 
-      <Tabs tabs={tabs} active={activeTab} onChange={onTab} demo="property-detail-tabs" />
-      {activeTab === "Résumé" && <PropertySummary property={property} />}
-      {activeTab === "Propriétaire" && <PropertyOwner property={property} />}
-      {activeTab === "Locataire" && <PropertyTenant property={property} />}
-      {activeTab === "Contrats" && <PropertyContracts property={property} />}
-      {activeTab === "Paiements" && <PropertyPayments property={property} />}
-      {activeTab === "Charges & entretiens" && <PropertyMaintenance property={property} />}
-      {activeTab === "Documents" && <PropertyDocuments property={property} onAction={onAction} />}
-      {activeTab === "Historique" && <PropertyHistory property={property} />}
+      <Tabs tabs={tabs} active={effectiveTab} onChange={onTab} demo="property-detail-tabs" />
+      {effectiveTab === "Résumé" && <PropertySummary property={property} onOpenProperty={onOpenProperty} />}
+      {effectiveTab === "Lots & blocs" && <PropertyHierarchy property={property} onOpenProperty={onOpenProperty} />}
+      {effectiveTab === "Propriétaire" && <PropertyOwner property={property} />}
+      {effectiveTab === "Locataire" && <PropertyTenant property={property} />}
+      {effectiveTab === "Contrats" && <PropertyContracts property={property} />}
+      {effectiveTab === "Paiements" && <PropertyPayments property={property} />}
+      {effectiveTab === "Charges & entretiens" && <PropertyMaintenance property={property} />}
+      {effectiveTab === "Documents" && <PropertyDocuments property={property} onAction={onAction} />}
+      {effectiveTab === "Historique" && <PropertyHistory property={property} />}
     </>
   );
 }
 
-function PropertySummary({ property }) {
+function PropertySummary({ property, onOpenProperty }) {
+  const children = getPropertyChildren(property);
+  const parent = getPropertyParent(property);
+
   return (
     <section className="detail-grid">
       <div className="detail-main">
@@ -2405,6 +2660,9 @@ function PropertySummary({ property }) {
             <Info label="Chambres" value={property.bedrooms} />
             <Info label="Salles de bain" value={property.baths} />
             <Info label="Mode financier" value={property.financialMode} />
+            <Info label="Structure" value={getPropertyStructureSummary(property)} />
+            {property.block && <Info label="Bloc" value={property.block} />}
+            {property.unitNumber && <Info label="Lot" value={property.unitNumber} />}
           </div>
           <div className="property-description">
             <p><strong>Description</strong><span>{property.type} situé à {property.district}, rattaché au portefeuille E.K immo.</span></p>
@@ -2418,6 +2676,29 @@ function PropertySummary({ property }) {
           {property.financialMode.includes("direct") && (
             <div className="notice">
               Encaissement effectué directement par le propriétaire.
+            </div>
+          )}
+          {parent && (
+            <div className="linked-property-card">
+              <img src={parent.image} alt="" />
+              <div>
+                <span>Immeuble parent</span>
+                <strong>{parent.name}</strong>
+                <small>{getPropertyStructureSummary(parent)}</small>
+              </div>
+              <Button compact onClick={() => onOpenProperty(parent)}><Eye size={15} /> Ouvrir</Button>
+            </div>
+          )}
+          {children.length > 0 && (
+            <div className="linked-lots-strip">
+              {children.slice(0, 3).map((child) => (
+                <button key={child.code} onClick={() => onOpenProperty(child)}>
+                  <img src={child.image} alt="" />
+                  <span>{child.unitNumber}</span>
+                  <strong>{child.name}</strong>
+                  <small>{child.status}</small>
+                </button>
+              ))}
             </div>
           )}
         </Panel>
@@ -2475,6 +2756,104 @@ function PropertySummary({ property }) {
   );
 }
 
+function PropertyHierarchy({ property, onOpenProperty }) {
+  const children = getPropertyChildren(property);
+  const parent = getPropertyParent(property);
+  const siblings = parent ? getPropertyChildren(parent) : [];
+
+  if (isBuildingProperty(property)) {
+    return (
+      <section className="detail-grid">
+        <div className="detail-main">
+          <Panel title="Structure de l'immeuble">
+            <div className="building-illustration">
+              <img src={property.image} alt="" />
+              <div className="building-blocks">
+                {property.structure.blocks.map((block) => (
+                  <article key={block.name}>
+                    <strong>{block.name}</strong>
+                    <span>{block.floors} niveaux</span>
+                    <small>{block.units} appartements · {block.available} libre{block.available > 1 ? "s" : ""}</small>
+                    <div className="unit-dots" aria-hidden="true">
+                      {Array.from({ length: block.units }).map((_, index) => (
+                        <i className={index < block.available ? "available" : ""} key={index} />
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+            <DataTable
+              columns={["Lot", "Appartement", "Bloc", "Étage", "Occupant", "Flux", "Statut", "Action"]}
+              rows={children.map((child) => [
+                child.unitNumber,
+                child.name,
+                child.block,
+                child.floor,
+                child.tenant,
+                `${child.price} ${child.period}`,
+                <Badge label={child.status} />,
+                <Button compact onClick={() => onOpenProperty(child)}><Eye size={15} /> Fiche lot</Button>,
+              ])}
+            />
+          </Panel>
+        </div>
+        <aside className="detail-side">
+          <Panel title="Lecture rapide" className="accent-top">
+            <div className="simple-list">
+              <p><span>Immeuble</span><strong>{property.name}</strong></p>
+              <p><span>Adresse</span><strong>{property.address}</strong></p>
+              <p><span>Lots rattachés</span><strong>{children.length}</strong></p>
+              <p><span>Point focal</span><strong>{property.focalPoint?.name ?? "Propriétaire"}</strong></p>
+              <p><span>Mode financier</span><strong>{property.financialMode}</strong></p>
+            </div>
+          </Panel>
+        </aside>
+      </section>
+    );
+  }
+
+  return (
+    <section className="detail-grid">
+      <div className="detail-main">
+        <Panel title="Rattachement de l'appartement">
+          {parent && (
+            <div className="linked-property-card large">
+              <img src={parent.image} alt="" />
+              <div>
+                <span>Immeuble parent</span>
+                <strong>{parent.name}</strong>
+                <small>{parent.address}</small>
+              </div>
+              <Button compact onClick={() => onOpenProperty(parent)}><Eye size={15} /> Ouvrir l'immeuble</Button>
+            </div>
+          )}
+          <div className="info-grid">
+            <Info label="Bloc" value={property.block ?? "-"} />
+            <Info label="Étage" value={property.floor ?? "-"} />
+            <Info label="Lot" value={property.unitNumber ?? "-"} />
+            <Info label="Fiche indépendante" value={property.code} />
+            <Info label="Occupant" value={property.tenant} />
+            <Info label="Flux financier" value={`${property.price} ${property.period}`} />
+          </div>
+        </Panel>
+      </div>
+      <aside className="detail-side">
+        <Panel title="Autres lots du même immeuble">
+          <div className="mini-list">
+            {(siblings.length ? siblings : [property]).map((sibling) => (
+              <button className="mini-action-row" key={sibling.code} onClick={() => onOpenProperty(sibling)}>
+                <span>{sibling.unitNumber ?? sibling.code} · {sibling.name}</span>
+                <Badge label={sibling.status} />
+              </button>
+            ))}
+          </div>
+        </Panel>
+      </aside>
+    </section>
+  );
+}
+
 function PropertyOwner({ property }) {
   const owner = owners.find((item) => item.name === property.owner) ?? owners[0];
   return (
@@ -2492,7 +2871,14 @@ function PropertyOwner({ property }) {
           <Info label="Dernier reversement" value={owner.lastPayment} />
           <Info label="Conditions de gestion" value={property.financialMode} />
           <Info label="Commission applicable" value={property.commission} />
+          <Info label="Point focal" value={property.focalPoint ? `${property.focalPoint.name} · ${property.focalPoint.role}` : "Identique au propriétaire"} />
         </div>
+        {property.focalPoint && (
+          <div className="simple-list">
+            <p><span>Contact point focal</span><strong>{property.focalPoint.phone}</strong></p>
+            <p><span>Email point focal</span><strong>{property.focalPoint.email}</strong></p>
+          </div>
+        )}
       </Panel>
       <Panel title="Autres biens du propriétaire" className="detail-side">
         <div className="mini-list">
@@ -2684,17 +3070,67 @@ function PropertyHistory({ property }) {
 
 function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, selectedTenant, onTenant, onAction }) {
   const tabs = ["Propriétaires", "Locataires", "Prospects", "Visites"];
+  const [detailView, setDetailView] = useState(null);
+  const [selectedProspect, setSelectedProspect] = useState(prospects[0]);
+  const [selectedVisit, setSelectedVisit] = useState(visits[0]);
+  const [savedScroll, setSavedScroll] = useState(0);
+  const actionByTab = {
+    Propriétaires: ["Nouveau propriétaire", "Nouveau propriétaire"],
+    Locataires: ["Nouveau locataire", "Nouveau locataire"],
+    Prospects: ["Nouveau prospect", "Nouveau prospect"],
+    Visites: ["Planifier visite", "Planifier visite"],
+  };
+  const [actionLabel, actionTitle] = actionByTab[activeTab] ?? ["Nouveau client", "Nouveau client"];
+
+  useEffect(() => {
+    setDetailView(null);
+  }, [activeTab]);
+
+  const openDetail = (type, item) => {
+    setSavedScroll(window.scrollY);
+    if (type === "owner") onOwner(item);
+    if (type === "tenant") onTenant(item);
+    if (type === "prospect") setSelectedProspect(item);
+    if (type === "visit") setSelectedVisit(item);
+    setDetailView(type);
+  };
+
+  const closeDetail = () => {
+    setDetailView(null);
+    window.setTimeout(() => window.scrollTo({ top: savedScroll, behavior: "auto" }), 0);
+  };
+
+  const detailContent = detailView === "owner" ? (
+    <DetailPageShell title="Fiche propriétaire" subtitle={selectedOwner.name} onBack={closeDetail}>
+      <OwnerProfilePanel owner={selectedOwner} onAction={onAction} />
+    </DetailPageShell>
+  ) : detailView === "tenant" ? (
+    <DetailPageShell title="Fiche locataire" subtitle={selectedTenant.name} onBack={closeDetail}>
+      <TenantProfilePanel tenant={selectedTenant} onAction={onAction} />
+    </DetailPageShell>
+  ) : detailView === "prospect" ? (
+    <DetailPageShell title="Fiche prospect" subtitle={selectedProspect.name} onBack={closeDetail}>
+      <ProspectProfilePanel prospect={selectedProspect} onAction={onAction} />
+    </DetailPageShell>
+  ) : detailView === "visit" ? (
+    <DetailPageShell title="Fiche visite" subtitle={`${selectedVisit.client} · ${selectedVisit.property}`} onBack={closeDetail}>
+      <VisitProfilePanel visit={selectedVisit} onAction={onAction} />
+    </DetailPageShell>
+  ) : null;
+
   return (
     <>
       <PageIntro
         title="Gestion des Clients"
         actions={
-          <Button variant="primary" onClick={() => onAction("Nouveau client")}>
-            <Plus size={18} /> Nouveau client
+          <Button variant="primary" onClick={() => onAction(actionTitle)}>
+            <Plus size={18} /> {actionLabel}
           </Button>
         }
       />
       <Tabs tabs={tabs} active={activeTab} onChange={onTab} demo="client-tabs" />
+      {detailContent ?? (
+        <>
       <Panel className="filter-panel">
         <div className="filters-row">
           <label className="field search-field mid">
@@ -2710,17 +3146,51 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, selectedTenant,
           </Button>
         </div>
       </Panel>
-      {activeTab === "Propriétaires" && <OwnersView selected={selectedOwner} onSelect={onOwner} onAction={onAction} />}
-      {activeTab === "Locataires" && <TenantsView selected={selectedTenant} onSelect={onTenant} onAction={onAction} />}
-      {activeTab === "Prospects" && <ProspectsView onAction={onAction} />}
-      {activeTab === "Visites" && <VisitsView onAction={onAction} />}
+      {activeTab === "Propriétaires" && <OwnersView selected={selectedOwner} onOpenDetail={(owner) => openDetail("owner", owner)} />}
+      {activeTab === "Locataires" && <TenantsView onOpenDetail={(tenant) => openDetail("tenant", tenant)} />}
+      {activeTab === "Prospects" && <ProspectsView onOpenDetail={(prospect) => openDetail("prospect", prospect)} onAction={onAction} />}
+      {activeTab === "Visites" && <VisitsView onOpenDetail={(visit) => openDetail("visit", visit)} onAction={onAction} />}
+        </>
+      )}
     </>
   );
 }
 
-function OwnersView({ selected, onSelect, onAction }) {
+function DetailPageShell({ title, subtitle, onBack, children }) {
   return (
-    <section className="master-detail" data-demo="owner-workspace">
+    <section className="client-detail-shell">
+      <div className="detail-return-bar">
+        <Button onClick={onBack}><ArrowLeft size={17} /> Retour à la liste</Button>
+        <div>
+          <span>{title}</span>
+          <strong>{subtitle}</strong>
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function useDetailNavigation() {
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [savedScroll, setSavedScroll] = useState(0);
+
+  const openDetail = () => {
+    setSavedScroll(window.scrollY);
+    setDetailOpen(true);
+  };
+
+  const closeDetail = () => {
+    setDetailOpen(false);
+    window.setTimeout(() => window.scrollTo({ top: savedScroll, behavior: "auto" }), 0);
+  };
+
+  return { detailOpen, openDetail, closeDetail };
+}
+
+function OwnersView({ selected, onOpenDetail }) {
+  return (
+    <section className="client-list-workspace" data-demo="owner-workspace">
       <Panel title="Liste des propriétaires" toolbar={<span className="muted">124 propriétaires</span>}>
         <div className="owner-list">
           <div className="owner-list-header" aria-hidden="true">
@@ -2735,7 +3205,7 @@ function OwnersView({ selected, onSelect, onAction }) {
             <button
               className={selected.id === owner.id ? "owner-row active" : "owner-row"}
               key={owner.id}
-              onClick={() => onSelect(owner)}
+              onClick={() => onOpenDetail(owner)}
             >
               <Avatar name={owner.name} image={owner.avatar} initials={owner.initials} />
               <span>
@@ -2753,7 +3223,6 @@ function OwnersView({ selected, onSelect, onAction }) {
           ))}
         </div>
       </Panel>
-      <OwnerProfilePanel owner={selected} onAction={onAction} />
     </section>
   );
 }
@@ -2883,14 +3352,14 @@ function OwnerProfilePanel({ owner, onAction }) {
   );
 }
 
-function TenantsView({ selected, onSelect, onAction }) {
+function TenantsView({ onOpenDetail }) {
   return (
-    <section className="master-detail">
+    <section className="client-list-workspace">
       <Panel title="Liste des locataires">
         <DataTable
           columns={["Locataire", "Téléphone", "Bien occupé", "Propriétaire", "Loyer", "Impayé", "Contrat actif", "Statut", "Action"]}
           rows={tenants.map((tenant) => [
-            <button className="table-person" onClick={() => onSelect(tenant)}>
+            <button className="table-person" onClick={() => onOpenDetail(tenant)}>
               <Avatar name={tenant.name} />
               <span><strong>{tenant.name}</strong><small>{tenant.id}</small></span>
             </button>,
@@ -2901,11 +3370,10 @@ function TenantsView({ selected, onSelect, onAction }) {
             tenant.paymentStatus === "À jour" ? "0 FCFA" : rentRows.find((row) => row.tenant === tenant.name)?.balance ?? "0 FCFA",
             tenant.contract,
             <Badge label={tenant.paymentStatus} />,
-            <Button compact onClick={() => onSelect(tenant)}><Eye size={15} /> Fiche</Button>,
+            <Button compact onClick={() => onOpenDetail(tenant)}><Eye size={15} /> Fiche</Button>,
           ])}
         />
       </Panel>
-      <TenantProfilePanel tenant={selected} onAction={onAction} />
     </section>
   );
 }
@@ -3006,40 +3474,31 @@ function TenantProfilePanel({ tenant, onAction }) {
   );
 }
 
-function ProspectsView({ onAction }) {
-  const [selected, setSelected] = useState(prospects[0]);
-  const stages = ["Nouveau", "Contacté", "Visite prévue", "Intéressé", "Conclu", "Perdu"];
+function ProspectsView({ onOpenDetail, onAction }) {
   return (
-    <section className="prospect-workspace" data-demo="prospect-workspace">
-      <div className="pipeline-columns">
-        {stages.map((stage) => (
-          <Panel title={stage} key={stage}>
-            <div className="prospect-stack">
-              {prospects
-                .filter((prospect) => prospect.status === stage)
-                .map((prospect) => (
-                  <article
-                    className={selected.name === prospect.name ? "prospect-card active" : "prospect-card"}
-                    key={prospect.name}
-                    onClick={() => setSelected(prospect)}
-                  >
-                    <strong>{prospect.name}</strong>
-                    <small>{prospect.phone}</small>
-                    <p>{prospect.need}</p>
-                    <span><MapPin size={14} /> {prospect.district}</span>
-                    <span><Wallet size={14} /> {prospect.budget}</span>
-                    <div>
-                      <Avatar name={prospect.agent} />
-                      <small>{prospect.agent}</small>
-                    </div>
-                    <button onClick={(event) => { event.stopPropagation(); onAction(prospect.next); }}>{prospect.next}</button>
-                  </article>
-                ))}
-            </div>
-          </Panel>
-        ))}
-      </div>
-      <ProspectProfilePanel prospect={selected} onAction={onAction} />
+    <section className="client-list-workspace" data-demo="prospect-workspace">
+      <Panel title="Liste des prospects" toolbar={<span className="muted">{prospects.length} prospects</span>}>
+        <DataTable
+          columns={["Prospect", "Téléphone", "Besoin", "Quartiers", "Budget", "Agent", "Statut", "Prochaine action", "Action"]}
+          rows={prospects.map((prospect) => [
+            <button className="table-person" onClick={() => onOpenDetail(prospect)}>
+              <Avatar name={prospect.name} />
+              <span><strong>{prospect.name}</strong><small>{prospect.status}</small></span>
+            </button>,
+            prospect.phone,
+            prospect.need,
+            prospect.district,
+            prospect.budget,
+            prospect.agent,
+            <Badge label={prospect.status} />,
+            prospect.next,
+            <div className="table-actions">
+              <Button compact onClick={() => onOpenDetail(prospect)}><Eye size={15} /> Fiche</Button>
+              <Button compact onClick={() => onAction(prospect.next)}><Phone size={15} /> Action</Button>
+            </div>,
+          ])}
+        />
+      </Panel>
     </section>
   );
 }
@@ -3109,10 +3568,9 @@ function ProspectProfilePanel({ prospect, onAction }) {
   );
 }
 
-function VisitsView({ onAction }) {
-  const [selected, setSelected] = useState(visits[0]);
+function VisitsView({ onOpenDetail, onAction }) {
   return (
-    <section className="master-detail" data-demo="visits-workspace">
+    <section className="client-list-workspace" data-demo="visits-workspace">
       <Panel title="Visites programmées et réalisées" toolbar={<Button compact onClick={() => onAction("Planifier une visite")}><Plus size={16} /> Planifier</Button>}>
         <DataTable
           columns={["Date & heure", "Prospect / client", "Bien", "Agent", "Statut", "Retour client", "Prochaine action", "Action"]}
@@ -3124,11 +3582,10 @@ function VisitsView({ onAction }) {
             <Badge label={visit.status} />,
             visit.feedback,
             visit.next,
-            <Button compact onClick={() => setSelected(visit)}><Eye size={15} /> Fiche</Button>,
+            <Button compact onClick={() => onOpenDetail(visit)}><Eye size={15} /> Fiche</Button>,
           ])}
         />
       </Panel>
-      <VisitProfilePanel visit={selected} onAction={onAction} />
     </section>
   );
 }
@@ -3198,6 +3655,12 @@ function ContractsPage({ activeTab, onTab, onAction }) {
 
 function ContractsList({ onAction }) {
   const [selected, setSelected] = useState(contracts[0]);
+  const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
+
+  const openContract = (contract) => {
+    setSelected(contract);
+    openDetail();
+  };
 
   return (
     <>
@@ -3216,7 +3679,12 @@ function ContractsList({ onAction }) {
           <Button><Filter size={17} /> Filtres</Button>
         </div>
       </Panel>
-      <section className="master-detail" data-demo="contracts-workspace">
+      {detailOpen ? (
+        <DetailPageShell title="Fiche contrat" subtitle={selected.number} onBack={closeDetail}>
+          <ContractProfilePanel contract={selected} onAction={onAction} />
+        </DetailPageShell>
+      ) : (
+      <section className="client-list-workspace" data-demo="contracts-workspace">
         <Panel title="Liste des contrats">
           <DataTable
             columns={["Numéro contrat", "Type", "Bien", "Propriétaire", "Locataire / client", "Date début", "Date fin", "Statut", "Échéance", "Action"]}
@@ -3230,12 +3698,12 @@ function ContractsList({ onAction }) {
               contract.end,
               <Badge label={contract.status} />,
               getContractDueLabel(contract),
-              <Button compact onClick={() => setSelected(contract)}><Eye size={16} /> Fiche</Button>,
+              <Button compact onClick={() => openContract(contract)}><Eye size={16} /> Fiche</Button>,
             ])}
           />
         </Panel>
-        <ContractProfilePanel contract={selected} onAction={onAction} />
       </section>
+      )}
     </>
   );
 }
@@ -3341,6 +3809,11 @@ function DocumentGeneration({ onAction }) {
 
 function InvoicesView({ onAction }) {
   const [selected, setSelected] = useState(invoices[0]);
+  const [documentNumbers, setDocumentNumbers] = useState(() =>
+    Object.fromEntries(invoices.map((invoice, index) => [invoice.number, invoice.number || makeDocumentNumber(getDocumentPrefix(invoice.type), index + 1)]))
+  );
+  const selectedNumber = documentNumbers[selected.number] ?? selected.number;
+  const selectedInvoice = { ...selected, number: selectedNumber };
   const selectedPayment = paymentRecords.find((item) => item.property === selected.property || item.receipt === selected.number) ?? paymentRecords[0];
   const selectedProperty = properties.find((item) => item.name === selected.property) ?? properties[0];
   const selectedOwner = owners.find((item) => item.name === selectedProperty.owner) ?? owners[0];
@@ -3353,11 +3826,21 @@ function InvoicesView({ onAction }) {
         title="Documents émis"
         toolbar={<span className="muted">{invoices.length} modèles</span>}
       >
+        <div className="auto-number-box">
+          <label>
+            Numéro automatique
+            <input
+              value={selectedNumber}
+              onChange={(event) => setDocumentNumbers((current) => ({ ...current, [selected.number]: event.target.value }))}
+            />
+            <small>Proposé par E.K immo, modifiable avant génération.</small>
+          </label>
+        </div>
         <div className="document-list">
           {invoices.map((invoice) => (
             <button className={selected.number === invoice.number ? "active" : ""} key={invoice.number} onClick={() => setSelected(invoice)}>
               <span>
-                <strong>{invoice.number}</strong>
+                <strong>{documentNumbers[invoice.number] ?? invoice.number}</strong>
                 <small>{invoice.type} · {invoice.client}</small>
               </span>
               <Badge label={invoice.status} />
@@ -3371,7 +3854,7 @@ function InvoicesView({ onAction }) {
         title="Document à remplir"
         onAction={onAction}
         data={{
-          invoice: selected,
+          invoice: selectedInvoice,
           payment: selectedPayment,
           property: selectedProperty,
           owner: selectedOwner,
@@ -3987,9 +4470,23 @@ function FinanceTable({ title, columns, rows }) {
 
 function CommissionsView({ onAction }) {
   const [selected, setSelected] = useState(commissions[0]);
+  const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
+
+  const openCommission = (row) => {
+    setSelected(row);
+    openDetail();
+  };
+
+  if (detailOpen) {
+    return (
+      <DetailPageShell title="Fiche commission" subtitle={selected.operation} onBack={closeDetail}>
+        <CommissionProfilePanel commission={selected} onAction={onAction} />
+      </DetailPageShell>
+    );
+  }
 
   return (
-    <section className="master-detail">
+    <section className="client-list-workspace">
       <div>
         <div className="summary-strip finance-summary">
           <Info label="Total encaissé" value="41 600 000 FCFA" />
@@ -4007,13 +4504,12 @@ function CommissionsView({ onAction }) {
               row.commission,
               row.ownerNet,
               <Badge label="Généré" />,
-              <Button compact onClick={() => setSelected(row)}><Eye size={16} /> Fiche</Button>,
+              <Button compact onClick={() => openCommission(row)}><Eye size={16} /> Fiche</Button>,
             ])}
             columns={["Opération", "Bien", "Propriétaire", "Montant encaissé", "Mode", "Commission", "Net propriétaire", "Statut", "Action"]}
           />
         </Panel>
       </div>
-      <CommissionProfilePanel commission={selected} onAction={onAction} />
     </section>
   );
 }
@@ -4079,6 +4575,7 @@ function getChargeImpactLabel(charge) {
 
 function ChargesView({ onAction }) {
   const [selected, setSelected] = useState(charges[0]);
+  const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
   const [query, setQuery] = useState("");
   const [period, setPeriod] = useState("Toutes périodes");
   const [type, setType] = useState("Tous types");
@@ -4134,6 +4631,11 @@ function ChargesView({ onAction }) {
       ["Charges à valider", String(charges.filter((charge) => ["À valider", "En attente", "Brouillon"].includes(charge.status)).length), AlertTriangle],
     ];
   }, []);
+
+  const openCharge = (charge) => {
+    setSelected(charge);
+    openDetail();
+  };
 
   return (
     <section className="charges-screen" data-demo="charges-workspace">
@@ -4195,7 +4697,12 @@ function ChargesView({ onAction }) {
         </div>
       </Panel>
 
-      <section className="master-detail charges-detail-layout">
+      {detailOpen ? (
+        <DetailPageShell title="Fiche charge" subtitle={selected.id} onBack={closeDetail}>
+          <ChargeProfilePanel charge={selected} onAction={onAction} />
+        </DetailPageShell>
+      ) : (
+      <section className="client-list-workspace charges-detail-layout">
         <Panel title="Tableau des charges" toolbar={<span className="filter-count">{filteredCharges.length}</span>}>
           <DataTable
             columns={["Date", "Type de charge", "Description courte", "Bien concerné", "Propriétaire", "Montant", "Prise en charge", "Statut", "Justificatif", "Action"]}
@@ -4209,13 +4716,13 @@ function ChargesView({ onAction }) {
               getChargeImpactLabel(row),
               <Badge label={row.status} />,
               <ChargeProofCell charge={row} />,
-              <ChargeActions charge={row} selected={selected} onSelect={setSelected} onAction={onAction} />,
+              <ChargeActions charge={row} selected={selected} onSelect={openCharge} onAction={onAction} />,
             ])}
           />
           {filteredCharges.length === 0 && <p className="empty-state">Aucune charge ne correspond aux filtres sélectionnés.</p>}
         </Panel>
-        <ChargeProfilePanel charge={selected} onAction={onAction} />
       </section>
+      )}
     </section>
   );
 }
@@ -4347,9 +4854,23 @@ function ChargeProfilePanel({ charge, onAction }) {
 
 function MaintenancesView({ onAction }) {
   const [selected, setSelected] = useState(maintenances[0]);
+  const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
+
+  const openMaintenance = (row) => {
+    setSelected(row);
+    openDetail();
+  };
+
+  if (detailOpen) {
+    return (
+      <DetailPageShell title="Fiche entretien" subtitle={`${selected.type} · ${selected.property}`} onBack={closeDetail}>
+        <MaintenanceProfilePanel maintenance={selected} onAction={onAction} />
+      </DetailPageShell>
+    );
+  }
 
   return (
-    <section className="master-detail">
+    <section className="client-list-workspace">
       <Panel title="Entretiens prévus ou réalisés">
         <DataTable
           columns={["Bien", "Type", "Date prévue", "Responsable", "Coût estimé", "Coût réel", "Prise en charge", "Justificatif", "Statut", "Action"]}
@@ -4363,11 +4884,10 @@ function MaintenancesView({ onAction }) {
             row.payer,
             "Justificatif à joindre",
             <Badge label={row.status} />,
-            <Button compact onClick={() => setSelected(row)}><Eye size={16} /> Fiche</Button>,
+            <Button compact onClick={() => openMaintenance(row)}><Eye size={16} /> Fiche</Button>,
           ])}
         />
       </Panel>
-      <MaintenanceProfilePanel maintenance={selected} onAction={onAction} />
     </section>
   );
 }
@@ -4421,9 +4941,23 @@ function MaintenanceProfilePanel({ maintenance, onAction }) {
 
 function ReversalsView({ onAction }) {
   const [selected, setSelected] = useState(reversals[0]);
+  const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
+
+  const openReversal = (row) => {
+    setSelected(row);
+    openDetail();
+  };
+
+  if (detailOpen) {
+    return (
+      <DetailPageShell title="Fiche reversement" subtitle={selected.owner} onBack={closeDetail}>
+        <ReversalProfilePanel reversal={selected} onAction={onAction} />
+      </DetailPageShell>
+    );
+  }
 
   return (
-    <section className="master-detail" data-demo="reversals-workspace">
+    <section className="client-list-workspace" data-demo="reversals-workspace">
       <Panel title="Reversements propriétaires">
         <DataTable
           columns={["Propriétaire", "Loyers encaissés", "Commissions", "Charges", "Déjà reversé", "Solde", "Statut", "Action"]}
@@ -4435,11 +4969,10 @@ function ReversalsView({ onAction }) {
             row.paid,
             row.balance,
             <Badge label={row.status} />,
-            <Button compact onClick={() => setSelected(row)}><Eye size={16} /> Fiche</Button>,
+            <Button compact onClick={() => openReversal(row)}><Eye size={16} /> Fiche</Button>,
           ])}
         />
       </Panel>
-      <ReversalProfilePanel reversal={selected} onAction={onAction} />
     </section>
   );
 }
@@ -4484,6 +5017,7 @@ function ReversalProfilePanel({ reversal, onAction }) {
 
 function PaymentForm({ onAction }) {
   const [selected, setSelected] = useState(paymentRecords[1]);
+  const [receiptNumber, setReceiptNumber] = useState(makeDocumentNumber("REC", 92));
   const agencyProperties = properties.filter((property) => isAgencyCollectedProperty(property.name));
   const paymentRows = paymentRecords.filter((payment) => isAgencyCollectedProperty(payment.property));
 
@@ -4500,6 +5034,7 @@ function PaymentForm({ onAction }) {
           <label>Solde automatique<input defaultValue="400 000 FCFA" readOnly /></label>
           <label>Mode de paiement<select>{paymentModes.map((mode) => <option key={mode}>{mode}</option>)}</select></label>
           <label>Référence paiement<input defaultValue="OM-250528-118" /></label>
+          <label>Numéro reçu automatique<input value={receiptNumber} onChange={(event) => setReceiptNumber(event.target.value)} /><small>Modifiable si le client impose une référence interne.</small></label>
           <label>Date paiement<input defaultValue="28/05/2026" /></label>
           <label className="full">Observations<textarea defaultValue="Paiement partiel reçu via Orange Money. Relance prévue pour le solde." /></label>
         </div>
@@ -4549,9 +5084,23 @@ function PaymentForm({ onAction }) {
 function ArrearsView({ onAction }) {
   const rows = getAgencyRentRows().filter((row) => row.status === "Partiel" || row.status === "Impayé");
   const [selected, setSelected] = useState(rows[0]);
+  const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
+
+  const openArrear = (row) => {
+    setSelected(row);
+    openDetail();
+  };
+
+  if (detailOpen) {
+    return (
+      <DetailPageShell title="Fiche relance" subtitle={selected.tenant} onBack={closeDetail}>
+        <ArrearsProfilePanel row={selected} onAction={onAction} />
+      </DetailPageShell>
+    );
+  }
 
   return (
-    <section className="master-detail">
+    <section className="client-list-workspace">
       <Panel title="Impayés & relances">
         <DataTable
           columns={["Locataire", "Bien", "Propriétaire", "Montant dû", "Ancienneté", "Dernière relance", "Prochaine action", "Statut", "Actions"]}
@@ -4564,11 +5113,10 @@ function ArrearsView({ onAction }) {
             index === 0 ? "SMS le 22/05" : "Appel le 24/05",
             index === 0 ? "Encaisser solde" : "Lettre de relance",
             <Badge label={row.status === "Partiel" ? "Relancé" : "En retard"} />,
-            <div className="table-actions"><Button compact onClick={() => setSelected(row)}><Eye size={15} /> Fiche</Button><Button compact onClick={() => onAction("Ajouter relance")}>Relancer</Button></div>,
+            <div className="table-actions"><Button compact onClick={() => openArrear(row)}><Eye size={15} /> Fiche</Button><Button compact onClick={() => onAction("Ajouter relance")}>Relancer</Button></div>,
           ])}
         />
       </Panel>
-      <ArrearsProfilePanel row={selected} onAction={onAction} />
     </section>
   );
 }
@@ -4697,9 +5245,23 @@ function AdminPage({ activeTab, onTab, onAction }) {
 
 function UsersAdmin({ onAction }) {
   const [selected, setSelected] = useState(users[0]);
+  const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
+
+  const openUser = (user) => {
+    setSelected(user);
+    openDetail();
+  };
+
+  if (detailOpen) {
+    return (
+      <DetailPageShell title="Fiche utilisateur" subtitle={selected.name} onBack={closeDetail}>
+        <UserProfilePanel user={selected} onAction={onAction} />
+      </DetailPageShell>
+    );
+  }
 
   return (
-    <section className="master-detail" data-demo="admin-workspace">
+    <section className="client-list-workspace" data-demo="admin-workspace">
       <Panel title="Utilisateurs">
         <DataTable
           columns={["Nom", "Email", "Rôle", "Statut", "Dernière connexion", "Action"]}
@@ -4710,14 +5272,13 @@ function UsersAdmin({ onAction }) {
             <Badge label={user.status} />,
             user.lastLogin,
             <div className="table-actions">
-              <Button compact onClick={() => setSelected(user)}><Eye size={15} /> Fiche</Button>
+              <Button compact onClick={() => openUser(user)}><Eye size={15} /> Fiche</Button>
               <Button compact onClick={() => onAction("Modifier utilisateur")}><Pencil size={15} /> Modifier</Button>
               <Button compact onClick={() => onAction("Désactiver utilisateur")}><XCircle size={15} /> Désactiver</Button>
             </div>,
           ])}
         />
       </Panel>
-      <UserProfilePanel user={selected} onAction={onAction} />
     </section>
   );
 }
@@ -5098,7 +5659,7 @@ function Badge({ label }) {
 function statusTone(label) {
   if (["Disponible", "Actif", "À jour", "Payé", "Payée", "Validée", "Déduite", "Conclu", "Archivé", "Imprimé", "Généré", "Réalisée", "Présent", "Justificatif joint"].includes(label)) return "success";
   if (["Loué", "Visite prévue", "Prévue", "Contacté", "Réservé", "Planifié", "À payer", "À reverser", "Refacturable", "Ouverte", "Entretien seul"].includes(label)) return "purple";
-  if (["En travaux", "Partiel", "À valider", "À échéance", "À déduire", "En attente", "En cours", "Reportée", "Relancé", "Client intéressé", "Brouillon", "Encaissement propriétaire"].includes(label)) return "warning";
+  if (["En travaux", "Partiel", "À valider", "À échéance", "À déduire", "En attente", "En cours", "Reportée", "Relancé", "Client intéressé", "Brouillon", "Encaissement propriétaire", "Gestion multi-lots", "Suivi"].includes(label)) return "warning";
   if (["Impayé", "En retard", "Litige", "Perdu", "Suspendu", "Annulée", "Justificatif manquant"].includes(label)) return "danger";
   if (["Inactif", "Indisponible", "Vendu", "Manquant"].includes(label)) return "muted";
   return "default";
@@ -5124,12 +5685,16 @@ function ProfileHeader({ person }) {
         <h3>{person.name}</h3>
         <p>{person.id}</p>
       </div>
-      <span className="profile-contact">
-        <Mail size={15} /> {person.email}
-      </span>
-      <span className="profile-contact">
-        <Phone size={15} /> {person.phone}
-      </span>
+      {person.email && (
+        <span className="profile-contact">
+          <Mail size={15} /> {person.email}
+        </span>
+      )}
+      {person.phone && (
+        <span className="profile-contact">
+          <Phone size={15} /> {person.phone}
+        </span>
+      )}
     </div>
   );
 }
@@ -5325,6 +5890,9 @@ function ContractFormModal({ onClose }) {
 }
 
 function PropertyFormModal({ title, onClose }) {
+  const [propertyNature, setPropertyNature] = useState("Appartement rattaché");
+  const [hasFocalPoint, setHasFocalPoint] = useState(true);
+
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section className="modal-card wide-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
@@ -5334,12 +5902,12 @@ function PropertyFormModal({ title, onClose }) {
           <h3>Informations générales</h3>
           <div className="form-grid compact-form">
             <label>Code du bien<input defaultValue="EKM-NEW-001" /></label>
-            <label>Type de bien<select><option>Maison</option><option>Appartement</option><option>Villa</option><option>Terrain</option><option>Bureau</option><option>Boutique</option><option>Immeuble</option></select></label>
-            <label>Nom ou désignation<input defaultValue="Nouveau bien" /></label>
+            <label>Type de bien<select><option>Immeuble collectif</option><option>Appartement rattaché</option><option>Appartement individuel</option><option>Maison</option><option>Villa</option><option>Terrain</option><option>Bureau</option><option>Boutique</option></select></label>
+            <label>Nom ou désignation<input defaultValue="Appartement B-204 Korofina" /></label>
             <label>Quartier<input defaultValue="ACI 2000, Bamako" /></label>
             <label className="full">Adresse détaillée<input defaultValue="Adresse complète du bien" /></label>
             <label className="full">Description<textarea defaultValue="Description du bien, de ses accès et de ses caractéristiques principales." /></label>
-            <label>Statut<select><option>Disponible</option><option>Loué</option><option>Réservé</option><option>Vendu</option><option>En travaux</option><option>Indisponible</option></select></label>
+            <label>Statut<select><option>Disponible</option><option>Loué</option><option>Réservé</option><option>Gestion multi-lots</option><option>Entretien seul</option><option>Vendu</option><option>En travaux</option><option>Indisponible</option></select></label>
             <label>Prix de location<input defaultValue="850 000 FCFA" /></label>
             <label>Prix de vente<input placeholder="Si applicable" /></label>
             <label>Montant de caution<input defaultValue="1 700 000 FCFA" /></label>
@@ -5347,12 +5915,53 @@ function PropertyFormModal({ title, onClose }) {
           </div>
         </div>
         <div className="form-section">
-          <h3>Rattachement</h3>
+          <h3>Immeuble, blocs et lots</h3>
+          <div className="form-grid compact-form">
+            <label>Nature du dossier<select value={propertyNature} onChange={(event) => setPropertyNature(event.target.value)}><option>Appartement rattaché</option><option>Immeuble parent</option><option>Bien individuel</option></select></label>
+            {propertyNature === "Appartement rattaché" && (
+              <>
+                <label>Immeuble parent<select>{properties.filter(isBuildingProperty).map((property) => <option key={property.code}>{property.name}</option>)}</select></label>
+                <label>Bloc<select><option>Bloc A</option><option>Bloc B</option><option>Bloc C</option></select></label>
+                <label>Étage<input defaultValue="2e étage" /></label>
+                <label>Numéro du lot<input defaultValue="B-204" /></label>
+              </>
+            )}
+            {propertyNature === "Immeuble parent" && (
+              <>
+                <label>Nombre de blocs<input defaultValue="2" /></label>
+                <label>Nombre d'appartements<input defaultValue="12" /></label>
+                <label>Lots disponibles<input defaultValue="3" /></label>
+                <label>Référence structure<input defaultValue="STR-KOR-2026" /></label>
+              </>
+            )}
+          </div>
+          <div className="form-structure-preview">
+            <img src={assets.residence} alt="" />
+            <div>
+              <strong>{propertyNature === "Immeuble parent" ? "Création d'un immeuble parent" : "Appartement lié à un immeuble"}</strong>
+              <span>{propertyNature === "Immeuble parent" ? "Les appartements pourront ensuite être créés comme fiches indépendantes rattachées aux blocs." : "La fiche appartement reste autonome, avec un lien visible vers l'immeuble parent."}</span>
+            </div>
+          </div>
+        </div>
+        <div className="form-section">
+          <h3>Propriétaire & point focal</h3>
           <div className="form-grid compact-form">
             <label>Propriétaire<select>{owners.map((owner) => <option key={owner.id}>{owner.name}</option>)}</select></label>
             <label>Locataire actuel<select><option>Libre</option>{tenants.map((tenant) => <option key={tenant.id}>{tenant.name}</option>)}</select></label>
             <label>Agent responsable<select><option>Aïssata Diarra</option><option>Mariam Traoré</option><option>Issa Maïga</option><option>Cheick Camara</option></select></label>
-            <label>Mode de gestion financière<select><option>Encaissement par l'agence</option><option>Encaissement direct par le propriétaire</option></select></label>
+            <label>Mode de gestion financière<select><option>Encaissement par l'agence</option><option>Encaissement direct par le propriétaire</option><option>Contrat entretien seul</option></select></label>
+            <label className="check-line full">
+              <input type="checkbox" checked={hasFocalPoint} onChange={(event) => setHasFocalPoint(event.target.checked)} />
+              <span>Point focal différent du propriétaire</span>
+            </label>
+            {hasFocalPoint && (
+              <>
+                <label>Nom du point focal<input defaultValue="Ousmane Traoré" /></label>
+                <label>Fonction / rôle<input defaultValue="Gestionnaire du syndic" /></label>
+                <label>Téléphone<input defaultValue="+223 76 55 21 04" /></label>
+                <label>Email<input defaultValue="syndic.korofina@foncieremande.ml" /></label>
+              </>
+            )}
           </div>
         </div>
         <div className="form-section">
@@ -5372,7 +5981,6 @@ function PropertyFormModal({ title, onClose }) {
         <div className="action-row compact-row">
           <Button variant="primary" onClick={onClose}><CheckCircle2 size={17} /> Enregistrer</Button>
           <Button onClick={onClose}>Enregistrer comme brouillon</Button>
-          <Button onClick={onClose}>Ajouter propriétaire</Button>
           <Button onClick={onClose}>Annuler</Button>
         </div>
       </section>
