@@ -4444,7 +4444,7 @@ function FillableBail({ values, onChange, readOnly = false, preview = false }) {
   return (
     <div className="fillable-document digital bail">
       {preview ? (
-        <OriginalLeaseDocument values={values} onChange={onChange} readOnly={readOnly} />
+        <OriginalLeaseDocument values={values} />
       ) : (
         <LeaseVariableForm values={values} onChange={onChange} readOnly={readOnly} />
       )}
@@ -4452,136 +4452,213 @@ function FillableBail({ values, onChange, readOnly = false, preview = false }) {
   );
 }
 
-function OriginalLeaseDocument({ values, onChange, readOnly = false }) {
-  const fieldProps = { values, onChange, readOnly };
+function LeaseFill({ children, wide = false }) {
+  return <span className={wide ? "lease-fill wide" : "lease-fill"}>{children || "..."}</span>;
+}
+
+function LeaseMeta({ label, children }) {
+  return (
+    <p>
+      <strong>{label}</strong>
+      <span>{children}</span>
+    </p>
+  );
+}
+
+function LeaseHeading({ children }) {
+  return <h4 className="lease-original-heading">{children}</h4>;
+}
+
+function LeaseSubheading({ children }) {
+  return <h5 className="lease-original-subheading">{children}</h5>;
+}
+
+function OriginalLeaseDocument({ values }) {
+  const localAddress = values.localAdresse || values.adresse;
+  const signatureDate = values.dateSignature || values.souscritLe;
+  const signaturePlace = values.lieuSignature || "Bamako";
+  const contractObject = values.objet || "CONTRAT DE BAIL À USAGE PROFESSIONNEL";
 
   return (
     <article className="original-lease-document">
       <section className="lease-sheet">
-        <div className="lease-meta-grid">
-          <LeaseField name="contratNo" label="CONTRAT NO" {...fieldProps} />
-          <LeaseField name="souscritLe" label="LE SOUSCRIT LE" {...fieldProps} />
-          <LeaseField name="preneur" label="PRENEUR" {...fieldProps} />
-          <LeaseField name="objet" label="OBJET" {...fieldProps} />
+        <header className="lease-original-logo">
+          <img src={ekimmoAssets.logo} alt="E.K immo" />
+        </header>
+
+        <div className="lease-original-meta">
+          <LeaseMeta label="CONTRAT N° :">{values.contratNo}</LeaseMeta>
+          <LeaseMeta label="LE SOUSCRIT LE :">{values.souscritLe}</LeaseMeta>
+          <LeaseMeta label="PRENEUR :">{values.preneur}</LeaseMeta>
+          <LeaseMeta label="OBJET :">{contractObject}</LeaseMeta>
         </div>
 
-        <h3>CONTRAT DE BAIL À USAGE PROFESSIONNEL</h3>
-
-        <section className="lease-clause-block">
-          <h4>ENTRE LES SOUSSIGNÉS</h4>
+        <section className="lease-original-section">
+          <LeaseHeading>ENTRE LES SOUSSIGNÉS :</LeaseHeading>
           <p>
-            La société <strong>E.K immo SAS</strong>, société immobilière au capital de 1 000 000 FCFA,
-            sise à Niaréla, rue Achkhabad, face mairie, Bamako - Mali, immatriculée au RCCM sous le numéro
-            <strong> MA BKO 2022 B-2224</strong>, représentée par
-            <LeaseInlineField name="bailleurRep" label="Représentant du bailleur" {...fieldProps} wide />.
+            La société <strong>ekIMMO SAS</strong>, société par actions simplifiée au capital d’un million
+            (1 000 000) de francs CFA, dont le siège social est situé à Niaréla, rue ACHKHABAD,
+            en face de la Mairie, Bamako-MALI, immatriculée au registre de commerce et du crédit mobilier
+            de Bamako sous le numéro <strong>MA.BKO.2022.B.2224</strong>, représentée par
+            Monsieur <LeaseFill>{values.bailleurRep}</LeaseFill>, demeurant à Bamako, en sa qualité de Président
+            dûment habilité aux fins des présentes ;
           </p>
-          <p>Ci-après dénommée <strong>le bailleur</strong>, d'une part.</p>
-        </section>
-
-        <section className="lease-clause-block">
-          <h4>IDENTITÉ DU PRENEUR</h4>
-          <div className="lease-form-grid">
-            <LeaseField name="civilite" label="Civilité" {...fieldProps} />
-            <LeaseField name="preneur" label="Nom et prénom / raison sociale" {...fieldProps} />
-            <LeaseField name="naissance" label="Date et lieu de naissance" {...fieldProps} />
-            <LeaseField name="nina" label="Numéro carte NINA ou pièce" {...fieldProps} />
-            <LeaseField name="qualitePreneur" label="Qualité / fonction" {...fieldProps} />
-            <LeaseField name="telephonePreneur" label="Téléphone" {...fieldProps} />
-            <LeaseField name="adressePreneur" label="Adresse du preneur" {...fieldProps} className="full" />
+          <p>Ci-après dénommée : <strong>« le bailleur »</strong>,</p>
+          <p className="lease-centered">ET</p>
+          <div className="lease-identity-lines">
+            <p><strong>Nom Prénom :</strong> <LeaseFill wide>{values.preneur}</LeaseFill></p>
+            <p><strong>Date de naissance :</strong> <LeaseFill wide>{values.naissance}</LeaseFill></p>
+            <p><strong>Numéro carte NINA :</strong> <LeaseFill wide>{values.nina}</LeaseFill></p>
+            <p><strong>Adresse :</strong> <LeaseFill wide>{values.adressePreneur}</LeaseFill></p>
+            <p><strong>Téléphone :</strong> <LeaseFill wide>{values.telephonePreneur}</LeaseFill></p>
           </div>
+          <p>Ci-après dénommée : <strong>« le preneur »</strong>,</p>
+          <p>Ci-après ensemble dénommées <strong>« les parties »</strong>.</p>
+          <p className="lease-centered strong">IL A ÉTÉ CONVENU CE QUI SUIT :</p>
+        </section>
+
+        <section className="lease-original-section">
+          <LeaseHeading>OBJET DU CONTRAT</LeaseHeading>
           <p>
-            Donne à bail à <LeaseInlineField name="civilite" label="Civilité dans la clause" {...fieldProps} />
-            <LeaseInlineField name="preneur" label="Preneur dans la clause" {...fieldProps} wide />
-            es-qualité de <LeaseInlineField name="qualitePreneur" label="Qualité du preneur" {...fieldProps} wide />.
+            La société ekIMMO SAS, es-qualité, le bailleur, donne à bail à usage professionnel à
+            <LeaseFill>{values.civilite}</LeaseFill> <LeaseFill wide>{values.preneur}</LeaseFill>,
+            es-qualité de <LeaseFill wide>{values.qualitePreneur}</LeaseFill>, le preneur, le local ci-après désigné,
+            le preneur déclarant parfaitement le connaître pour l'avoir vu et visité et qu'il l'accepte :
+          </p>
+          <LeaseSubheading>Désignation du local</LeaseSubheading>
+          <p>
+            Le local est un <LeaseFill>{values.localType}</LeaseFill>, situé à <LeaseFill wide>{localAddress}</LeaseFill>,
+            tel que ledit immeuble existe, s'étend et se comporte avec ses aisances et dépendances sans exception
+            ni réserve.
+          </p>
+          <p className="lease-reference-line">
+            Bien concerné : <LeaseFill wide>{values.bien}</LeaseFill> - Désignation : <LeaseFill wide>{values.designationLocal}</LeaseFill>
+          </p>
+          <LeaseSubheading>Destination du local</LeaseSubheading>
+          <p>
+            Le preneur devra occuper les lieux loués par lui-même, paisiblement, conformément aux dispositions
+            de l'article 113 de l'Acte uniforme portant sur le droit commercial général, et pour exercer les activités
+            de <LeaseFill wide>{values.activite}</LeaseFill>.
+          </p>
+          <p>En cas de changement de l'activité prévue au présent contrat, le preneur doit obtenir l'accord préalable et exprès du bailleur qui peut s'y opposer pour des motifs sérieux. En cas de conflit entre le bailleur et le preneur, il appartient à la partie la plus diligente de saisir la juridiction compétente.</p>
+          <p>Les activités du preneur autorisées ne devront donner lieu à aucune contravention ni à aucune plainte ou réclamation de la part de qui que ce soit et, notamment, des autres locataires et/ou occupants de l'immeuble.</p>
+          <p>Le preneur fera en conséquence son affaire personnelle de tous les griefs qui seraient faits au bailleur à son sujet, de manière que ce dernier ne soit jamais inquiété et soit garanti de toutes les conséquences qui pourraient en résulter.</p>
+        </section>
+
+        <section className="lease-original-section">
+          <LeaseHeading>DATE DE PRISE D’EFFET ET DUREE DU CONTRAT</LeaseHeading>
+          <p>
+            Le présent bail est fait et consenti pour une durée de <LeaseFill>{values.duree}</LeaseFill> à compter du
+            <LeaseFill>{values.effetDate}</LeaseFill>. À l'expiration de cette période, le
+            <LeaseFill>{values.expirationDate}</LeaseFill>, il sera prorogé d'année en année par tacite reconduction.
+            Au cas où l'une des parties n'aurait pas l'intention de renouveler aux mêmes conditions le présent contrat,
+            elle devra le notifier trois (3) mois avant l'expiration du bail en cours par lettre recommandée avec accusé
+            de réception ou lettre remise en main propre contre décharge.
           </p>
         </section>
 
-        <section className="lease-clause-block">
-          <h4>ARTICLE 1 - DÉSIGNATION DU LOCAL</h4>
+        <section className="lease-original-section">
+          <LeaseHeading>CONDITIONS FINANCIERES</LeaseHeading>
+          <p>Les parties conviennent des conditions financières suivantes :</p>
+          <LeaseSubheading>Loyer</LeaseSubheading>
           <p>
-            Le local est un <LeaseInlineField name="localType" label="Type de local" {...fieldProps} />
-            situé à <LeaseInlineField name="localAdresse" label="Adresse du local" {...fieldProps} wide />.
+            Le présent bail est fait et consenti moyennant un loyer mensuel de :
+            <LeaseFill>{values.loyerHt}</LeaseFill> Hors Taxes, <LeaseFill>{values.loyerTtc}</LeaseFill> Toutes Taxes
+            Comprises, payable au plus tard <LeaseFill>{values.paiementJour}</LeaseFill>, sans qu'il y ait lieu à avis préalable.
           </p>
-          <div className="lease-form-grid">
-            <LeaseField name="bien" label="Bien concerné" {...fieldProps} />
-            <LeaseField name="adresse" label="Adresse enregistrée" {...fieldProps} />
-            <LeaseField name="designationLocal" label="Désignation détaillée" {...fieldProps} multiline className="full" />
+          <p>D'un commun accord il est convenu que tout mois entamé est dû en entier. Dès lors, si le preneur devait, pour quelque motif que ce soit, libérer les lieux en cours de mois, il ne pourrait pas réclamer un quelconque remboursement pour le mois entamé et non terminé.</p>
+          <p>Le montant du loyer prévu par le présent contrat sera révisé <LeaseFill>{values.revisionFrequence}</LeaseFill>, sans qu'il puisse être revu à la baisse.</p>
+          <LeaseSubheading>Dépôt de garantie (caution)</LeaseSubheading>
+          <p>
+            Le preneur s'engage à verser au bailleur la somme de <LeaseFill>{values.caution}</LeaseFill> correspondant
+            à <LeaseFill>{values.cautionMois}</LeaseFill> de loyer, en garantie de paiement du loyer, de la bonne exécution
+            des clauses et conditions du présent bail, des réparations d'entretien ou toute autre somme que le preneur peut
+            devoir au bailleur dans le cadre du présent contrat de bail.
+          </p>
+          <p>Le dépôt de garantie versé ne sera pas réévalué. Il ne produira pas d'intérêt pendant la durée de la location. Il est restitué au preneur dans un délai maximal d'un mois à compter de son départ lorsque l'état des lieux de sortie est conforme à l'état des lieux d'entrée, déduction faite, le cas échéant, des sommes restantes dues au bailleur à titre de loyer, charges, impôts remboursables, réparations, ou à tous autres titres.</p>
+        </section>
+
+        <section className="lease-original-section">
+          <LeaseHeading>REPARATIONS ET ENTRETIENS</LeaseHeading>
+          <p>Le preneur est tenu aux réparations d'entretien, il répond des dégradations ou pertes dues à un défaut d'entretien au cours du bail.</p>
+          <p>Par dérogation à l'état des lieux, tous les travaux d'embellissement qui seront entrepris par le preneur resteront en fin du bail, la propriété du bailleur sans contrepartie. Au cas où le bailleur aura l'intention de demander que le lieu soit rétabli à leur état initial à la fin du contrat, il doit le notifier trois mois à l'avance avant l'expiration du contrat. Tous les biens mobiliers apportés par le preneur resteront sa propriété exclusive.</p>
+          <p>Le bailleur assurera toutes les grosses réparations qui deviendraient nécessaires sur les lieux. Le preneur devra informer le bailleur des grosses dégradations dans un délai de 15 jours sous peine d'être tenu responsable de toute aggravation résultant de son silence ou de son retard.</p>
+          <p>Le preneur devra souffrir sans indemnité, ni diminution de loyer, de tous travaux, quels qu'ils soient, de modification, d'amélioration, ou de construction nouvelle, que le bailleur se réserve de faire exécuter dans les locaux loués ou dans l'immeuble, quels qu'en soient les inconvénients.</p>
+        </section>
+
+        <section className="lease-original-section">
+          <LeaseHeading>ETAT DES LIEUX</LeaseHeading>
+          <p>Un état des lieux contradictoire sera fait entre les parties. Le bailleur s'acquittera de la remise en état des lieux au moment de la signature du contrat. À la fin du contrat pour quelque cause que ce soit, le preneur est tenu de s'acquitter de la remise en état des lieux, dans les mêmes conditions qu'il les a trouvés au moment d'intégrer les locaux du Bailleur. L'état des lieux se fera au début et à la fin du contrat, constaté par un Procès-Verbal signé par les parties ou établi par un tiers mandaté par eux, le coût étant supporté à part égale par les parties.</p>
+          <p>Si l'état des lieux ne peut être établi dans les conditions prévues ci-dessus, il sera établi par un huissier de Justice, sur l'initiative de la partie la plus diligente, à frais partagés par moitié entre le bailleur et le preneur.</p>
+        </section>
+
+        <section className="lease-original-section">
+          <LeaseHeading>LES CONDITIONS DE FIN DE CONTRAT</LeaseHeading>
+          <p>Les parties peuvent mettre fin au bail à tout moment, après un préavis de trois (3) mois.</p>
+          <p>Le bailleur, quant à lui, peut mettre fin au bail à son échéance et après avoir donné le préavis ci-dessus cité, soit pour reprendre le logement en vue de l'occuper lui-même ou une personne de sa famille, soit pour le vendre, soit pour un motif sérieux et légitime en respectant un préavis de trois (3) mois.</p>
+          <LeaseSubheading>DÉPART DU PRENEUR</LeaseSubheading>
+          <p>Dès la notification du préavis, le preneur devra permettre la visite des lieux loués, en vue de la nouvelle location, deux heures par jour (les jours ouvrables) et ce, après accord avec le bailleur. À défaut d'accord du preneur pour fixer cet horaire, les visites pourront avoir lieu de 17 heures à 19 heures du lundi au samedi inclus.</p>
+          <p>Le preneur devra rendre les clés le jour de son déménagement, même si ce dernier a lieu avant l'expiration du terme en cours. Le preneur devra rendre les locaux loués en bon état conformément aux obligations lui incombant en vertu du présent bail.</p>
+        </section>
+
+        <section className="lease-original-section">
+          <LeaseHeading>CLAUSES RÉSOLUTOIRES</LeaseHeading>
+          <p>À défaut de paiement par le preneur de tout ou partie des loyers et/ou charges aux termes convenus, ou du dépôt de garantie, le présent contrat sera si bon semble au bailleur résilié de plein droit sans aucune autre formalité judiciaire, un mois après un commandement de payer demeuré infructueux.</p>
+          <p>À défaut de justification de la souscription de la police d'assurance couvrant les risques définis ci-après, le présent contrat sera si bon semble au bailleur, résilié de plein droit sans autre formalité judiciaire, un mois après un commandement demeuré infructueux.</p>
+          <p>Le bailleur pourra invoquer le bénéfice de la présente clause en cas de non-paiement, changement de destination des locaux sans accord écrit, inexploitation, manquement à l'entretien, défaut d'assurance, cession du bail sans accord écrit, sous-location prohibée ou mise en location-gérance prohibée.</p>
+          <LeaseSubheading>RESILIATION JUDICIAIRE</LeaseSubheading>
+          <p>Le bailleur peut demander judiciairement la résiliation du bail pour toutes infractions aux clauses des présentes telles que troubles de voisinage, défaut d'entretien du logement ou par application des clauses résolutoires.</p>
+        </section>
+
+        <section className="lease-original-section">
+          <LeaseHeading>ASSURANCE PRENEUR</LeaseHeading>
+          <p>Le preneur devra se faire assurer contre l'incendie, les explosions, la foudre, le bris de glaces et les dégâts des eaux, auprès d'une compagnie d'assurance notoirement solvable, tous les biens, y compris le local loué, mis à sa disposition par le bailleur dans le cadre du présent contrat du bail. Il devra payer les primes ou cotisations et justifier du tout à première demande au bailleur par la production de la police.</p>
+          <p>Cette obligation de s’assurer s’impose au preneur pendant toute la durée de la location. Il est responsable à l'égard du bailleur de tous les dommages aux locaux loués même si leur cause est inconnue, à moins qu'il ne prouve qu'ils aient eu lieu sans sa faute.</p>
+        </section>
+
+        <section className="lease-original-section">
+          <LeaseHeading>RÈGLEMENTS DE SECURITÉ ET DE SALUBRITÉ</LeaseHeading>
+          <p>Le preneur s'interdira tout acte pouvant nuire à la sécurité des personnes et des biens. Il n'utilisera, ni ne stockera de produits explosifs ou inflammables, autres que ceux d'un usage domestique courant. Il observera les règlements sanitaires applicables et laissera pénétrer dans les lieux loués les représentants du bailleur ou toute personne mandatée par le bailleur, chaque fois que ce sera nécessaire pour la sécurité et pour la salubrité.</p>
+        </section>
+
+        <section className="lease-original-section">
+          <LeaseHeading>CONDITIONS GENERALES DE LOCATION</LeaseHeading>
+          <LeaseSubheading>Occupation des locaux</LeaseSubheading>
+          <p>Le preneur devra occuper personnellement les lieux loués et ne pourra en conséquence se substituer à toute personne physique ou morale, même à titre gratuit et/ou temporaire, dans les lieux loués. Il ne pourra sous-louer tout ou partie des lieux sans autorisation expresse et écrite du bailleur. Le preneur s'interdit expressément de changer la disposition des locaux sauf autorisation expresse et écrite du bailleur.</p>
+          <LeaseSubheading>Entretien et aménagement des lieux loués</LeaseSubheading>
+          <p>Le preneur entretiendra les lieux loués en bon état de réparations locatives. Il s'engage à rendre le logement en bon état de réparations locatives et à signaler au bailleur toute anomalie ou dégradation constatée qui pourrait survenir pendant l'occupation.</p>
+          <LeaseSubheading>Visites</LeaseSubheading>
+          <p>Le preneur devra laisser visiter les lieux loués toutes les fois que le bailleur ou son mandataire le jugera nécessaire, soit pour veiller au bon état des locaux soit pour la vente de l'immeuble ou toute autre cause.</p>
+        </section>
+
+        {values.conditions && (
+          <section className="lease-original-section">
+            <LeaseHeading>CONDITIONS PARTICULIERES</LeaseHeading>
+            <p><LeaseFill wide>{values.conditions}</LeaseFill></p>
+          </section>
+        )}
+
+        <section className="lease-original-section">
+          <LeaseHeading>LOI APPLICABLE</LeaseHeading>
+          <p>Tout litige né dans l’exécution du présent contrat, sera soumis aux juridictions maliennes et la loi applicable est celle en vigueur au Mali.</p>
+          <LeaseHeading>ARTICLE 8 : ÉLECTION DE DOMICILE</LeaseHeading>
+          <p>Pour l'exécution des présentes, les parties élisent domicile :</p>
+          <p>Pour le bailleur : <LeaseFill wide>{values.domicileBailleur}</LeaseFill>.</p>
+          <p>Pour le preneur : <LeaseFill wide>{values.domicilePreneur}</LeaseFill>.</p>
+          <p>Fait à <LeaseFill>{signaturePlace}</LeaseFill>, en deux exemplaires originaux, le <LeaseFill>{signatureDate}</LeaseFill>.</p>
+        </section>
+
+        <section className="lease-original-signatures">
+          <div>
+            <strong>Le bailleur</strong>
+            <span>Pour ekIMMO</span>
+            <em>{values.bailleurRep}</em>
           </div>
-        </section>
-
-        <section className="lease-clause-block">
-          <h4>ARTICLE 2 - DESTINATION</h4>
-          <p>
-            Le preneur déclare utiliser les lieux pour l'activité suivante :
-            <LeaseInlineField name="activite" label="Destination / activité" {...fieldProps} wide />.
-            Toute modification de destination devra être préalablement acceptée par le bailleur.
-          </p>
-        </section>
-
-        <section className="lease-clause-block">
-          <h4>ARTICLE 3 - DURÉE</h4>
-          <p>
-            Le présent bail est consenti pour une durée de
-            <LeaseInlineField name="duree" label="Durée du bail" {...fieldProps} />
-            à compter du <LeaseInlineField name="effetDate" label="Date de prise d'effet" {...fieldProps} />
-            jusqu'au <LeaseInlineField name="expirationDate" label="Date d'expiration" {...fieldProps} />.
-            À l'expiration, le renouvellement ou la libération des lieux sera traité selon les délais convenus.
-          </p>
-        </section>
-
-        <section className="lease-clause-block">
-          <h4>ARTICLE 4 - LOYER, TAXES ET CAUTION</h4>
-          <div className="lease-form-grid three">
-            <LeaseField name="loyerHt" label="Loyer mensuel HT" {...fieldProps} />
-            <LeaseField name="loyerTtc" label="Loyer mensuel TTC" {...fieldProps} />
-            <LeaseField name="paiementJour" label="Échéance de paiement" {...fieldProps} />
-            <LeaseField name="caution" label="Caution / dépôt de garantie" {...fieldProps} />
-            <LeaseField name="cautionMois" label="Nombre de mois de caution" {...fieldProps} />
-            <LeaseField name="revisionFrequence" label="Révision du loyer" {...fieldProps} />
+          <div>
+            <strong>Le preneur</strong>
+            <span>{values.civilite} / M.</span>
+            <em>{values.preneur}</em>
           </div>
-          <p>
-            Le loyer sera payé mensuellement au plus tard le
-            <LeaseInlineField name="paiementJour" label="Jour de paiement" {...fieldProps} />.
-            Le preneur verse à titre de caution la somme de
-            <LeaseInlineField name="caution" label="Montant de la caution" {...fieldProps} wide />.
-          </p>
-        </section>
-
-        <section className="lease-clause-block">
-          <h4>ARTICLES 5 À 11 - CONDITIONS D'OCCUPATION</h4>
-          <p>
-            Le preneur prendra les lieux dans l'état où ils se trouvent après état des lieux contradictoire.
-            Les réparations locatives, l'entretien courant, l'assurance, la salubrité, les règles de sécurité,
-            les autorisations administratives et les conditions de fin de contrat sont acceptés par les parties.
-          </p>
-          <p>
-            Les travaux de transformation, cession, sous-location ou changement d'activité ne pourront intervenir
-            sans accord écrit du bailleur. Tout retard de paiement, défaut d'assurance ou non-respect des clauses
-            essentielles pourra entraîner la résolution du contrat conformément à la loi applicable au Mali.
-          </p>
-          <LeaseField name="conditions" label="Conditions particulières" {...fieldProps} multiline />
-        </section>
-
-        <section className="lease-clause-block">
-          <h4>DOMICILE, LOI APPLICABLE ET SIGNATURE</h4>
-          <div className="lease-form-grid two">
-            <LeaseField name="domicileBailleur" label="Domicile élu du bailleur" {...fieldProps} />
-            <LeaseField name="domicilePreneur" label="Domicile élu du preneur" {...fieldProps} />
-            <LeaseField name="lieuSignature" label="Fait à" {...fieldProps} />
-            <LeaseField name="dateSignature" label="Le" {...fieldProps} />
-          </div>
-          <p>
-            Pour le preneur :
-            <LeaseInlineField name="domicilePreneur" label="Domicile du preneur dans la clause" {...fieldProps} wide />.
-            Fait à <LeaseInlineField name="lieuSignature" label="Lieu de signature" {...fieldProps} />
-            le <LeaseInlineField name="dateSignature" label="Date de signature" {...fieldProps} />.
-          </p>
-        </section>
-
-        <section className="lease-signature-grid">
-          <div><span>Le bailleur</span><strong>Pour E.K immo</strong><em>{values.bailleurRep}</em></div>
-          <div><span>Le preneur</span><strong>Lu et approuvé</strong><em>{values.preneur}</em></div>
-          <div><span>Agence</span><strong>Cachet et signature</strong><em>E.K immo SAS</em></div>
         </section>
       </section>
     </article>

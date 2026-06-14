@@ -3451,10 +3451,11 @@ td:last-child {
 
 .lease-sheet {
   display: grid;
-  gap: 18px;
-  padding: clamp(28px, 4vw, 54px);
+  gap: 12px;
+  min-height: 1120px;
+  padding: clamp(28px, 4vw, 58px);
   border: 1px solid #d9e0ea;
-  border-radius: 8px;
+  border-radius: 2px;
   background: #fff;
   box-shadow: 0 16px 34px rgba(17, 10, 35, 0.12);
   font-family: "Times New Roman", Georgia, serif;
@@ -3466,6 +3467,145 @@ td:last-child {
   font-size: clamp(1.25rem, 2.4vw, 1.85rem);
   line-height: 1.2;
   text-decoration: underline;
+}
+
+.lease-original-logo {
+  min-height: 88px;
+  margin-bottom: 8px;
+}
+
+.lease-original-logo img {
+  display: block;
+  width: min(360px, 54%);
+  height: auto;
+}
+
+.lease-original-meta {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 18px;
+  font-family: "Times New Roman", Georgia, serif;
+  font-size: 0.98rem;
+}
+
+.lease-original-meta p {
+  display: grid;
+  grid-template-columns: 165px minmax(0, 1fr);
+  gap: 8px;
+  margin: 0;
+  line-height: 1.45;
+}
+
+.lease-original-meta strong {
+  color: #111827;
+  font-weight: 800;
+}
+
+.lease-original-meta span {
+  border-bottom: 1px dotted #8b8b8b;
+  min-height: 22px;
+  color: #111827;
+  font-weight: 700;
+}
+
+.lease-original-section {
+  display: grid;
+  gap: 7px;
+  break-inside: avoid;
+}
+
+.lease-original-section p {
+  margin: 0;
+  color: #111827;
+  font-size: 0.98rem;
+  line-height: 1.42;
+  text-align: justify;
+}
+
+.lease-original-heading {
+  margin: 13px 0 2px;
+  color: #111827;
+  font-size: 1rem;
+  font-weight: 850;
+  line-height: 1.25;
+  text-align: left;
+  text-decoration: underline;
+  text-transform: uppercase;
+}
+
+.lease-original-subheading {
+  margin: 8px 0 0;
+  color: #111827;
+  font-size: 0.98rem;
+  font-weight: 850;
+  line-height: 1.25;
+  text-decoration: underline;
+}
+
+.lease-fill {
+  display: inline;
+  color: #071328;
+  font-weight: 800;
+}
+
+.lease-fill.wide {
+  overflow-wrap: anywhere;
+}
+
+.lease-centered {
+  text-align: center !important;
+}
+
+.lease-centered.strong,
+.lease-original-section .strong {
+  font-weight: 850;
+}
+
+.lease-identity-lines {
+  display: grid;
+  gap: 3px;
+  margin: 2px 0 4px 24px;
+}
+
+.lease-reference-line {
+  color: #1f2937 !important;
+  font-size: 0.94rem !important;
+}
+
+.lease-original-signatures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 48px;
+  margin-top: 26px;
+  padding-top: 6px;
+}
+
+.lease-original-signatures div {
+  min-height: 118px;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.lease-original-signatures strong,
+.lease-original-signatures span,
+.lease-original-signatures em {
+  display: block;
+  color: #111827;
+}
+
+.lease-original-signatures strong {
+  font-size: 1rem;
+}
+
+.lease-original-signatures span {
+  min-height: 42px;
+  margin-top: 8px;
+}
+
+.lease-original-signatures em {
+  font-style: normal;
+  font-weight: 780;
 }
 
 .lease-meta-grid,
