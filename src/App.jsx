@@ -434,6 +434,18 @@ const properties = [
     block: "Bloc B",
     floor: "1er étage",
     unitNumber: "B-102",
+    serviceProvider: {
+      company: "ClimaFix Mali SARL",
+      contact: "Seydou Cissé",
+      role: "Technicien référent climatisation",
+      phone: "+223 76 40 18 22",
+      email: "intervention@climafix-mali.ml",
+      specialties: ["Climatisation", "Électricité légère", "Contrôle préventif"],
+      zone: "Korofina, Hamdallaye, ACI",
+      responseTime: "Intervention sous 24h ouvrées",
+      contract: "Convention entretien B-102 · Forfait par intervention",
+      lastVisit: "12/06/2026 · contrôle split séjour",
+    },
     tags: ["Entretien climatisation", "Gardien", "Parking"],
   },
   {
@@ -478,6 +490,18 @@ const properties = [
     commission: "7%",
     financialMode: "Contrat entretien seul",
     lastAction: "Peinture à valider · flux non-loyer",
+    serviceProvider: {
+      company: "Bamako Pro Maintenance",
+      contact: "Mahamadou Samaké",
+      role: "Chef d'équipe travaux",
+      phone: "+223 74 22 90 18",
+      email: "contact@bamakopromaintenance.ml",
+      specialties: ["Peinture", "Petits travaux", "Électricité", "Plomberie"],
+      zone: "Hamdallaye ACI, Badalabougou, Centre-ville",
+      responseTime: "Diagnostic sous 12h · intervention sous 48h",
+      contract: "Contrat cadre entretien bureaux · 2026",
+      lastVisit: "14/06/2026 · retouches peinture bureaux",
+    },
     tags: ["Ascenseur", "Parking", "Fibre optique"],
   },
   {
@@ -1568,6 +1592,10 @@ function getPropertyStructureSummary(property) {
   }
 
   return "Bien individuel";
+}
+
+function isMaintenanceOnlyProperty(property) {
+  return property?.status === "Entretien seul" || property?.financialMode?.includes("entretien seul");
 }
 
 function isAgencyCollectedProperty(name) {
@@ -2678,6 +2706,9 @@ function PropertySummary({ property, onOpenProperty }) {
               Encaissement effectué directement par le propriétaire.
             </div>
           )}
+          {isMaintenanceOnlyProperty(property) && property.serviceProvider && (
+            <MaintenanceProviderCard provider={property.serviceProvider} compact />
+          )}
           {parent && (
             <div className="linked-property-card">
               <img src={parent.image} alt="" />
@@ -2751,8 +2782,43 @@ function PropertySummary({ property, onOpenProperty }) {
             </p>
           </div>
         </Panel>
+        {isMaintenanceOnlyProperty(property) && property.serviceProvider && (
+          <Panel title="Prestataire d'entretien" className="accent-top">
+            <MaintenanceProviderCard provider={property.serviceProvider} />
+          </Panel>
+        )}
       </aside>
     </section>
+  );
+}
+
+function MaintenanceProviderCard({ provider, compact = false }) {
+  return (
+    <article className={compact ? "provider-card compact" : "provider-card"}>
+      <div className="provider-card-head">
+        <div className="round-icon">
+          <Wrench size={20} />
+        </div>
+        <div>
+          <span>Prestataire mandaté</span>
+          <strong>{provider.company}</strong>
+          <small>{provider.contract}</small>
+        </div>
+      </div>
+      <div className="provider-list">
+        <p><span>Référent</span><strong>{provider.contact}</strong><small>{provider.role}</small></p>
+        <p><span>Téléphone</span><strong>{provider.phone}</strong></p>
+        <p><span>Email</span><strong>{provider.email}</strong></p>
+        <p><span>Zone couverte</span><strong>{provider.zone}</strong></p>
+        <p><span>Délai</span><strong>{provider.responseTime}</strong></p>
+        <p><span>Dernière intervention</span><strong>{provider.lastVisit}</strong></p>
+      </div>
+      <div className="tag-row provider-tags">
+        {provider.specialties.map((specialty) => (
+          <span key={specialty}>{specialty}</span>
+        ))}
+      </div>
+    </article>
   );
 }
 
@@ -3011,23 +3077,30 @@ function PropertyMaintenance({ property }) {
   ];
 
   return (
-    <Panel title="Charges & entretiens">
-      <DataTable
-        columns={["Date", "Nature", "Type", "Responsable", "Montant", "Prise en charge", "Justificatif", "Statut"]}
-        rows={(rows.length ? rows : [
-          {
-            date: "À planifier",
-            kind: "Entretien",
-            type: "Aucun élément ouvert",
-            manager: "E.K immo",
-            amount: "0 FCFA",
-            payer: "-",
-            proof: "-",
-            status: "À prévoir",
-          },
-        ]).map((item) => [item.date, item.kind, item.type, item.manager, item.amount, item.payer, item.proof, <Badge label={item.status} />])}
-      />
-    </Panel>
+    <section className="maintenance-detail-stack">
+      {isMaintenanceOnlyProperty(property) && property.serviceProvider && (
+        <Panel title="Prestataire mandaté pour ce bien">
+          <MaintenanceProviderCard provider={property.serviceProvider} />
+        </Panel>
+      )}
+      <Panel title="Charges & entretiens">
+        <DataTable
+          columns={["Date", "Nature", "Type", "Responsable", "Montant", "Prise en charge", "Justificatif", "Statut"]}
+          rows={(rows.length ? rows : [
+            {
+              date: "À planifier",
+              kind: "Entretien",
+              type: "Aucun élément ouvert",
+              manager: "E.K immo",
+              amount: "0 FCFA",
+              payer: "-",
+              proof: "-",
+              status: "À prévoir",
+            },
+          ]).map((item) => [item.date, item.kind, item.type, item.manager, item.amount, item.payer, item.proof, <Badge label={item.status} />])}
+        />
+      </Panel>
+    </section>
   );
 }
 
