@@ -4000,6 +4000,17 @@ function DocumentStudio({ initialTemplate = "facture", lockedTemplate, title, da
 
 function DocumentEditor({ compact = false, data, onAction, onBack, template, title }) {
   const relatedFiles = getRelatedDocumentFiles(template.key);
+  const defaults = useMemo(() => getDocumentDefaults(template.key, data), [template.key, data]);
+  const [values, setValues] = useState(defaults);
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  useEffect(() => {
+    setValues(defaults);
+  }, [defaults]);
+
+  const updateField = (name, value) => {
+    setValues((current) => ({ ...current, [name]: value }));
+  };
 
   return (
     <section className={compact ? "document-editor compact" : "document-editor"} data-demo="document-generation">
@@ -4015,14 +4026,14 @@ function DocumentEditor({ compact = false, data, onAction, onBack, template, tit
           <p>{template.source}</p>
         </div>
         <div className="document-editor-actions">
-          <Button variant="primary" onClick={() => onAction(`Générer ${template.label}`)}><Download size={17} /> Générer PDF</Button>
-          <Button onClick={() => onAction(`Imprimer ${template.label}`)}><Printer size={17} /> Imprimer</Button>
+          <Button variant="primary" onClick={() => setPreviewOpen(true)}><Download size={17} /> Générer PDF</Button>
+          <Button onClick={() => setPreviewOpen(true)}><Printer size={17} /> Imprimer</Button>
           <Button onClick={() => onAction(`Archiver ${template.label}`)}><Archive size={17} /> Archiver</Button>
         </div>
       </div>
 
       <Panel title={title}>
-        <FillableDocument template={template} data={data} />
+        <FillableDocument template={template} values={values} onChange={updateField} />
       </Panel>
 
       <div className="document-source-strip">
@@ -4038,31 +4049,50 @@ function DocumentEditor({ compact = false, data, onAction, onBack, template, tit
           </a>
         ))}
       </div>
+      {previewOpen && (
+        <DocumentPreviewModal
+          template={template}
+          values={values}
+          onChange={updateField}
+          onClose={() => setPreviewOpen(false)}
+        />
+      )}
     </section>
   );
 }
 
-function FillableDocument({ template, data }) {
-  const defaults = useMemo(() => getDocumentDefaults(template.key, data), [template.key, data]);
-  const [values, setValues] = useState(defaults);
+function DocumentPreviewModal({ template, values, onChange, onClose }) {
+  return (
+    <div className="modal-backdrop document-print-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card document-print-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="document-print-head">
+          <div>
+            <span>Aperçu avant impression</span>
+            <h2>{template.label}</h2>
+            <p>Le PDF sera généré depuis cette version remplie. Les champs modifiés remplacent uniquement les zones variables du modèle source.</p>
+          </div>
+          <div className="document-editor-actions">
+            <Button onClick={() => window.print()}><Printer size={17} /> Imprimer</Button>
+            <Button variant="primary" onClick={onClose}><Download size={17} /> Valider la sortie PDF</Button>
+          </div>
+        </div>
+        <FillableDocument template={template} values={values} onChange={onChange} readOnly />
+      </section>
+    </div>
+  );
+}
 
-  useEffect(() => {
-    setValues(defaults);
-  }, [defaults]);
-
-  const updateField = (name, value) => {
-    setValues((current) => ({ ...current, [name]: value }));
-  };
-
+function FillableDocument({ template, values, onChange, readOnly = false }) {
   if (template.key === "bail") {
-    return <FillableBail values={values} onChange={updateField} />;
+    return <FillableBail values={values} onChange={onChange} readOnly={readOnly} />;
   }
 
   return (
     <div className={`fillable-document digital ${template.key}`}>
-      {template.key === "recu" && <DigitalReceipt values={values} onChange={updateField} />}
-      {template.key === "bordereau" && <DigitalCommissionStatement values={values} onChange={updateField} />}
-      {template.key === "facture" && <DigitalInvoice values={values} onChange={updateField} />}
+      {template.key === "recu" && <DigitalReceipt values={values} onChange={onChange} readOnly={readOnly} />}
+      {template.key === "bordereau" && <DigitalCommissionStatement values={values} onChange={onChange} readOnly={readOnly} />}
+      {template.key === "facture" && <DigitalInvoice values={values} onChange={onChange} readOnly={readOnly} />}
     </div>
   );
 }
@@ -4087,31 +4117,31 @@ function DigitalDocumentHeader({ title, subtitle, children }) {
   );
 }
 
-function DigitalField({ name, label, values, onChange, multiline = false, className = "", hideLabel = false }) {
+function DigitalField({ name, label, values, onChange, multiline = false, className = "", hideLabel = false, readOnly = false }) {
   const fieldClass = `digital-field ${className} ${hideLabel ? "hide-label" : ""}`.trim();
 
   return (
     <label className={fieldClass}>
       <span className={hideLabel ? "sr-only" : ""}>{label}</span>
       {multiline ? (
-        <textarea value={values[name] ?? ""} onChange={(event) => onChange(name, event.target.value)} />
+        <textarea value={values[name] ?? ""} onChange={(event) => onChange(name, event.target.value)} readOnly={readOnly} />
       ) : (
-        <input value={values[name] ?? ""} onChange={(event) => onChange(name, event.target.value)} />
+        <input value={values[name] ?? ""} onChange={(event) => onChange(name, event.target.value)} readOnly={readOnly} />
       )}
     </label>
   );
 }
 
-function DigitalCheck({ name, label, values, onChange }) {
+function DigitalCheck({ name, label, values, onChange, readOnly = false }) {
   return (
     <label className="digital-check">
-      <input type="checkbox" checked={Boolean(values[name])} onChange={(event) => onChange(name, event.target.checked)} />
+      <input type="checkbox" checked={Boolean(values[name])} onChange={(event) => onChange(name, event.target.checked)} disabled={readOnly} />
       <span>{label}</span>
     </label>
   );
 }
 
-function DigitalInvoice({ values, onChange }) {
+function DigitalInvoice({ values, onChange, readOnly = false }) {
   return (
     <div className="digital-page invoice-page">
       <DigitalDocumentHeader title="Facture" subtitle="Document digital">
@@ -4281,39 +4311,180 @@ function DigitalCommissionStatement({ values, onChange }) {
   );
 }
 
-function FillableBail({ values, onChange }) {
-  const fields = [
-    ["bailleur", "Bailleur"],
-    ["locataire", "Locataire"],
-    ["bien", "Bien loué"],
-    ["adresse", "Adresse"],
-    ["loyer", "Loyer mensuel"],
-    ["caution", "Dépôt de garantie"],
-    ["date", "Date de signature"],
-  ];
+function LeaseField({ name, label, values, onChange, multiline = false, readOnly = false, className = "" }) {
+  const handleChange = (value) => {
+    if (!readOnly) onChange?.(name, value);
+  };
 
   return (
+    <label className={`lease-field ${className}`.trim()}>
+      <span>{label}</span>
+      {multiline ? (
+        <textarea value={values[name] ?? ""} onChange={(event) => handleChange(event.target.value)} readOnly={readOnly} />
+      ) : (
+        <input value={values[name] ?? ""} onChange={(event) => handleChange(event.target.value)} readOnly={readOnly} />
+      )}
+    </label>
+  );
+}
+
+function LeaseInlineField({ name, label, values, onChange, readOnly = false, wide = false }) {
+  const handleChange = (value) => {
+    if (!readOnly) onChange?.(name, value);
+  };
+
+  return (
+    <input
+      aria-label={label}
+      className={wide ? "lease-inline-field wide" : "lease-inline-field"}
+      value={values[name] ?? ""}
+      onChange={(event) => handleChange(event.target.value)}
+      readOnly={readOnly}
+    />
+  );
+}
+
+function FillableBail({ values, onChange, readOnly = false }) {
+  return (
     <div className="fillable-document digital bail">
-      <div className="digital-page lease-page">
-        <DigitalDocumentHeader title="Contrat de bail" subtitle="Usage d'habitation" />
-        <div className="contract-fields">
-          {fields.map(([name, label]) => (
-            <DigitalField name={name} label={label} values={values} onChange={onChange} key={name} />
-          ))}
-          <DigitalField className="full" name="conditions" label="Conditions particulières" values={values} onChange={onChange} multiline />
-        </div>
-        <section className="lease-clauses">
-          <h4>Clauses principales</h4>
-          <p>Le bailleur met à disposition le bien désigné ci-dessus. Le locataire s'engage à respecter les conditions d'occupation, de paiement et d'entretien convenues.</p>
-          <p>Les paiements sont suivis par E.K immo et les justificatifs sont archivés dans le dossier numérique du bien.</p>
-        </section>
-        <section className="signature-grid">
-          <div><span>Bailleur</span><strong>Lu et approuvé</strong></div>
-          <div><span>Locataire</span><strong>Lu et approuvé</strong></div>
-          <div><span>E.K immo</span><strong>Cachet agence</strong></div>
-        </section>
-      </div>
+      <OriginalLeaseDocument values={values} onChange={onChange} readOnly={readOnly} />
     </div>
+  );
+}
+
+function OriginalLeaseDocument({ values, onChange, readOnly = false }) {
+  const fieldProps = { values, onChange, readOnly };
+
+  return (
+    <article className="original-lease-document">
+      <section className="lease-sheet">
+        <div className="lease-meta-grid">
+          <LeaseField name="contratNo" label="CONTRAT NO" {...fieldProps} />
+          <LeaseField name="souscritLe" label="LE SOUSCRIT LE" {...fieldProps} />
+          <LeaseField name="preneur" label="PRENEUR" {...fieldProps} />
+          <LeaseField name="objet" label="OBJET" {...fieldProps} />
+        </div>
+
+        <h3>CONTRAT DE BAIL À USAGE PROFESSIONNEL</h3>
+
+        <section className="lease-clause-block">
+          <h4>ENTRE LES SOUSSIGNÉS</h4>
+          <p>
+            La société <strong>E.K immo SAS</strong>, société immobilière au capital de 1 000 000 FCFA,
+            sise à Niaréla, rue Achkhabad, face mairie, Bamako - Mali, immatriculée au RCCM sous le numéro
+            <strong> MA BKO 2022 B-2224</strong>, représentée par
+            <LeaseInlineField name="bailleurRep" label="Représentant du bailleur" {...fieldProps} wide />.
+          </p>
+          <p>Ci-après dénommée <strong>le bailleur</strong>, d'une part.</p>
+        </section>
+
+        <section className="lease-clause-block">
+          <h4>IDENTITÉ DU PRENEUR</h4>
+          <div className="lease-form-grid">
+            <LeaseField name="civilite" label="Civilité" {...fieldProps} />
+            <LeaseField name="preneur" label="Nom et prénom / raison sociale" {...fieldProps} />
+            <LeaseField name="naissance" label="Date et lieu de naissance" {...fieldProps} />
+            <LeaseField name="nina" label="Numéro carte NINA ou pièce" {...fieldProps} />
+            <LeaseField name="qualitePreneur" label="Qualité / fonction" {...fieldProps} />
+            <LeaseField name="telephonePreneur" label="Téléphone" {...fieldProps} />
+            <LeaseField name="adressePreneur" label="Adresse du preneur" {...fieldProps} className="full" />
+          </div>
+          <p>
+            Donne à bail à <LeaseInlineField name="civilite" label="Civilité dans la clause" {...fieldProps} />
+            <LeaseInlineField name="preneur" label="Preneur dans la clause" {...fieldProps} wide />
+            es-qualité de <LeaseInlineField name="qualitePreneur" label="Qualité du preneur" {...fieldProps} wide />.
+          </p>
+        </section>
+
+        <section className="lease-clause-block">
+          <h4>ARTICLE 1 - DÉSIGNATION DU LOCAL</h4>
+          <p>
+            Le local est un <LeaseInlineField name="localType" label="Type de local" {...fieldProps} />
+            situé à <LeaseInlineField name="localAdresse" label="Adresse du local" {...fieldProps} wide />.
+          </p>
+          <div className="lease-form-grid">
+            <LeaseField name="bien" label="Bien concerné" {...fieldProps} />
+            <LeaseField name="adresse" label="Adresse enregistrée" {...fieldProps} />
+            <LeaseField name="designationLocal" label="Désignation détaillée" {...fieldProps} multiline className="full" />
+          </div>
+        </section>
+
+        <section className="lease-clause-block">
+          <h4>ARTICLE 2 - DESTINATION</h4>
+          <p>
+            Le preneur déclare utiliser les lieux pour l'activité suivante :
+            <LeaseInlineField name="activite" label="Destination / activité" {...fieldProps} wide />.
+            Toute modification de destination devra être préalablement acceptée par le bailleur.
+          </p>
+        </section>
+
+        <section className="lease-clause-block">
+          <h4>ARTICLE 3 - DURÉE</h4>
+          <p>
+            Le présent bail est consenti pour une durée de
+            <LeaseInlineField name="duree" label="Durée du bail" {...fieldProps} />
+            à compter du <LeaseInlineField name="effetDate" label="Date de prise d'effet" {...fieldProps} />
+            jusqu'au <LeaseInlineField name="expirationDate" label="Date d'expiration" {...fieldProps} />.
+            À l'expiration, le renouvellement ou la libération des lieux sera traité selon les délais convenus.
+          </p>
+        </section>
+
+        <section className="lease-clause-block">
+          <h4>ARTICLE 4 - LOYER, TAXES ET CAUTION</h4>
+          <div className="lease-form-grid three">
+            <LeaseField name="loyerHt" label="Loyer mensuel HT" {...fieldProps} />
+            <LeaseField name="loyerTtc" label="Loyer mensuel TTC" {...fieldProps} />
+            <LeaseField name="paiementJour" label="Échéance de paiement" {...fieldProps} />
+            <LeaseField name="caution" label="Caution / dépôt de garantie" {...fieldProps} />
+            <LeaseField name="cautionMois" label="Nombre de mois de caution" {...fieldProps} />
+            <LeaseField name="revisionFrequence" label="Révision du loyer" {...fieldProps} />
+          </div>
+          <p>
+            Le loyer sera payé mensuellement au plus tard le
+            <LeaseInlineField name="paiementJour" label="Jour de paiement" {...fieldProps} />.
+            Le preneur verse à titre de caution la somme de
+            <LeaseInlineField name="caution" label="Montant de la caution" {...fieldProps} wide />.
+          </p>
+        </section>
+
+        <section className="lease-clause-block">
+          <h4>ARTICLES 5 À 11 - CONDITIONS D'OCCUPATION</h4>
+          <p>
+            Le preneur prendra les lieux dans l'état où ils se trouvent après état des lieux contradictoire.
+            Les réparations locatives, l'entretien courant, l'assurance, la salubrité, les règles de sécurité,
+            les autorisations administratives et les conditions de fin de contrat sont acceptés par les parties.
+          </p>
+          <p>
+            Les travaux de transformation, cession, sous-location ou changement d'activité ne pourront intervenir
+            sans accord écrit du bailleur. Tout retard de paiement, défaut d'assurance ou non-respect des clauses
+            essentielles pourra entraîner la résolution du contrat conformément à la loi applicable au Mali.
+          </p>
+          <LeaseField name="conditions" label="Conditions particulières" {...fieldProps} multiline />
+        </section>
+
+        <section className="lease-clause-block">
+          <h4>DOMICILE, LOI APPLICABLE ET SIGNATURE</h4>
+          <div className="lease-form-grid two">
+            <LeaseField name="domicileBailleur" label="Domicile élu du bailleur" {...fieldProps} />
+            <LeaseField name="domicilePreneur" label="Domicile élu du preneur" {...fieldProps} />
+            <LeaseField name="lieuSignature" label="Fait à" {...fieldProps} />
+            <LeaseField name="dateSignature" label="Le" {...fieldProps} />
+          </div>
+          <p>
+            Pour le preneur :
+            <LeaseInlineField name="domicilePreneur" label="Domicile du preneur dans la clause" {...fieldProps} wide />.
+            Fait à <LeaseInlineField name="lieuSignature" label="Lieu de signature" {...fieldProps} />
+            le <LeaseInlineField name="dateSignature" label="Date de signature" {...fieldProps} />.
+          </p>
+        </section>
+
+        <section className="lease-signature-grid">
+          <div><span>Le bailleur</span><strong>Pour E.K immo</strong><em>{values.bailleurRep}</em></div>
+          <div><span>Le preneur</span><strong>Lu et approuvé</strong><em>{values.preneur}</em></div>
+          <div><span>Agence</span><strong>Cachet et signature</strong><em>E.K immo SAS</em></div>
+        </section>
+      </section>
+    </article>
   );
 }
 
@@ -4392,15 +4563,46 @@ function getDocumentDefaults(key, data = {}) {
   }
 
   if (key === "bail") {
+    const rentValue = parseFCFA(property.price);
+    const rentHt = rentValue ? formatFCFA(Math.round(rentValue / 1.18)) : property.price;
+    const rentTtc = property.price;
+
     return {
-      bailleur: owner.name,
+      contratNo: makeDocumentNumber("CON", 46),
+      souscritLe: "05/06/2026",
+      objet: "CONTRAT DE BAIL À USAGE PROFESSIONNEL",
+      bailleur: "E.K immo SAS",
+      bailleurRep: "M. Tidiane Niaro",
+      civilite: "Madame",
+      preneur: tenant.name,
       locataire: tenant.name,
+      naissance: "Née le 14/04/1992 à Bamako",
+      nina: "NINA-2026-774412",
+      qualitePreneur: "Gérante",
+      telephonePreneur: tenant.phone ?? "+223 72 77 71 77",
+      adressePreneur: "Hamdallaye ACI 2000, Bamako",
       bien: property.name,
       adresse: property.address,
+      localType: property.type?.toLowerCase().includes("bureau") ? "bureau" : "magasin",
+      localAdresse: property.address,
+      designationLocal: `${property.name}, ${property.type}, situé à ${property.district}. Accès et état des lieux rattachés à la fiche bien ${property.code}.`,
+      activite: "vente d'articles de fête et de décoration",
+      duree: "un (1) an",
+      effetDate: "01/06/2026",
+      expirationDate: "31/05/2027",
       loyer: `${property.price} ${property.period}`,
+      loyerHt: rentHt,
+      loyerTtc: rentTtc,
+      paiementJour: "10 de chaque mois",
       caution: property.deposit,
+      cautionMois: "deux (2) mois",
+      revisionFrequence: "tous les deux (2) ans",
       date: "05/06/2026",
-      conditions: "Paiement au plus tard le 05 de chaque mois. Caution conservée selon l'état des lieux contradictoire.",
+      domicileBailleur: "Niaréla, rue Achkhabad, face mairie, Bamako (Mali)",
+      domicilePreneur: "Hamdallaye ACI 2000, Bamako (Mali)",
+      lieuSignature: "Bamako",
+      dateSignature: "05/06/2026",
+      conditions: "Paiement au plus tard le 10 de chaque mois. Assurance obligatoire à fournir avant remise des clés. Caution conservée selon l'état des lieux contradictoire.",
     };
   }
 
@@ -5918,43 +6120,134 @@ function ChargeFormModal({ title, onClose }) {
 
 function ContractFormModal({ onClose }) {
   const [preview, setPreview] = useState(false);
+  const [propertyCode, setPropertyCode] = useState(properties[0].code);
+  const [tenantName, setTenantName] = useState(tenants[0].name);
+  const [values, setValues] = useState(() => getDocumentDefaults("bail", { property: properties[0], owner: owners[0], tenant: tenants[0] }));
+
+  const updateLease = (name, value) => {
+    setValues((current) => ({ ...current, [name]: value }));
+  };
+
+  const handlePropertyChange = (code) => {
+    const property = properties.find((item) => item.code === code) ?? properties[0];
+    const owner = owners.find((item) => item.name === property.owner) ?? owners[0];
+    const tenant = tenants.find((item) => item.name === tenantName) ?? tenants[0];
+    const nextDefaults = getDocumentDefaults("bail", { property, owner, tenant });
+
+    setPropertyCode(code);
+    setValues((current) => ({
+      ...current,
+      bien: nextDefaults.bien,
+      adresse: nextDefaults.adresse,
+      localType: nextDefaults.localType,
+      localAdresse: nextDefaults.localAdresse,
+      designationLocal: nextDefaults.designationLocal,
+      loyer: nextDefaults.loyer,
+      loyerHt: nextDefaults.loyerHt,
+      loyerTtc: nextDefaults.loyerTtc,
+      caution: nextDefaults.caution,
+    }));
+  };
+
+  const handleTenantChange = (name) => {
+    const property = properties.find((item) => item.code === propertyCode) ?? properties[0];
+    const owner = owners.find((item) => item.name === property.owner) ?? owners[0];
+    const tenant = tenants.find((item) => item.name === name) ?? tenants[0];
+    const nextDefaults = getDocumentDefaults("bail", { property, owner, tenant });
+
+    setTenantName(name);
+    setValues((current) => ({
+      ...current,
+      preneur: nextDefaults.preneur,
+      locataire: nextDefaults.locataire,
+      telephonePreneur: nextDefaults.telephonePreneur,
+    }));
+  };
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <section className="modal-card wide-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+      <section className="modal-card wide-modal contract-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
         <button className="modal-close" onClick={onClose}>×</button>
         <h2>Créer contrat</h2>
-        <p>Création à partir des biens, propriétaires et clients déjà enregistrés.</p>
+        <p>Création à partir du modèle de bail E.K immo. Les champs ci-dessous remplacent les zones variables du document original.</p>
         <div className="form-section">
-          <h3>Contrat</h3>
+          <h3>Contrat et rattachement</h3>
           <div className="form-grid">
-            <label>Type de contrat<select>{["Contrat de location", "Mandat de gestion", "Mandat de vente", "Promesse de vente", "Autre document contractuel"].map((item) => <option key={item}>{item}</option>)}</select></label>
-            <label>Bien concerné<select>{properties.map((property) => <option key={property.code}>{property.name}</option>)}</select></label>
-            <label>Propriétaire<select>{owners.map((owner) => <option key={owner.id}>{owner.name}</option>)}</select></label>
-            <label>Locataire ou client<select>{[...tenants.map((tenant) => tenant.name), ...prospects.map((prospect) => prospect.name)].map((name) => <option key={name}>{name}</option>)}</select></label>
-            <label>Date début<input defaultValue="01/06/2026" /></label>
-            <label>Date fin<input defaultValue="31/05/2027" /></label>
-            <label>Montant du loyer ou prix<input defaultValue="2 750 000 FCFA" /></label>
-            <label>Caution<input defaultValue="5 500 000 FCFA" /></label>
-            <label>Commission<input defaultValue="8%" /></label>
-            <label>Modèle de contrat<select>{templates.map((template) => <option key={template}>{template}</option>)}</select></label>
-            <label className="full">Conditions particulières<textarea defaultValue="Paiement au plus tard le 05 de chaque mois. Caution conservée selon l'état des lieux." /></label>
+            <label>Type de contrat<select value={values.objet} onChange={(event) => updateLease("objet", event.target.value)}><option>CONTRAT DE BAIL À USAGE PROFESSIONNEL</option><option>Contrat de bail à usage d'habitation</option><option>Mandat de gestion</option></select></label>
+            <label>Numéro contrat<input value={values.contratNo} onChange={(event) => updateLease("contratNo", event.target.value)} /><small>Généré automatiquement, modifiable avant sortie PDF.</small></label>
+            <label>Date de souscription<input value={values.souscritLe} onChange={(event) => updateLease("souscritLe", event.target.value)} /></label>
+            <label>Bien concerné<select value={propertyCode} onChange={(event) => handlePropertyChange(event.target.value)}>{properties.map((property) => <option value={property.code} key={property.code}>{property.name}</option>)}</select></label>
+            <label>Propriétaire / bailleur<select value={values.bailleurRep} onChange={(event) => updateLease("bailleurRep", event.target.value)}><option>M. Tidiane Niaro</option><option>Mamadou Keita</option><option>Sira Coulibaly</option><option>Foncière Mandé</option></select></label>
+            <label>Locataire ou client<select value={tenantName} onChange={(event) => handleTenantChange(event.target.value)}>{[...tenants.map((tenant) => tenant.name), ...prospects.map((prospect) => prospect.name)].map((name) => <option key={name}>{name}</option>)}</select></label>
           </div>
         </div>
+
+        <div className="form-section">
+          <h3>Identité du preneur</h3>
+          <div className="form-grid">
+            <label>Civilité<input value={values.civilite} onChange={(event) => updateLease("civilite", event.target.value)} /></label>
+            <label>Nom / raison sociale<input value={values.preneur} onChange={(event) => updateLease("preneur", event.target.value)} /></label>
+            <label>Date et lieu de naissance<input value={values.naissance} onChange={(event) => updateLease("naissance", event.target.value)} /></label>
+            <label>Numéro carte NINA ou pièce<input value={values.nina} onChange={(event) => updateLease("nina", event.target.value)} /></label>
+            <label>Qualité / fonction<input value={values.qualitePreneur} onChange={(event) => updateLease("qualitePreneur", event.target.value)} /></label>
+            <label>Téléphone<input value={values.telephonePreneur} onChange={(event) => updateLease("telephonePreneur", event.target.value)} /></label>
+            <label className="full">Adresse du preneur<input value={values.adressePreneur} onChange={(event) => updateLease("adressePreneur", event.target.value)} /></label>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Local et destination</h3>
+          <div className="form-grid">
+            <label>Type de local<input value={values.localType} onChange={(event) => updateLease("localType", event.target.value)} /></label>
+            <label>Adresse du local<input value={values.localAdresse} onChange={(event) => updateLease("localAdresse", event.target.value)} /></label>
+            <label className="full">Désignation détaillée<textarea value={values.designationLocal} onChange={(event) => updateLease("designationLocal", event.target.value)} /></label>
+            <label className="full">Destination / activité<textarea value={values.activite} onChange={(event) => updateLease("activite", event.target.value)} /></label>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Durée et finances</h3>
+          <div className="form-grid">
+            <label>Durée<input value={values.duree} onChange={(event) => updateLease("duree", event.target.value)} /></label>
+            <label>Date de prise d'effet<input value={values.effetDate} onChange={(event) => updateLease("effetDate", event.target.value)} /></label>
+            <label>Date d'expiration<input value={values.expirationDate} onChange={(event) => updateLease("expirationDate", event.target.value)} /></label>
+            <label>Loyer mensuel HT<input value={values.loyerHt} onChange={(event) => updateLease("loyerHt", event.target.value)} /></label>
+            <label>Loyer mensuel TTC<input value={values.loyerTtc} onChange={(event) => updateLease("loyerTtc", event.target.value)} /></label>
+            <label>Échéance de paiement<input value={values.paiementJour} onChange={(event) => updateLease("paiementJour", event.target.value)} /></label>
+            <label>Caution<input value={values.caution} onChange={(event) => updateLease("caution", event.target.value)} /></label>
+            <label>Nombre de mois de caution<input value={values.cautionMois} onChange={(event) => updateLease("cautionMois", event.target.value)} /></label>
+            <label>Révision du loyer<input value={values.revisionFrequence} onChange={(event) => updateLease("revisionFrequence", event.target.value)} /></label>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Domicile, clauses et signature</h3>
+          <div className="form-grid">
+            <label>Domicile élu du bailleur<input value={values.domicileBailleur} onChange={(event) => updateLease("domicileBailleur", event.target.value)} /></label>
+            <label>Domicile élu du preneur<input value={values.domicilePreneur} onChange={(event) => updateLease("domicilePreneur", event.target.value)} /></label>
+            <label>Fait à<input value={values.lieuSignature} onChange={(event) => updateLease("lieuSignature", event.target.value)} /></label>
+            <label>Le<input value={values.dateSignature} onChange={(event) => updateLease("dateSignature", event.target.value)} /></label>
+            <label className="full">Conditions particulières<textarea value={values.conditions} onChange={(event) => updateLease("conditions", event.target.value)} /></label>
+          </div>
+        </div>
+
         {preview && (
-          <div className="document-preview modal-preview">
-            <strong>E.K immo</strong>
-            <h3>Contrat de location</h3>
-            <p>Bien : Villa Koulouba</p>
-            <p>Propriétaire : Mamadou Keita</p>
-            <p>Locataire : Awa Traoré</p>
-            <p>Montant : 2 750 000 FCFA</p>
+          <div className="contract-preview-pane">
+            <div className="document-print-head inline">
+              <div>
+                <span>Aperçu avant impression</span>
+                <h3>Contrat de bail rempli</h3>
+                <p>Contrôle du rendu avant génération PDF.</p>
+              </div>
+              <Button onClick={() => window.print()}><Printer size={17} /> Imprimer</Button>
+            </div>
+            <FillableBail values={values} onChange={updateLease} readOnly />
           </div>
         )}
         <div className="action-row compact-row">
           <Button onClick={onClose}><Archive size={17} /> Enregistrer brouillon</Button>
           <Button onClick={() => setPreview(true)}><Eye size={17} /> Prévisualiser</Button>
-          <Button variant="primary" onClick={onClose}><Download size={17} /> Générer PDF</Button>
+          <Button variant="primary" onClick={() => setPreview(true)}><Download size={17} /> Générer PDF</Button>
           <Button onClick={onClose}><Archive size={17} /> Archiver</Button>
         </div>
       </section>
@@ -6061,8 +6354,84 @@ function PropertyFormModal({ title, onClose }) {
   );
 }
 
+function getDocumentPreviewContext(title) {
+  const normalizedTitle = normalizeSearch(title);
+  const isOutputAction = ["pdf", "imprimer", "telecharger", "generer", "exporter"].some((keyword) => normalizedTitle.includes(keyword));
+  if (!isOutputAction) return null;
+
+  const invoice = invoices.find((item) => normalizedTitle.includes(normalizeSearch(item.number)));
+  if (invoice) {
+    const templateKey = invoice.type === "Reçu" || invoice.type === "Quittance" ? "recu" : "facture";
+    const property = getPropertyByName(invoice.property) ?? properties[0];
+    const owner = owners.find((item) => item.name === property.owner) ?? owners[0];
+    const tenant = tenants.find((item) => item.name === invoice.client) ?? tenants[0];
+
+    return {
+      template: documentTemplates.find((item) => item.key === templateKey) ?? documentTemplates[0],
+      data: { invoice, property, owner, tenant },
+    };
+  }
+
+  const contract = contracts.find((item) => normalizedTitle.includes(normalizeSearch(item.number)));
+  if (contract) {
+    const property = getPropertyByName(contract.property) ?? properties[0];
+    const owner = owners.find((item) => item.name === contract.owner) ?? owners[0];
+    const tenant = tenants.find((item) => item.name === contract.client) ?? tenants[0];
+
+    return {
+      template: documentTemplates.find((item) => item.key === "bail") ?? documentTemplates[3],
+      data: { property, owner, tenant },
+    };
+  }
+
+  if (normalizedTitle.includes("recu") || normalizedTitle.includes("quittance")) {
+    return { template: documentTemplates.find((item) => item.key === "recu") ?? documentTemplates[1], data: {} };
+  }
+
+  if (normalizedTitle.includes("bordereau") || normalizedTitle.includes("commission")) {
+    return { template: documentTemplates.find((item) => item.key === "bordereau") ?? documentTemplates[2], data: {} };
+  }
+
+  if (normalizedTitle.includes("contrat") || normalizedTitle.includes("bail")) {
+    return { template: documentTemplates.find((item) => item.key === "bail") ?? documentTemplates[3], data: {} };
+  }
+
+  if (normalizedTitle.includes("facture")) {
+    return { template: documentTemplates.find((item) => item.key === "facture") ?? documentTemplates[0], data: {} };
+  }
+
+  return null;
+}
+
+function ActionDocumentModal({ context, onClose }) {
+  const defaults = useMemo(() => getDocumentDefaults(context.template.key, context.data), [context]);
+  const [values, setValues] = useState(defaults);
+
+  useEffect(() => {
+    setValues(defaults);
+  }, [defaults]);
+
+  const updateField = (name, value) => {
+    setValues((current) => ({ ...current, [name]: value }));
+  };
+
+  return (
+    <DocumentPreviewModal
+      template={context.template}
+      values={values}
+      onChange={updateField}
+      onClose={onClose}
+    />
+  );
+}
+
 function DemoModal({ title, onClose }) {
+  const documentContext = getDocumentPreviewContext(title);
   const sensitive = isSensitiveAction(title);
+
+  if (documentContext) {
+    return <ActionDocumentModal context={documentContext} onClose={onClose} />;
+  }
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>

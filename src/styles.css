@@ -3290,6 +3290,246 @@ td:last-child {
   line-height: 1.5;
 }
 
+.document-print-backdrop {
+  z-index: 90;
+  place-items: start center;
+  overflow-y: auto;
+}
+
+.document-print-modal {
+  width: min(1280px, 100%);
+  max-height: none;
+  padding: 24px;
+  overflow: visible;
+}
+
+.document-print-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+  padding-right: 44px;
+}
+
+.document-print-head.inline {
+  padding-right: 0;
+}
+
+.document-print-head span {
+  color: var(--gold-dark);
+  font-size: 0.78rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.document-print-head h2,
+.document-print-head h3,
+.document-print-head p {
+  margin: 0;
+}
+
+.document-print-head h2,
+.document-print-head h3 {
+  margin-top: 4px;
+}
+
+.document-print-head p {
+  max-width: 680px;
+  color: var(--muted);
+}
+
+.contract-modal {
+  width: min(1240px, 100%);
+}
+
+.contract-preview-pane {
+  display: grid;
+  gap: 16px;
+  margin-top: 22px;
+  padding: 18px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: #f4f8fb;
+}
+
+.original-lease-document {
+  width: min(100%, 980px);
+  margin: 0 auto;
+  color: #111827;
+}
+
+.lease-sheet {
+  display: grid;
+  gap: 18px;
+  padding: clamp(28px, 4vw, 54px);
+  border: 1px solid #d9e0ea;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 16px 34px rgba(17, 10, 35, 0.12);
+  font-family: "Times New Roman", Georgia, serif;
+}
+
+.lease-sheet h3 {
+  margin: 10px 0 6px;
+  text-align: center;
+  font-size: clamp(1.25rem, 2.4vw, 1.85rem);
+  line-height: 1.2;
+  text-decoration: underline;
+}
+
+.lease-meta-grid,
+.lease-form-grid,
+.lease-signature-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.lease-meta-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.lease-form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.lease-form-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.lease-form-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.lease-form-grid .full,
+.lease-field.full {
+  grid-column: 1 / -1;
+}
+
+.lease-clause-block {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.lease-clause-block h4 {
+  margin: 0;
+  font-size: 1rem;
+  text-decoration: underline;
+}
+
+.lease-clause-block p {
+  margin: 0;
+  color: #1f2937;
+  font-size: 1rem;
+  line-height: 1.65;
+  text-align: justify;
+}
+
+.lease-field {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  color: #374151;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.lease-field input,
+.lease-field textarea,
+.lease-inline-field {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-bottom: 1px dotted #6b7280;
+  border-radius: 0;
+  color: #071328;
+  background: #fff;
+  font-family: "Times New Roman", Georgia, serif;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.35;
+  outline: 0;
+}
+
+.lease-field input,
+.lease-inline-field {
+  min-height: 30px;
+  padding: 3px 2px;
+}
+
+.lease-field textarea {
+  min-height: 72px;
+  padding: 6px 2px;
+  resize: vertical;
+}
+
+.lease-field input:focus,
+.lease-field textarea:focus,
+.lease-inline-field:focus {
+  border-bottom-color: var(--purple);
+  box-shadow: 0 3px 0 rgba(5, 47, 95, 0.1);
+}
+
+.lease-field input[readonly],
+.lease-field textarea[readonly],
+.lease-inline-field[readonly] {
+  color: #111827;
+  background: transparent;
+}
+
+.lease-inline-field {
+  display: inline-block;
+  width: clamp(120px, 22vw, 220px);
+  margin: 0 5px;
+  vertical-align: baseline;
+}
+
+.lease-inline-field.wide {
+  width: clamp(220px, 36vw, 420px);
+}
+
+.lease-signature-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 18px;
+}
+
+.lease-signature-grid div {
+  min-height: 122px;
+  padding: 12px;
+  border: 1px dashed #9ca3af;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.lease-signature-grid span,
+.lease-signature-grid strong,
+.lease-signature-grid em {
+  display: block;
+}
+
+.lease-signature-grid span {
+  color: #4b5563;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 0.78rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.lease-signature-grid strong {
+  margin-top: 28px;
+  font-size: 1rem;
+}
+
+.lease-signature-grid em {
+  margin-top: 8px;
+  color: #4b5563;
+  font-style: normal;
+}
+
 .document-source-card {
   display: grid;
   gap: 12px;
@@ -3907,6 +4147,16 @@ td:last-child {
   font-size: 1.2rem;
 }
 
+.modal-card.document-print-modal {
+  width: min(1280px, 100%);
+  max-height: none;
+  overflow: visible;
+}
+
+.modal-card.contract-modal {
+  width: min(1240px, 100%);
+}
+
 .demo-tour {
   position: fixed;
   inset: 0;
@@ -4180,6 +4430,20 @@ td:last-child {
     grid-template-columns: 1fr;
   }
 
+  .document-print-head {
+    flex-direction: column;
+    align-items: stretch;
+    padding-right: 36px;
+  }
+
+  .lease-meta-grid,
+  .lease-form-grid,
+  .lease-form-grid.two,
+  .lease-form-grid.three,
+  .lease-signature-grid {
+    grid-template-columns: 1fr;
+  }
+
   .document-editor-actions {
     justify-content: flex-start;
   }
@@ -4248,6 +4512,22 @@ td:last-child {
 
   .login-card {
     padding: 26px;
+  }
+
+  .document-print-modal,
+  .wide-modal {
+    padding: 22px;
+  }
+
+  .lease-sheet {
+    padding: 22px;
+  }
+
+  .lease-inline-field,
+  .lease-inline-field.wide {
+    display: block;
+    width: 100%;
+    margin: 5px 0;
   }
 
   .login-brand {
