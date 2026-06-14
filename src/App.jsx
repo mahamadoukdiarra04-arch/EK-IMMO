@@ -4077,15 +4077,15 @@ function DocumentPreviewModal({ template, values, onChange, onClose }) {
             <Button variant="primary" onClick={onClose}><Download size={17} /> Valider la sortie PDF</Button>
           </div>
         </div>
-        <FillableDocument template={template} values={values} onChange={onChange} readOnly />
+        <FillableDocument template={template} values={values} onChange={onChange} readOnly preview />
       </section>
     </div>
   );
 }
 
-function FillableDocument({ template, values, onChange, readOnly = false }) {
+function FillableDocument({ template, values, onChange, readOnly = false, preview = false }) {
   if (template.key === "bail") {
-    return <FillableBail values={values} onChange={onChange} readOnly={readOnly} />;
+    return <FillableBail values={values} onChange={onChange} readOnly={readOnly} preview={preview} />;
   }
 
   return (
@@ -4344,10 +4344,110 @@ function LeaseInlineField({ name, label, values, onChange, readOnly = false, wid
   );
 }
 
-function FillableBail({ values, onChange, readOnly = false }) {
+function ContractVariableField({ name, label, values, onChange, multiline = false, options, help, readOnly = false, className = "" }) {
+  const handleChange = (value) => {
+    if (!readOnly) onChange?.(name, value);
+  };
+
+  return (
+    <label className={`contract-variable-field ${className}`.trim()}>
+      <span>{label}</span>
+      {options ? (
+        <select value={values[name] ?? ""} onChange={(event) => handleChange(event.target.value)} disabled={readOnly}>
+          {options.map((option) => <option key={option}>{option}</option>)}
+        </select>
+      ) : multiline ? (
+        <textarea value={values[name] ?? ""} onChange={(event) => handleChange(event.target.value)} readOnly={readOnly} />
+      ) : (
+        <input value={values[name] ?? ""} onChange={(event) => handleChange(event.target.value)} readOnly={readOnly} />
+      )}
+      {help && <small>{help}</small>}
+    </label>
+  );
+}
+
+function LeaseVariableForm({ values, onChange, readOnly = false, includeReference = true }) {
+  const fieldProps = { values, onChange, readOnly };
+
+  return (
+    <div className="lease-variable-form">
+      <div className="form-helper-note">
+        Renseignez uniquement les éléments variables du bail. Ces informations alimentent automatiquement le modèle de contrat E.K immo au moment de la génération PDF.
+      </div>
+
+      {includeReference && (
+        <section className="lease-variable-section">
+          <h3>Références du contrat</h3>
+          <div className="lease-variable-grid">
+            <ContractVariableField name="objet" label="Type de contrat" options={["CONTRAT DE BAIL À USAGE PROFESSIONNEL", "Contrat de bail à usage d'habitation", "Mandat de gestion"]} {...fieldProps} />
+            <ContractVariableField name="contratNo" label="Numéro contrat" help="Généré automatiquement, modifiable si besoin." {...fieldProps} />
+            <ContractVariableField name="souscritLe" label="Date de souscription" {...fieldProps} />
+            <ContractVariableField name="bailleurRep" label="Représentant du bailleur" {...fieldProps} />
+          </div>
+        </section>
+      )}
+
+      <section className="lease-variable-section">
+        <h3>Identité du preneur</h3>
+        <div className="lease-variable-grid">
+          <ContractVariableField name="civilite" label="Civilité" options={["Madame", "Monsieur", "Société"]} {...fieldProps} />
+          <ContractVariableField name="preneur" label="Nom complet ou raison sociale" {...fieldProps} />
+          <ContractVariableField name="naissance" label="Date et lieu de naissance / création" {...fieldProps} />
+          <ContractVariableField name="nina" label="Numéro carte NINA ou pièce d'identité" {...fieldProps} />
+          <ContractVariableField name="qualitePreneur" label="Qualité / fonction du signataire" {...fieldProps} />
+          <ContractVariableField name="telephonePreneur" label="Téléphone du preneur" {...fieldProps} />
+          <ContractVariableField className="full" name="adressePreneur" label="Adresse complète du preneur" {...fieldProps} />
+        </div>
+      </section>
+
+      <section className="lease-variable-section">
+        <h3>Local loué et destination</h3>
+        <div className="lease-variable-grid">
+          <ContractVariableField name="bien" label="Bien concerné" {...fieldProps} />
+          <ContractVariableField name="localType" label="Nature du local" {...fieldProps} />
+          <ContractVariableField className="full" name="localAdresse" label="Adresse du local" {...fieldProps} />
+          <ContractVariableField className="full" name="designationLocal" label="Désignation détaillée du local" multiline {...fieldProps} />
+          <ContractVariableField className="full" name="activite" label="Destination / activité autorisée" multiline {...fieldProps} />
+        </div>
+      </section>
+
+      <section className="lease-variable-section">
+        <h3>Durée et conditions financières</h3>
+        <div className="lease-variable-grid three">
+          <ContractVariableField name="duree" label="Durée du bail" {...fieldProps} />
+          <ContractVariableField name="effetDate" label="Date de prise d'effet" {...fieldProps} />
+          <ContractVariableField name="expirationDate" label="Date d'expiration" {...fieldProps} />
+          <ContractVariableField name="loyerHt" label="Loyer mensuel HT" {...fieldProps} />
+          <ContractVariableField name="loyerTtc" label="Loyer mensuel TTC" {...fieldProps} />
+          <ContractVariableField name="paiementJour" label="Échéance de paiement" {...fieldProps} />
+          <ContractVariableField name="caution" label="Montant de la caution" {...fieldProps} />
+          <ContractVariableField name="cautionMois" label="Nombre de mois de caution" {...fieldProps} />
+          <ContractVariableField name="revisionFrequence" label="Périodicité de révision" {...fieldProps} />
+        </div>
+      </section>
+
+      <section className="lease-variable-section">
+        <h3>Domicile, signature et clauses particulières</h3>
+        <div className="lease-variable-grid">
+          <ContractVariableField name="domicileBailleur" label="Domicile élu du bailleur" {...fieldProps} />
+          <ContractVariableField name="domicilePreneur" label="Domicile élu du preneur" {...fieldProps} />
+          <ContractVariableField name="lieuSignature" label="Lieu de signature" {...fieldProps} />
+          <ContractVariableField name="dateSignature" label="Date de signature" {...fieldProps} />
+          <ContractVariableField className="full" name="conditions" label="Conditions particulières à insérer" multiline {...fieldProps} />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function FillableBail({ values, onChange, readOnly = false, preview = false }) {
   return (
     <div className="fillable-document digital bail">
-      <OriginalLeaseDocument values={values} onChange={onChange} readOnly={readOnly} />
+      {preview ? (
+        <OriginalLeaseDocument values={values} onChange={onChange} readOnly={readOnly} />
+      ) : (
+        <LeaseVariableForm values={values} onChange={onChange} readOnly={readOnly} />
+      )}
     </div>
   );
 }
@@ -6169,7 +6269,7 @@ function ContractFormModal({ onClose }) {
       <section className="modal-card wide-modal contract-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
         <button className="modal-close" onClick={onClose}>×</button>
         <h2>Créer contrat</h2>
-        <p>Création à partir du modèle de bail E.K immo. Les champs ci-dessous remplacent les zones variables du document original.</p>
+        <p>Création à partir d'un formulaire métier. Les champs renseignés alimentent automatiquement le modèle de bail E.K immo.</p>
         <div className="form-section">
           <h3>Contrat et rattachement</h3>
           <div className="form-grid">
@@ -6182,74 +6282,20 @@ function ContractFormModal({ onClose }) {
           </div>
         </div>
 
-        <div className="form-section">
-          <h3>Identité du preneur</h3>
-          <div className="form-grid">
-            <label>Civilité<input value={values.civilite} onChange={(event) => updateLease("civilite", event.target.value)} /></label>
-            <label>Nom / raison sociale<input value={values.preneur} onChange={(event) => updateLease("preneur", event.target.value)} /></label>
-            <label>Date et lieu de naissance<input value={values.naissance} onChange={(event) => updateLease("naissance", event.target.value)} /></label>
-            <label>Numéro carte NINA ou pièce<input value={values.nina} onChange={(event) => updateLease("nina", event.target.value)} /></label>
-            <label>Qualité / fonction<input value={values.qualitePreneur} onChange={(event) => updateLease("qualitePreneur", event.target.value)} /></label>
-            <label>Téléphone<input value={values.telephonePreneur} onChange={(event) => updateLease("telephonePreneur", event.target.value)} /></label>
-            <label className="full">Adresse du preneur<input value={values.adressePreneur} onChange={(event) => updateLease("adressePreneur", event.target.value)} /></label>
-          </div>
-        </div>
-
-        <div className="form-section">
-          <h3>Local et destination</h3>
-          <div className="form-grid">
-            <label>Type de local<input value={values.localType} onChange={(event) => updateLease("localType", event.target.value)} /></label>
-            <label>Adresse du local<input value={values.localAdresse} onChange={(event) => updateLease("localAdresse", event.target.value)} /></label>
-            <label className="full">Désignation détaillée<textarea value={values.designationLocal} onChange={(event) => updateLease("designationLocal", event.target.value)} /></label>
-            <label className="full">Destination / activité<textarea value={values.activite} onChange={(event) => updateLease("activite", event.target.value)} /></label>
-          </div>
-        </div>
-
-        <div className="form-section">
-          <h3>Durée et finances</h3>
-          <div className="form-grid">
-            <label>Durée<input value={values.duree} onChange={(event) => updateLease("duree", event.target.value)} /></label>
-            <label>Date de prise d'effet<input value={values.effetDate} onChange={(event) => updateLease("effetDate", event.target.value)} /></label>
-            <label>Date d'expiration<input value={values.expirationDate} onChange={(event) => updateLease("expirationDate", event.target.value)} /></label>
-            <label>Loyer mensuel HT<input value={values.loyerHt} onChange={(event) => updateLease("loyerHt", event.target.value)} /></label>
-            <label>Loyer mensuel TTC<input value={values.loyerTtc} onChange={(event) => updateLease("loyerTtc", event.target.value)} /></label>
-            <label>Échéance de paiement<input value={values.paiementJour} onChange={(event) => updateLease("paiementJour", event.target.value)} /></label>
-            <label>Caution<input value={values.caution} onChange={(event) => updateLease("caution", event.target.value)} /></label>
-            <label>Nombre de mois de caution<input value={values.cautionMois} onChange={(event) => updateLease("cautionMois", event.target.value)} /></label>
-            <label>Révision du loyer<input value={values.revisionFrequence} onChange={(event) => updateLease("revisionFrequence", event.target.value)} /></label>
-          </div>
-        </div>
-
-        <div className="form-section">
-          <h3>Domicile, clauses et signature</h3>
-          <div className="form-grid">
-            <label>Domicile élu du bailleur<input value={values.domicileBailleur} onChange={(event) => updateLease("domicileBailleur", event.target.value)} /></label>
-            <label>Domicile élu du preneur<input value={values.domicilePreneur} onChange={(event) => updateLease("domicilePreneur", event.target.value)} /></label>
-            <label>Fait à<input value={values.lieuSignature} onChange={(event) => updateLease("lieuSignature", event.target.value)} /></label>
-            <label>Le<input value={values.dateSignature} onChange={(event) => updateLease("dateSignature", event.target.value)} /></label>
-            <label className="full">Conditions particulières<textarea value={values.conditions} onChange={(event) => updateLease("conditions", event.target.value)} /></label>
-          </div>
-        </div>
-
-        {preview && (
-          <div className="contract-preview-pane">
-            <div className="document-print-head inline">
-              <div>
-                <span>Aperçu avant impression</span>
-                <h3>Contrat de bail rempli</h3>
-                <p>Contrôle du rendu avant génération PDF.</p>
-              </div>
-              <Button onClick={() => window.print()}><Printer size={17} /> Imprimer</Button>
-            </div>
-            <FillableBail values={values} onChange={updateLease} readOnly />
-          </div>
-        )}
+        <LeaseVariableForm values={values} onChange={updateLease} includeReference={false} />
         <div className="action-row compact-row">
           <Button onClick={onClose}><Archive size={17} /> Enregistrer brouillon</Button>
-          <Button onClick={() => setPreview(true)}><Eye size={17} /> Prévisualiser</Button>
           <Button variant="primary" onClick={() => setPreview(true)}><Download size={17} /> Générer PDF</Button>
           <Button onClick={onClose}><Archive size={17} /> Archiver</Button>
         </div>
+        {preview && (
+          <DocumentPreviewModal
+            template={documentTemplates.find((item) => item.key === "bail") ?? documentTemplates[3]}
+            values={values}
+            onChange={updateLease}
+            onClose={() => setPreview(false)}
+          />
+        )}
       </section>
     </div>
   );

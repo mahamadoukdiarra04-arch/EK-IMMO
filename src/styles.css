@@ -3353,6 +3353,96 @@ td:last-child {
   background: #f4f8fb;
 }
 
+.lease-variable-form {
+  display: grid;
+  gap: 18px;
+}
+
+.form-helper-note {
+  padding: 13px 15px;
+  border: 1px solid rgba(200, 162, 26, 0.35);
+  border-radius: 10px;
+  color: #4a3b07;
+  background: rgba(200, 162, 26, 0.1);
+  font-size: 0.92rem;
+  font-weight: 720;
+  line-height: 1.45;
+}
+
+.lease-variable-section {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.lease-variable-section h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.lease-variable-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.lease-variable-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.contract-variable-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 760;
+}
+
+.contract-variable-field.full {
+  grid-column: 1 / -1;
+}
+
+.contract-variable-field input,
+.contract-variable-field textarea,
+.contract-variable-field select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  outline: 0;
+  color: var(--text);
+  background: var(--surface-soft);
+  font: inherit;
+  font-size: 0.96rem;
+  font-weight: 760;
+  line-height: 1.3;
+}
+
+.contract-variable-field textarea {
+  min-height: 106px;
+  resize: vertical;
+}
+
+.contract-variable-field input:focus,
+.contract-variable-field textarea:focus,
+.contract-variable-field select:focus {
+  border-color: var(--purple);
+  box-shadow: 0 0 0 3px rgba(5, 47, 95, 0.1);
+}
+
+.contract-variable-field small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 640;
+  line-height: 1.3;
+}
+
 .original-lease-document {
   width: min(100%, 980px);
   margin: 0 auto;
@@ -4440,7 +4530,9 @@ td:last-child {
   .lease-form-grid,
   .lease-form-grid.two,
   .lease-form-grid.three,
-  .lease-signature-grid {
+  .lease-signature-grid,
+  .lease-variable-grid,
+  .lease-variable-grid.three {
     grid-template-columns: 1fr;
   }
 
