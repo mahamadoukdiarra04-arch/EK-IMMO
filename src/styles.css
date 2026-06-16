@@ -4560,9 +4560,9 @@ td:last-child {
 .charge-stat-card {
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr);
-  align-items: center;
+  align-items: start;
   gap: 10px 12px;
-  min-height: 118px;
+  min-height: 148px;
   padding: 18px;
   border: 1px solid var(--border-soft);
   border-radius: 10px;
@@ -4572,7 +4572,7 @@ td:last-child {
 
 .charge-stat-card > span {
   display: grid;
-  grid-row: 1 / span 2;
+  grid-row: 1 / span 3;
   place-items: center;
   width: 42px;
   height: 42px;
@@ -4582,6 +4582,7 @@ td:last-child {
 }
 
 .charge-stat-card small {
+  align-self: end;
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 780;
@@ -4594,6 +4595,14 @@ td:last-child {
   font-size: 1.3rem;
   line-height: 1.12;
   overflow-wrap: anywhere;
+}
+
+.charge-stat-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 620;
+  line-height: 1.35;
 }
 
 .charge-filter-panel {

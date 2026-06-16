@@ -5698,11 +5698,11 @@ function ChargesView({ onAction }) {
   const chargeStats = useMemo(() => {
     const currentMonthCharges = charges.filter((charge) => charge.period === "Juin 2026");
     return [
-      ["Total charges du mois", formatFCFA(currentMonthCharges.reduce((sum, charge) => sum + parseFCFA(charge.amount), 0)), ReceiptText],
-      ["Charges agence", formatFCFA(charges.filter((charge) => charge.payer === "Agence").reduce((sum, charge) => sum + parseFCFA(charge.amount), 0)), Banknote],
-      ["Charges propriétaires", formatFCFA(charges.filter((charge) => charge.payer === "Propriétaire").reduce((sum, charge) => sum + parseFCFA(charge.amount), 0)), HandCoins],
-      ["Charges refacturables", formatFCFA(charges.filter((charge) => charge.payer.includes("Locataire")).reduce((sum, charge) => sum + parseFCFA(charge.amount), 0)), WalletCards],
-      ["Charges à valider", String(charges.filter((charge) => ["À valider", "En attente", "Brouillon"].includes(charge.status)).length), AlertTriangle],
+      ["Total charges du mois", formatFCFA(currentMonthCharges.reduce((sum, charge) => sum + parseFCFA(charge.amount), 0)), "Toutes les sorties enregistrées sur juin 2026.", ReceiptText],
+      ["Charges agence", formatFCFA(charges.filter((charge) => charge.payer === "Agence").reduce((sum, charge) => sum + parseFCFA(charge.amount), 0)), "Dépenses prises en charge directement par E.K immo.", Banknote],
+      ["Charges propriétaires", formatFCFA(charges.filter((charge) => charge.payer === "Propriétaire").reduce((sum, charge) => sum + parseFCFA(charge.amount), 0)), "Montants imputés aux propriétaires concernés.", HandCoins],
+      ["Charges refacturables", formatFCFA(charges.filter((charge) => charge.payer.includes("Locataire")).reduce((sum, charge) => sum + parseFCFA(charge.amount), 0)), "Sommes récupérables auprès des locataires ou dossiers.", WalletCards],
+      ["Charges à valider", String(charges.filter((charge) => ["À valider", "En attente", "Brouillon"].includes(charge.status)).length), "Dossiers encore à contrôler avant paiement ou archive.", AlertTriangle],
     ];
   }, []);
 
@@ -5722,11 +5722,12 @@ function ChargesView({ onAction }) {
       </div>
 
       <div className="charge-stat-grid">
-        {chargeStats.map(([label, value, Icon]) => (
+        {chargeStats.map(([label, value, description, Icon]) => (
           <article className="charge-stat-card" key={label}>
             <span><Icon size={19} /></span>
             <small>{label}</small>
             <strong>{value}</strong>
+            <p>{description}</p>
           </article>
         ))}
       </div>
