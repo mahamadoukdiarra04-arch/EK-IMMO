@@ -1497,6 +1497,15 @@ const rentTargetByPeriod = {
   "P\u00e9riode personnalis\u00e9e": 42900000,
 };
 
+const rentMonthlyEvolution = [
+  { month: "Jan", expected: 13800000, collected: 12450000 },
+  { month: "Fév", expected: 14600000, collected: 13280000 },
+  { month: "Mar", expected: 15300000, collected: 14100000 },
+  { month: "Avr", expected: 13200000, collected: 11650000 },
+  { month: "Mai", expected: 16800000, collected: 15100000 },
+  { month: "Juin", expected: 16000000, collected: 14300000 },
+];
+
 const pipelineToneColors = {
   pale: "#eef4f9",
   soft: "#dce8f3",
@@ -2298,6 +2307,7 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onPro
 
 function DashboardPage({ onAction, onOpenProperty }) {
   const [kpiPeriod, setKpiPeriod] = useState("Mois");
+  const [dashboardState, setDashboardState] = useState("Données");
   const kpiValues = dashboardKpisByPeriod[kpiPeriod] ?? dashboardKpisByPeriod.Mois;
   const kpiDetails = dashboardKpiDetailsByPeriod[kpiPeriod] ?? dashboardKpiDetailsByPeriod.Mois;
   const selectedPipeline = getPipelineData("Commercial & visites", kpiPeriod);
@@ -2331,10 +2341,27 @@ function DashboardPage({ onAction, onOpenProperty }) {
           <DashboardFilterBar
             period={kpiPeriod}
             onPeriod={setKpiPeriod}
+            state={dashboardState}
+            onState={setDashboardState}
           />
         }
       />
 
+      {dashboardState === "Chargement" && <DashboardLoadingState />}
+
+      {dashboardState === "Vide" && (
+        <DashboardEmptyState
+          onAddProperty={() => onAction("Ajouter un bien")}
+          onAddPayment={() => onAction("Enregistrer un paiement")}
+        />
+      )}
+
+      {dashboardState === "Erreur" && (
+        <DashboardErrorState onRetry={() => setDashboardState("Données")} />
+      )}
+
+      {dashboardState === "Données" && (
+        <>
       <section className="kpi-grid" data-demo="dashboard-kpis">
         {kpis.map((item) => (
           <StatCard item={item} key={item.label} />
@@ -2398,6 +2425,8 @@ function DashboardPage({ onAction, onOpenProperty }) {
           </div>
         </Panel>
       </section>
+        </>
+      )}
     </>
   );
 }
@@ -6720,17 +6749,87 @@ function StatCard({ item }) {
   );
 }
 
-function DashboardFilterBar({ period, onPeriod }) {
+function DashboardFilterBar({ period, onPeriod, state, onState }) {
   return (
     <section className="dashboard-filter-bar">
       <Filter size={17} />
       <DashboardSelect value={period} onChange={onPeriod} options={periodOptions} ariaLabel="Période des blocs du dashboard" />
+      <DashboardSelect value={state} onChange={onState} options={["Données", "Chargement", "Vide", "Erreur"]} ariaLabel="État du tableau de bord" />
       {period === "Période personnalisée" && (
         <div className="custom-period">
           <input type="date" aria-label="Date de début" />
           <input type="date" aria-label="Date de fin" />
         </div>
       )}
+    </section>
+  );
+}
+
+function DashboardLoadingState() {
+  return (
+    <div className="dashboard-loading-state" aria-busy="true">
+      <section className="kpi-grid">
+        {Array.from({ length: 8 }).map((_, index) => (
+          <article className="stat-card skeleton-card" key={index}>
+            <span className="skeleton-line icon" />
+            <span className="skeleton-line short" />
+            <span className="skeleton-line value" />
+            <span className="skeleton-line full" />
+            <span className="skeleton-line medium" />
+          </article>
+        ))}
+      </section>
+      <section className="two-grid">
+        <DashboardSkeletonPanel lines={5} />
+        <DashboardSkeletonPanel lines={5} />
+      </section>
+      <section className="three-grid dashboard-bottom">
+        <DashboardSkeletonPanel lines={4} />
+        <DashboardSkeletonPanel lines={5} />
+        <DashboardSkeletonPanel lines={5} />
+      </section>
+    </div>
+  );
+}
+
+function DashboardSkeletonPanel({ lines }) {
+  return (
+    <article className="panel skeleton-panel">
+      <span className="skeleton-line title" />
+      <div>
+        {Array.from({ length: lines }).map((_, index) => (
+          <span className={index % 2 === 0 ? "skeleton-line full" : "skeleton-line medium"} key={index} />
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function DashboardEmptyState({ onAddProperty, onAddPayment }) {
+  return (
+    <section className="dashboard-state-card empty">
+      <div className="state-icon">
+        <BarChart3 size={24} />
+      </div>
+      <h2>Aucune donnée disponible pour cette période.</h2>
+      <p>Ajoutez un bien ou enregistrez un paiement pour alimenter le tableau de bord.</p>
+      <div className="action-row">
+        <Button variant="primary" onClick={onAddProperty}><Plus size={17} /> Ajouter un bien</Button>
+        <Button onClick={onAddPayment}><WalletCards size={17} /> Enregistrer un paiement</Button>
+      </div>
+    </section>
+  );
+}
+
+function DashboardErrorState({ onRetry }) {
+  return (
+    <section className="dashboard-state-card error">
+      <div className="state-icon">
+        <AlertTriangle size={24} />
+      </div>
+      <h2>Impossible de charger les données du tableau de bord.</h2>
+      <p>La récupération des indicateurs a échoué. Vous pouvez relancer le chargement.</p>
+      <Button variant="primary" onClick={onRetry}><RefreshCw size={17} /> Réessayer</Button>
     </section>
   );
 }
@@ -6748,16 +6847,19 @@ function DashboardSelect({ value, onChange, options, ariaLabel }) {
   );
 }
 
-function RentBars({ period }) {
-  const source = rentBarsByIndicator["Loyers attendus"][period] ?? rentBarsByIndicator["Loyers attendus"].Mois;
-  const target = rentTargetByPeriod[period] ?? rentTargetByPeriod.Mois;
-  const bars = source.map(([label, value], index, items) => {
-    const amount = Math.round((target * value) / 100);
+function RentBars() {
+  const maxExpected = Math.max(...rentMonthlyEvolution.map((item) => item.expected));
+  const bars = rentMonthlyEvolution.map((item, index, items) => {
+    const unpaid = Math.max(item.expected - item.collected, 0);
+    const collectionRate = Math.round((item.collected / item.expected) * 100);
+
     return {
-      label,
-      value,
-      amount,
-      amountLabel: formatCompactFCFA(amount),
+      ...item,
+      value: Math.round((item.expected / maxExpected) * 100),
+      expectedLabel: formatFCFA(item.expected),
+      collectedLabel: formatFCFA(item.collected),
+      unpaidLabel: formatFCFA(unpaid),
+      collectionRate,
       tone: index === items.length - 1 ? "active" : "soft",
     };
   });
@@ -6768,18 +6870,24 @@ function RentBars({ period }) {
         {bars.map((bar) => (
           <button
             className="bar-button"
-            key={bar.label}
+            key={bar.month}
             style={{ "--height": `${bar.value}%` }}
-            aria-label={`${bar.label}: ${bar.amountLabel}`}
+            aria-label={`${bar.month}: ${bar.expectedLabel} attendus, ${bar.collectedLabel} encaissés, ${bar.unpaidLabel} impayés, ${bar.collectionRate}% d'encaissement`}
           >
             <i className={bar.tone} />
-            <span className="chart-flyout">{bar.label}: {bar.amountLabel}</span>
+            <span className="chart-flyout rent-flyout">
+              <strong>{bar.month}</strong>
+              <span><em>Loyers attendus</em><b>{bar.expectedLabel}</b></span>
+              <span><em>Loyers encaissés</em><b>{bar.collectedLabel}</b></span>
+              <span><em>Impayés</em><b>{bar.unpaidLabel}</b></span>
+              <span><em>Taux d'encaissement</em><b>{bar.collectionRate}%</b></span>
+            </span>
           </button>
         ))}
       </div>
       <div className="months">
         {bars.map((bar) => (
-          <span key={bar.label}>{bar.label}</span>
+          <span key={bar.month}>{bar.month}</span>
         ))}
       </div>
     </div>
