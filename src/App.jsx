@@ -1944,6 +1944,7 @@ function App() {
         globalQuery={globalQuery}
         onQueryChange={setGlobalQuery}
         onNav={handleNav}
+        onAction={openAction}
         onProfile={() => setShowLogin(true)}
         onStartDemo={startDemo}
         demoActive={demoActive}
@@ -2112,9 +2113,10 @@ function DemoTour({ step, index, total, rect, onNext, onPrevious, onStop }) {
   );
 }
 
-function Topbar({ activePage, globalQuery, onQueryChange, onNav, onProfile, onStartDemo, demoActive }) {
+function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onProfile, onStartDemo, demoActive }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [readNotificationIds, setReadNotificationIds] = useState([]);
   const results = useMemo(() => getSearchResults(globalQuery), [globalQuery]);
   const hasQuery = globalQuery.trim().length > 0;
@@ -2128,10 +2130,20 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onProfile, onSt
   const handleNotificationView = (page) => {
     onNav(page);
     setNotificationsOpen(false);
+    setUserMenuOpen(false);
   };
 
   const markNotificationAsRead = (id) => {
     setReadNotificationIds((ids) => (ids.includes(id) ? ids : [...ids, id]));
+  };
+
+  const handleUserAction = (label) => {
+    setUserMenuOpen(false);
+    if (label === "Déconnexion") {
+      onProfile();
+      return;
+    }
+    onAction(label);
   };
 
   return (
@@ -2158,7 +2170,11 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onProfile, onSt
             className={searchOpen ? "icon-only active" : "icon-only"}
             aria-label="Rechercher"
             aria-expanded={searchOpen}
-            onClick={() => setSearchOpen((value) => !value)}
+            onClick={() => {
+              setSearchOpen((value) => !value);
+              setNotificationsOpen(false);
+              setUserMenuOpen(false);
+            }}
           >
             <Search size={20} />
           </button>
@@ -2199,6 +2215,7 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onProfile, onSt
             onClick={() => {
               setNotificationsOpen((value) => !value);
               setSearchOpen(false);
+              setUserMenuOpen(false);
             }}
           >
             <Bell size={20} />
@@ -2247,9 +2264,33 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onProfile, onSt
         <button className="icon-only" aria-label="Paramètres" onClick={() => onNav("Plus")}>
           <Settings size={20} />
         </button>
-        <button className="avatar-button" onClick={onProfile} aria-label="Ouvrir l'écran de connexion">
-          <span>AD</span>
-        </button>
+        <div className="user-menu">
+          <button
+            className={userMenuOpen ? "avatar-button active" : "avatar-button"}
+            onClick={() => {
+              setUserMenuOpen((value) => !value);
+              setSearchOpen(false);
+              setNotificationsOpen(false);
+            }}
+            aria-label="Menu utilisateur"
+            aria-expanded={userMenuOpen}
+          >
+            <span>AD</span>
+          </button>
+          {userMenuOpen && (
+            <section className="user-panel" onKeyDown={(event) => event.key === "Escape" && setUserMenuOpen(false)}>
+              <button onClick={() => handleUserAction("Mon profil")}>
+                <UserRound size={16} /> Mon profil
+              </button>
+              <button onClick={() => handleUserAction("Changer mot de passe")}>
+                <LockKeyhole size={16} /> Changer mot de passe
+              </button>
+              <button className="danger" onClick={() => handleUserAction("Déconnexion")}>
+                <XCircle size={16} /> Déconnexion
+              </button>
+            </section>
+          )}
+        </div>
       </div>
     </header>
   );
