@@ -2685,6 +2685,103 @@ td:last-child {
   align-items: start;
 }
 
+.archive-workspace {
+  display: grid;
+  gap: 22px;
+}
+
+.archive-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 0;
+}
+
+.archive-layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.archive-category-list {
+  display: grid;
+  gap: 10px;
+}
+
+.archive-category-card {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 4px 12px;
+  align-items: center;
+  min-height: 78px;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  color: var(--text);
+  background: #fff;
+  text-align: left;
+}
+
+.archive-category-card.active,
+.archive-category-card:hover,
+.archive-category-card:focus-visible {
+  border-color: var(--purple);
+  box-shadow: 0 0 0 3px rgba(5, 47, 95, 0.08);
+}
+
+.archive-category-card > span {
+  display: grid;
+  grid-row: 1 / span 2;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  color: var(--purple);
+  background: var(--purple-soft);
+}
+
+.archive-category-card strong,
+.archive-category-card small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.archive-category-card small {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.archive-rules {
+  display: grid;
+  gap: 0;
+  margin-top: 18px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.archive-rules p {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.archive-rules span {
+  color: var(--muted);
+}
+
+.archive-rules strong {
+  text-align: right;
+}
+
+.archive-filters {
+  margin-bottom: 18px;
+}
+
 .document-hub {
   display: grid;
   gap: 22px;
@@ -4703,6 +4800,7 @@ td:last-child {
   .detail-grid,
   .master-detail,
   .prospect-workspace,
+  .archive-layout,
   .document-layout,
   .document-workspace,
   .payment-layout,
@@ -4714,6 +4812,10 @@ td:last-child {
   .document-template-grid,
   .document-editor-top {
     grid-template-columns: 1fr;
+  }
+
+  .archive-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .document-print-head {

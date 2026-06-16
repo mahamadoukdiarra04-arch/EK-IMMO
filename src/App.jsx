@@ -3707,7 +3707,8 @@ function VisitProfilePanel({ visit, onAction }) {
 }
 
 function ContractsPage({ activeTab, onTab, onAction }) {
-  const tabs = ["Contrats", "Génération de document", "Factures & reçus"];
+  const tabs = ["Contrats", "Génération de document", "Archives"];
+  const effectiveTab = activeTab === "Factures & reçus" ? "Archives" : activeTab;
   return (
     <>
       <PageIntro
@@ -3718,10 +3719,10 @@ function ContractsPage({ activeTab, onTab, onAction }) {
           </Button>
         }
       />
-      <Tabs tabs={tabs} active={activeTab} onChange={onTab} demo="contract-tabs" />
-      {activeTab === "Contrats" && <ContractsList onAction={onAction} />}
-      {activeTab === "Génération de document" && <DocumentGeneration onAction={onAction} />}
-      {activeTab === "Factures & reçus" && <InvoicesView onAction={onAction} />}
+      <Tabs tabs={tabs} active={effectiveTab} onChange={onTab} demo="contract-tabs" />
+      {effectiveTab === "Contrats" && <ContractsList onAction={onAction} />}
+      {effectiveTab === "Génération de document" && <DocumentGeneration onAction={onAction} />}
+      {effectiveTab === "Archives" && <ArchivesView onAction={onAction} />}
     </>
   );
 }
@@ -3935,6 +3936,316 @@ function InvoicesView({ onAction }) {
           commission: commissions[0],
         }}
       />
+    </section>
+  );
+}
+
+function getArchiveRecords() {
+  const contractArchives = contracts
+    .filter((contract) => ["Archivé", "Expiré"].includes(contract.status))
+    .map((contract) => ({
+      id: `contract-${contract.number}`,
+      category: "Contrats et mandats",
+      reference: contract.number,
+      title: contract.type,
+      linked: `${contract.property} · ${contract.client}`,
+      date: contract.end === "Vendu" ? "02/11/2024" : contract.end,
+      status: contract.status === "Expiré" ? "Archivé" : contract.status,
+      module: "Docs",
+      owner: contract.owner,
+    }));
+
+  const invoiceArchives = invoices.map((invoice) => ({
+    id: `invoice-${invoice.number}`,
+    category: "Factures, reçus et quittances",
+    reference: invoice.number,
+    title: `${invoice.type} - ${invoice.client}`,
+    linked: `${invoice.property} · ${invoice.amount}`,
+    date: invoice.date,
+    status: invoice.status,
+    module: "Finance",
+    owner: invoice.client,
+  }));
+
+  const receiptArchives = paymentRecords
+    .filter((payment) => payment.receipt && payment.receipt !== "Non généré")
+    .map((payment) => ({
+      id: `payment-${payment.reference}`,
+      category: "Factures, reçus et quittances",
+      reference: payment.receipt,
+      title: `Reçu de paiement ${payment.period}`,
+      linked: `${payment.property} · ${payment.paid}`,
+      date: payment.date,
+      status: payment.status === "Payé" ? "Archivé" : "Généré",
+      module: "Finance",
+      owner: payment.tenant,
+    }));
+
+  const chargeArchives = charges
+    .filter((charge) => charge.status !== "Brouillon")
+    .map((charge) => ({
+      id: `charge-${charge.id}`,
+      category: "Charges et entretiens",
+      reference: charge.id,
+      title: `${charge.type} - ${charge.proof}`,
+      linked: `${charge.property} · ${charge.amount}`,
+      date: charge.date,
+      status: charge.status,
+      module: "Finance",
+      owner: charge.owner,
+    }));
+
+  const maintenanceArchives = maintenances.map((maintenance, index) => ({
+    id: `maintenance-${index}`,
+    category: "Charges et entretiens",
+    reference: `ENT-2026-${String(index + 21).padStart(3, "0")}`,
+    title: maintenance.type,
+    linked: `${maintenance.property} · ${maintenance.cost}`,
+    date: maintenance.date,
+    status: maintenance.status,
+    module: "Biens",
+    owner: maintenance.manager,
+  }));
+
+  const draftArchives = [
+    ...charges
+      .filter((charge) => charge.status === "Brouillon")
+      .map((charge) => ({
+        id: `draft-charge-${charge.id}`,
+        category: "Brouillons",
+        reference: charge.id,
+        title: `Charge en brouillon - ${charge.type}`,
+        linked: `${charge.property} · ${charge.amount}`,
+        date: charge.date,
+        status: "Brouillon",
+        module: "Finance",
+        owner: charge.createdBy,
+      })),
+    {
+      id: "draft-bail-a203",
+      category: "Brouillons",
+      reference: "BRO-DOC-2026-014",
+      title: "Contrat de bail - Appartement A-203 Korofina",
+      linked: "Appartement A-203 Korofina · nouveau preneur",
+      date: "14/06/2026",
+      status: "Brouillon",
+      module: "Docs",
+      owner: "Mariam Traoré",
+    },
+    {
+      id: "draft-mandat-sotuba",
+      category: "Brouillons",
+      reference: "BRO-MDT-2026-007",
+      title: "Mandat de gestion - Villa Sotuba Jardin",
+      linked: "Villa Sotuba Jardin · Fatoumata Diallo",
+      date: "13/06/2026",
+      status: "Brouillon",
+      module: "Biens",
+      owner: "Cheick Camara",
+    },
+    {
+      id: "draft-report-may",
+      category: "Brouillons",
+      reference: "BRO-RAP-2026-005",
+      title: "Rapport locatif mensuel",
+      linked: "Mai 2026 · portefeuille Bamako",
+      date: "29/05/2026",
+      status: "Brouillon",
+      module: "Rapports",
+      owner: "Aïssata Diarra",
+    },
+  ];
+
+  const propertyClientArchives = [
+    {
+      id: "property-owner-konaté",
+      category: "Biens et clients",
+      reference: "DOS-PRO-2024-071",
+      title: "Dossier propriétaire - Youssouf Konaté",
+      linked: "Parcelle Titibougou · mandat vendu",
+      date: "02/11/2024",
+      status: "Archivé",
+      module: "Clients",
+      owner: "Youssouf Konaté",
+    },
+    {
+      id: "property-tenant-awa",
+      category: "Biens et clients",
+      reference: "DOS-LOC-2026-011",
+      title: "Dossier locataire - Awa Traoré",
+      linked: "Villa Koulouba · pièces validées",
+      date: "05/05/2026",
+      status: "Archivé",
+      module: "Clients",
+      owner: "Mariam Traoré",
+    },
+    {
+      id: "provider-office",
+      category: "Biens et clients",
+      reference: "DOS-PRE-2026-003",
+      title: "Fiche prestataire entretien",
+      linked: "Plateau Office Center · suivi entretien seul",
+      date: "14/06/2026",
+      status: "Brouillon",
+      module: "Biens",
+      owner: "Issa Maïga",
+    },
+  ];
+
+  const reportArchives = [
+    {
+      id: "report-finance-may",
+      category: "Rapports et exports",
+      reference: "RAP-FIN-2026-005",
+      title: "Résumé financier mensuel",
+      linked: "Mai 2026 · PDF direction",
+      date: "31/05/2026",
+      status: "Archivé",
+      module: "Rapports",
+      owner: "Aïssata Diarra",
+    },
+    {
+      id: "report-property-quarter",
+      category: "Rapports et exports",
+      reference: "RAP-BIE-2026-T2",
+      title: "Rapport des biens",
+      linked: "Deuxième trimestre 2026 · export Excel",
+      date: "15/06/2026",
+      status: "Généré",
+      module: "Rapports",
+      owner: "Admin E.K immo",
+    },
+  ];
+
+  return [
+    ...contractArchives,
+    ...invoiceArchives,
+    ...receiptArchives,
+    ...chargeArchives,
+    ...maintenanceArchives,
+    ...draftArchives,
+    ...propertyClientArchives,
+    ...reportArchives,
+  ];
+}
+
+function getArchiveCategoryIcon(category) {
+  if (category === "Contrats et mandats") return FileText;
+  if (category === "Factures, reçus et quittances") return ReceiptText;
+  if (category === "Brouillons") return Pencil;
+  if (category === "Charges et entretiens") return Wrench;
+  if (category === "Biens et clients") return Building2;
+  if (category === "Rapports et exports") return BarChart3;
+  return Archive;
+}
+
+function ArchivesView({ onAction }) {
+  const records = useMemo(() => getArchiveRecords(), []);
+  const [category, setCategory] = useState("Tous les éléments");
+  const [status, setStatus] = useState("Tous statuts");
+  const [query, setQuery] = useState("");
+
+  const categories = useMemo(() => ["Tous les éléments", ...uniqueValues(records.map((record) => record.category))], [records]);
+  const statuses = useMemo(() => ["Tous statuts", ...uniqueValues(records.map((record) => record.status))], [records]);
+  const normalizedQuery = normalizeSearch(query);
+  const filteredRecords = records.filter((record) => {
+    const categoryMatch = category === "Tous les éléments" || record.category === category;
+    const statusMatch = status === "Tous statuts" || record.status === status;
+    const queryMatch =
+      !normalizedQuery ||
+      normalizeSearch(`${record.category} ${record.reference} ${record.title} ${record.linked} ${record.module} ${record.owner}`).includes(normalizedQuery);
+    return categoryMatch && statusMatch && queryMatch;
+  });
+
+  const archivedCount = records.filter((record) => record.status === "Archivé").length;
+  const draftCount = records.filter((record) => record.status === "Brouillon").length;
+  const generatedCount = records.filter((record) => ["Généré", "Imprimé", "Validée", "Payée"].includes(record.status)).length;
+  const categorySummaries = categories.map((item) => {
+    const items = item === "Tous les éléments" ? records : records.filter((record) => record.category === item);
+    return {
+      label: item,
+      count: items.length,
+      drafts: items.filter((record) => record.status === "Brouillon").length,
+    };
+  });
+
+  return (
+    <section className="archive-workspace" data-demo="document-archive">
+      <div className="summary-strip archive-summary">
+        <Info label="Éléments classés" value={records.length} />
+        <Info label="Archives validées" value={archivedCount} />
+        <Info label="Brouillons ouverts" value={draftCount} />
+        <Info label="Documents générés" value={generatedCount} />
+      </div>
+      <section className="archive-layout">
+        <Panel title="Catégories">
+          <div className="archive-category-list">
+            {categorySummaries.map((item) => {
+              const Icon = getArchiveCategoryIcon(item.label);
+              return (
+                <button
+                  className={category === item.label ? "archive-category-card active" : "archive-category-card"}
+                  key={item.label}
+                  onClick={() => setCategory(item.label)}
+                >
+                  <span><Icon size={19} /></span>
+                  <strong>{item.label}</strong>
+                  <small>{item.count} élément{item.count > 1 ? "s" : ""} · {item.drafts} brouillon{item.drafts > 1 ? "s" : ""}</small>
+                </button>
+              );
+            })}
+          </div>
+          <div className="archive-rules">
+            <p><span>Classement</span><strong>Par module métier</strong></p>
+            <p><span>Brouillons</span><strong>Reprise possible</strong></p>
+            <p><span>Archives</span><strong>Lecture et export</strong></p>
+          </div>
+        </Panel>
+        <Panel
+          title="Archives & brouillons"
+          toolbar={<span className="muted">{filteredRecords.length} élément{filteredRecords.length > 1 ? "s" : ""}</span>}
+        >
+          <div className="filters-row archive-filters">
+            <label className="field search-field">
+              <Search size={19} />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Rechercher une référence, un bien, un client..." />
+            </label>
+            <select value={category} onChange={(event) => setCategory(event.target.value)} aria-label="Catégorie archive">
+              {categories.map((item) => <option key={item}>{item}</option>)}
+            </select>
+            <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Statut archive">
+              {statuses.map((item) => <option key={item}>{item}</option>)}
+            </select>
+            <Button onClick={() => {
+              setQuery("");
+              setCategory("Tous les éléments");
+              setStatus("Tous statuts");
+            }}>
+              <RefreshCw size={17} /> Réinitialiser
+            </Button>
+          </div>
+          <DataTable
+            columns={["Catégorie", "Référence", "Document", "Dossier lié", "Date", "Statut", "Module", "Action"]}
+            rows={filteredRecords.map((record) => [
+              record.category,
+              record.reference,
+              record.title,
+              record.linked,
+              record.date,
+              <Badge label={record.status} />,
+              record.module,
+              <div className="table-actions">
+                <Button compact onClick={() => onAction(`Ouvrir archive ${record.reference}`)}><Eye size={15} /> Ouvrir</Button>
+                {record.status === "Brouillon" ? (
+                  <Button compact onClick={() => onAction(`Reprendre brouillon ${record.reference}`)}><Pencil size={15} /> Reprendre</Button>
+                ) : (
+                  <Button compact onClick={() => onAction(`Télécharger archive ${record.reference}`)}><Download size={15} /> Exporter</Button>
+                )}
+              </div>,
+            ])}
+          />
+        </Panel>
+      </section>
     </section>
   );
 }
