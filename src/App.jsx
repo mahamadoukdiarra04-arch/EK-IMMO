@@ -5479,14 +5479,17 @@ function FinancePage({ activeTab, onTab, onAction }) {
   const tabs = ["Loyers", "Paiements", "Impayés", "Commissions", "Charges", "Entretiens", "Reversements"];
   const effectiveTab = tabs.includes(activeTab) ? activeTab : "Loyers";
   const agencyRentRows = getAgencyRentRows();
+  const financeActions = {
+    Charges: <Button variant="primary" onClick={() => onAction("Ajouter une charge")}><Plus size={17} /> Ajouter une charge</Button>,
+    Entretiens: <Button variant="primary" onClick={() => onAction("Ajouter un entretien")}><Wrench size={17} /> Ajouter un entretien</Button>,
+    Reversements: <Button variant="primary" onClick={() => onAction("Préparer un reversement")}><RefreshCw size={17} /> Préparer un reversement</Button>,
+  };
 
   return (
     <>
       <PageIntro
         title="Finance métier"
-        actions={effectiveTab === "Charges" ? (
-          <Button variant="primary" onClick={() => onAction("Ajouter une charge")}><Plus size={17} /> Ajouter une charge</Button>
-        ) : null}
+        actions={financeActions[effectiveTab] ?? null}
       />
       <Tabs tabs={tabs} active={effectiveTab} onChange={onTab} demo="finance-tabs" />
       {effectiveTab === "Loyers" && <FinanceTable title="Loyers attendus par E.K immo" rows={agencyRentRows.map((row) => [row.period, row.tenant, row.property, row.owner, row.expected, row.paid, row.balance, <Badge label={row.status} />, <RentActions row={row} onAction={onAction} />])} columns={["Période", "Locataire", "Bien", "Propriétaire", "Attendu", "Payé", "Solde", "Statut", "Actions"]} />}
