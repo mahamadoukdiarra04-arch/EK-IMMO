@@ -5484,6 +5484,9 @@ function FinancePage({ activeTab, onTab, onAction }) {
     <>
       <PageIntro
         title="Finance métier"
+        actions={effectiveTab === "Charges" ? (
+          <Button variant="primary" onClick={() => onAction("Ajouter une charge")}><Plus size={17} /> Ajouter une charge</Button>
+        ) : null}
       />
       <Tabs tabs={tabs} active={effectiveTab} onChange={onTab} demo="finance-tabs" />
       {effectiveTab === "Loyers" && <FinanceTable title="Loyers attendus par E.K immo" rows={agencyRentRows.map((row) => [row.period, row.tenant, row.property, row.owner, row.expected, row.paid, row.balance, <Badge label={row.status} />, <RentActions row={row} onAction={onAction} />])} columns={["Période", "Locataire", "Bien", "Propriétaire", "Attendu", "Payé", "Solde", "Statut", "Actions"]} />}
@@ -5718,7 +5721,6 @@ function ChargesView({ onAction }) {
           <h2>Charges & dépenses</h2>
           <p>Suivi opérationnel des sorties liées aux biens, entretiens, propriétaires, locataires et frais internes E.K immo.</p>
         </div>
-        <Button variant="primary" onClick={() => onAction("Ajouter une charge")}><Plus size={17} /> Ajouter une charge</Button>
       </div>
 
       <div className="charge-stat-grid">
