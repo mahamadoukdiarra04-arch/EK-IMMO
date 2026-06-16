@@ -5476,7 +5476,8 @@ function InvoiceActions({ invoice, onAction }) {
 }
 
 function FinancePage({ activeTab, onTab, onAction }) {
-  const tabs = ["Loyers", "Paiements", "Impayés", "Factures & reçus", "Commissions", "Charges", "Entretiens", "Reversements"];
+  const tabs = ["Loyers", "Paiements", "Impayés", "Commissions", "Charges", "Entretiens", "Reversements"];
+  const effectiveTab = tabs.includes(activeTab) ? activeTab : "Loyers";
   const agencyRentRows = getAgencyRentRows();
 
   return (
@@ -5484,15 +5485,14 @@ function FinancePage({ activeTab, onTab, onAction }) {
       <PageIntro
         title="Finance métier"
       />
-      <Tabs tabs={tabs} active={activeTab} onChange={onTab} demo="finance-tabs" />
-      {activeTab === "Loyers" && <FinanceTable title="Loyers attendus par E.K immo" rows={agencyRentRows.map((row) => [row.period, row.tenant, row.property, row.owner, row.expected, row.paid, row.balance, <Badge label={row.status} />, <RentActions row={row} onAction={onAction} />])} columns={["Période", "Locataire", "Bien", "Propriétaire", "Attendu", "Payé", "Solde", "Statut", "Actions"]} />}
-      {activeTab === "Paiements" && <PaymentForm onAction={onAction} />}
-      {activeTab === "Impayés" && <ArrearsView onAction={onAction} />}
-      {activeTab === "Factures & reçus" && <InvoicesView onAction={onAction} />}
-      {activeTab === "Commissions" && <CommissionsView onAction={onAction} />}
-      {activeTab === "Charges" && <ChargesView onAction={onAction} />}
-      {activeTab === "Entretiens" && <MaintenancesView onAction={onAction} />}
-      {activeTab === "Reversements" && <ReversalsView onAction={onAction} />}
+      <Tabs tabs={tabs} active={effectiveTab} onChange={onTab} demo="finance-tabs" />
+      {effectiveTab === "Loyers" && <FinanceTable title="Loyers attendus par E.K immo" rows={agencyRentRows.map((row) => [row.period, row.tenant, row.property, row.owner, row.expected, row.paid, row.balance, <Badge label={row.status} />, <RentActions row={row} onAction={onAction} />])} columns={["Période", "Locataire", "Bien", "Propriétaire", "Attendu", "Payé", "Solde", "Statut", "Actions"]} />}
+      {effectiveTab === "Paiements" && <PaymentForm onAction={onAction} />}
+      {effectiveTab === "Impayés" && <ArrearsView onAction={onAction} />}
+      {effectiveTab === "Commissions" && <CommissionsView onAction={onAction} />}
+      {effectiveTab === "Charges" && <ChargesView onAction={onAction} />}
+      {effectiveTab === "Entretiens" && <MaintenancesView onAction={onAction} />}
+      {effectiveTab === "Reversements" && <ReversalsView onAction={onAction} />}
     </>
   );
 }
