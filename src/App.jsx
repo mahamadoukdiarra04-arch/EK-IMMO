@@ -6173,6 +6173,38 @@ function DetailMetrics({ items }) {
   );
 }
 
+const nowrapTableColumns = [
+  "action",
+  "agent",
+  "attendu",
+  "bien",
+  "charge",
+  "client",
+  "code",
+  "commission",
+  "contrat",
+  "date",
+  "echeance",
+  "impaye",
+  "locataire",
+  "loyer",
+  "montant",
+  "numero",
+  "occupant",
+  "paye",
+  "periode",
+  "proprietaire",
+  "quartier",
+  "reference",
+  "solde",
+  "statut",
+  "telephone",
+  "type",
+  "valeur",
+];
+
+const wrapTableColumns = ["adresse", "commentaire", "description", "derniere action", "details", "historique", "motif", "notes", "observation", "prochaine action"];
+
 function DataTable({ columns, rows }) {
   return (
     <div className="table-wrap">
@@ -6188,7 +6220,7 @@ function DataTable({ columns, rows }) {
           {rows.map((row, rowIndex) => (
             <tr key={rowIndex}>
               {row.map((cell, cellIndex) => (
-                <td className={getCellClass(cell)} key={`${rowIndex}-${cellIndex}`}>{cell}</td>
+                <td className={getCellClass(cell, columns[cellIndex])} data-column={columns[cellIndex]} key={`${rowIndex}-${cellIndex}`}>{cell}</td>
               ))}
             </tr>
           ))}
@@ -6198,8 +6230,15 @@ function DataTable({ columns, rows }) {
   );
 }
 
-function getCellClass(cell) {
-  if (typeof cell !== "string") return undefined;
+function getCellClass(cell, column) {
+  const classes = [];
+  const normalizedColumn = normalizeSearch(column);
+  const canWrap = wrapTableColumns.some((keyword) => normalizedColumn.includes(keyword));
+  const shouldKeepColumn = !canWrap && nowrapTableColumns.some((keyword) => normalizedColumn.includes(keyword));
+
+  if (shouldKeepColumn) classes.push("nowrap-cell");
+
+  if (typeof cell !== "string") return classes.length ? classes.join(" ") : undefined;
 
   const value = cell.trim();
   if (
@@ -6208,10 +6247,10 @@ function getCellClass(cell) {
     /^\d{2}\/\d{2}\/\d{4}(\s+\d{2}:\d{2})?$/.test(value) ||
     /^\+?\d[\d\s]+$/.test(value)
   ) {
-    return "nowrap-cell";
+    classes.push("nowrap-cell");
   }
 
-  return undefined;
+  return [...new Set(classes)].join(" ") || undefined;
 }
 
 function FilterSelect({ label }) {

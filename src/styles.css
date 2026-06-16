@@ -2353,8 +2353,8 @@ th {
   text-align: left;
   text-transform: uppercase;
   letter-spacing: 0;
-  overflow-wrap: break-word;
-  white-space: normal;
+  overflow-wrap: normal;
+  white-space: nowrap;
 }
 
 td {
@@ -2367,10 +2367,27 @@ td {
   line-height: 1.3;
   vertical-align: middle;
   overflow-wrap: break-word;
+  word-break: normal;
 }
 
 td.nowrap-cell {
-  white-space: normal;
+  overflow-wrap: normal;
+  white-space: nowrap;
+  word-break: normal;
+}
+
+td.nowrap-cell * {
+  white-space: nowrap;
+}
+
+td .badge,
+td .button,
+td .table-actions {
+  white-space: nowrap;
+}
+
+td .table-actions {
+  flex-wrap: nowrap;
 }
 
 td:first-child {
@@ -2392,12 +2409,14 @@ td:last-child {
   color: var(--text);
   background: transparent;
   text-align: left;
+  white-space: nowrap;
 }
 
 .table-person strong,
 .table-person small {
   display: block;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  white-space: nowrap;
 }
 
 .table-person small {
