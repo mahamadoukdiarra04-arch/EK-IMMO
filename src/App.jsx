@@ -3713,11 +3713,6 @@ function ContractsPage({ activeTab, onTab, onAction }) {
     <>
       <PageIntro
         title="Contrats & documents"
-        actions={
-          <Button variant="primary" onClick={() => onAction("Créer contrat")}>
-            <Plus size={18} /> Créer contrat
-          </Button>
-        }
       />
       <Tabs tabs={tabs} active={effectiveTab} onChange={onTab} demo="contract-tabs" />
       {effectiveTab === "Contrats" && <ContractsList onAction={onAction} />}
