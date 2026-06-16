@@ -1439,6 +1439,7 @@ a {
 }
 
 .property-card {
+  container-type: inline-size;
   overflow: hidden;
 }
 
@@ -1483,15 +1484,18 @@ a {
 
 .property-meta {
   display: grid;
-  grid-template-columns: minmax(108px, 0.82fr) minmax(max-content, 1.18fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   column-gap: 18px;
 }
 
 .property-code {
+  min-width: 0;
   color: var(--faint);
   font-weight: 700;
+  overflow: hidden;
   overflow-wrap: normal;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -1505,6 +1509,8 @@ a {
   align-items: baseline;
   justify-content: flex-end;
   gap: 6px;
+  min-width: 0;
+  max-width: 100%;
   color: var(--ink);
   text-align: right;
   white-space: nowrap;
@@ -1519,6 +1525,18 @@ a {
   color: var(--muted);
   font-size: 0.9rem;
   font-weight: 500;
+}
+
+@container (max-width: 520px) {
+  .property-meta {
+    grid-template-columns: 1fr;
+    row-gap: 6px;
+  }
+
+  .property-price {
+    justify-content: flex-start;
+    text-align: left;
+  }
 }
 
 .property-card h3 {
@@ -5185,7 +5203,7 @@ td:last-child {
   }
 
   .property-meta {
-    grid-template-columns: minmax(116px, 0.72fr) minmax(0, 1.28fr);
+    grid-template-columns: minmax(0, 1fr) auto;
     column-gap: 14px;
   }
 
