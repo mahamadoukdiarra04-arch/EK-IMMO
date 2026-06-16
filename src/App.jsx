@@ -6090,27 +6090,44 @@ function ReversalProfilePanel({ reversal, onAction }) {
 }
 
 function PaymentForm({ onAction }) {
-  const [selected, setSelected] = useState(paymentRecords[1]);
-  const [receiptNumber, setReceiptNumber] = useState(makeDocumentNumber("REC", 92));
   const agencyProperties = properties.filter((property) => isAgencyCollectedProperty(property.name));
   const paymentRows = paymentRecords.filter((payment) => isAgencyCollectedProperty(payment.property));
+  const [selected, setSelected] = useState(paymentRows[0] ?? paymentRecords[0]);
+  const [receiptNumber, setReceiptNumber] = useState(selected.receipt);
+  const modes = paymentModes.includes(selected.mode) ? paymentModes : [selected.mode, ...paymentModes];
+
+  useEffect(() => {
+    setReceiptNumber(selected.receipt === "Non généré" ? makeDocumentNumber("REC", 92) : selected.receipt);
+  }, [selected]);
+
+  const selectPayment = (reference) => {
+    setSelected(paymentRows.find((payment) => payment.reference === reference) ?? selected);
+  };
+
+  const selectByProperty = (propertyName) => {
+    setSelected(paymentRows.find((payment) => payment.property === propertyName) ?? selected);
+  };
+
+  const selectByOwner = (ownerName) => {
+    setSelected(paymentRows.find((payment) => payment.owner === ownerName) ?? selected);
+  };
 
   return (
     <section className="payment-layout" data-demo="payment-workspace">
       <Panel title="Enregistrer un paiement">
-        <div className="form-grid">
-          <label>Locataire<select>{tenants.map((tenant) => <option key={tenant.id}>{tenant.name}</option>)}</select></label>
-          <label>Bien<select>{agencyProperties.map((property) => <option key={property.code}>{property.name}</option>)}</select></label>
-          <label>Propriétaire<select>{owners.map((owner) => <option key={owner.id}>{owner.name}</option>)}</select></label>
-          <label>Période<input defaultValue="Mai 2026" /></label>
-          <label>Montant dû<input defaultValue="850 000 FCFA" /></label>
-          <label>Montant payé<input defaultValue="450 000 FCFA" /></label>
-          <label>Solde automatique<input defaultValue="400 000 FCFA" readOnly /></label>
-          <label>Mode de paiement<select>{paymentModes.map((mode) => <option key={mode}>{mode}</option>)}</select></label>
-          <label>Référence paiement<input defaultValue="OM-250528-118" /></label>
+        <div className="form-grid" key={selected.reference}>
+          <label>Locataire<select value={selected.reference} onChange={(event) => selectPayment(event.target.value)}>{paymentRows.map((payment) => <option key={payment.reference} value={payment.reference}>{payment.tenant}</option>)}</select></label>
+          <label>Bien<select value={selected.property} onChange={(event) => selectByProperty(event.target.value)}>{agencyProperties.map((property) => <option key={property.code}>{property.name}</option>)}</select></label>
+          <label>Propriétaire<select value={selected.owner} onChange={(event) => selectByOwner(event.target.value)}>{owners.map((owner) => <option key={owner.id}>{owner.name}</option>)}</select></label>
+          <label>Période<input defaultValue={selected.period} /></label>
+          <label>Montant dû<input defaultValue={selected.due} /></label>
+          <label>Montant payé<input defaultValue={selected.paid} /></label>
+          <label>Solde automatique<input defaultValue={selected.balance} readOnly /></label>
+          <label>Mode de paiement<select defaultValue={selected.mode}>{modes.map((mode) => <option key={mode}>{mode}</option>)}</select></label>
+          <label>Référence paiement<input defaultValue={selected.paymentRef} /></label>
           <label>Numéro reçu automatique<input value={receiptNumber} onChange={(event) => setReceiptNumber(event.target.value)} /><small>Modifiable si le client impose une référence interne.</small></label>
-          <label>Date paiement<input defaultValue="28/05/2026" /></label>
-          <label className="full">Observations<textarea defaultValue="Paiement partiel reçu via Orange Money. Relance prévue pour le solde." /></label>
+          <label>Date paiement<input defaultValue={selected.date} /></label>
+          <label className="full">Observations<textarea defaultValue={selected.note} /></label>
         </div>
         <div className="action-row compact-row">
           <Button variant="primary" onClick={() => onAction("Paiement enregistré")}><CheckCircle2 size={17} /> Valider</Button>
