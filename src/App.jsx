@@ -4390,6 +4390,12 @@ function DocumentPreviewModal({ template, values, onChange, onClose }) {
 }
 
 function FillableDocument({ template, values, onChange, readOnly = false, preview = false }) {
+  if (preview) {
+    if (template.key === "facture") return <OriginalInvoiceDocument values={values} />;
+    if (template.key === "recu") return <OriginalReceiptDocument values={values} />;
+    if (template.key === "bordereau") return <OriginalCommissionStatement values={values} />;
+  }
+
   if (template.key === "bail") {
     return <FillableBail values={values} onChange={onChange} readOnly={readOnly} preview={preview} />;
   }
@@ -4755,6 +4761,220 @@ function FillableBail({ values, onChange, readOnly = false, preview = false }) {
         <LeaseVariableForm values={values} onChange={onChange} readOnly={readOnly} />
       )}
     </div>
+  );
+}
+
+function getDocumentLines(value, fallback = []) {
+  const lines = String(value ?? "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return lines.length > 0 ? lines : fallback;
+}
+
+function SourceFill({ children }) {
+  return <span className="source-fill">{children || "\u00a0"}</span>;
+}
+
+function ReceiptLine({ label, value, className = "" }) {
+  return (
+    <p className={`receipt-source-line ${className}`.trim()}>
+      <strong>{label}</strong>
+      <SourceFill>{value}</SourceFill>
+    </p>
+  );
+}
+
+function ReceiptMethod({ label, checked }) {
+  return (
+    <span className="receipt-method">
+      <span>{label}</span>
+      <i>{checked ? "X" : ""}</i>
+    </span>
+  );
+}
+
+function OriginalInvoiceDocument({ values }) {
+  const clientLines = getDocumentLines(values.client, ["Nom et prénom du client", "Adresse"]);
+
+  return (
+    <article className="original-document original-invoice-document">
+      <section className="source-sheet invoice-source-sheet">
+        <header className="invoice-source-header">
+          <img src={ekimmoAssets.logo} alt="E.K immo" />
+          <h3>FACTURE N° {values.numero || "..."} DU {values.date || ".../.../20..."}</h3>
+          <div className="invoice-source-client">
+            {clientLines.map((line) => <span key={line}>{line}</span>)}
+          </div>
+        </header>
+
+        <table className="source-table invoice-source-table">
+          <thead>
+            <tr>
+              <th>Désignation</th>
+              <th>Loyer mensuel</th>
+              <th>Qté</th>
+              <th>Montant en FCFA</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <strong>{values.designation || "Loyer de..."}</strong>
+                <span>{values.bien}</span>
+                <span>{values.adresse}</span>
+              </td>
+              <td>{values.loyer}</td>
+              <td>{values.quantite}</td>
+              <td>{values.montant}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <table className="source-table invoice-total-table">
+          <tbody>
+            <tr>
+              <th>Total HT</th>
+              <td>{values.totalHt}</td>
+            </tr>
+            <tr>
+              <th>TVA</th>
+              <td>{values.tva}</td>
+            </tr>
+            <tr>
+              <th>Total TTC à payer</th>
+              <td>{values.totalTtc}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p className="invoice-amount-letters">
+          <strong>Arrêté la présente facture à la somme de :</strong>
+          <span>{values.montantLettres}</span>
+        </p>
+
+        <footer className="source-signatures invoice-source-signatures">
+          <strong>Pour Acquit</strong>
+          <strong>Pour ekIMMO</strong>
+        </footer>
+      </section>
+    </article>
+  );
+}
+
+function OriginalReceiptDocument({ values }) {
+  return (
+    <article className="original-document original-receipt-document">
+      <section className="source-sheet receipt-source-sheet">
+        <header className="receipt-source-header">
+          <img src={ekimmoAssets.logo} alt="E.K immo" />
+          <div className="receipt-source-company">
+            <strong>Société Immobilière</strong>
+            <span>Niaréla Rue ACHKHABAAD en face de la Mairie</span>
+          </div>
+          <h3>REÇU D'ENCAISSEMENT</h3>
+          <strong className="receipt-source-number">{values.numero || "0002"}</strong>
+        </header>
+
+        <div className="receipt-source-lines">
+          <ReceiptLine label="Nom et Prénom :" value={values.nom} />
+          <ReceiptLine label="Fonction/Structure :" value={values.structure} />
+          <ReceiptLine label="Téléphone :" value={values.telephone} />
+          <ReceiptLine label="Montant (en chiffres) :" value={values.montantChiffres} />
+          <ReceiptLine label="Montant (en lettres) :" value={values.montantLettres} />
+          <div className="receipt-method-row">
+            <strong>REMIS par le client :</strong>
+            <ReceiptMethod label="en espèce" checked={values.espece} />
+            <ReceiptMethod label="par chèque" checked={values.cheque} />
+            <ReceiptMethod label="par virement" checked={values.virement} />
+          </div>
+          <ReceiptLine label="Objet :" value={values.objet} className="tall" />
+          <ReceiptLine label="A :" value={values.lieu} />
+        </div>
+
+        <footer className="receipt-source-footer">
+          <strong>SIGNATURE DU BENEFICIAIRE</strong>
+          <strong>ekIMMO SAS</strong>
+          <span>www.ekimmo-mali.com</span>
+          <span>RCCM : MA BKO 2022 B-2224 / NIF : 082255646 X</span>
+          <span>Contact : +223 72 77 71 77 / +223 44 44 13 31</span>
+        </footer>
+      </section>
+    </article>
+  );
+}
+
+function OriginalCommissionStatement({ values }) {
+  const filledRows = [
+    { locataire: values.locataire1, periode: values.periode1, encaisse: values.encaisse1, taux: values.taux1, commission: values.commission1 },
+    { locataire: values.locataire2, periode: values.periode2, encaisse: values.encaisse2, taux: values.taux2, commission: values.commission2 },
+    { locataire: values.locataire3, periode: values.periode3, encaisse: values.encaisse3, taux: values.taux3, commission: values.commission3 },
+  ].filter((row) => Object.values(row).some(Boolean));
+  const rows = [
+    ...filledRows,
+    ...Array.from({ length: Math.max(0, 10 - filledRows.length) }, () => ({
+      locataire: "",
+      periode: "",
+      encaisse: "",
+      taux: "",
+      commission: "",
+    })),
+  ];
+
+  return (
+    <article className="original-document original-commission-document">
+      <section className="source-sheet commission-source-sheet">
+        <header className="commission-source-header">
+          <img src={ekimmoAssets.logo} alt="E.K immo" />
+          <h3>BORDEREAU DES ENCAISSEMENTS DE LOYERS ET DE RECOUVREMENT DES CRÉANCES LOCATIVES</h3>
+          <strong>{values.partenaire || "NOM DU PARTENAIRE"}</strong>
+        </header>
+
+        <p className="commission-source-ref">Bordereau N° {values.numero || "..."} du {values.date || "../../20..."}</p>
+        <p className="commission-source-amount">Montant encaissé et recouvré : <strong>{values.total || "..." } FCFA</strong></p>
+
+        <table className="source-table commission-source-table">
+          <thead>
+            <tr>
+              <th>Périodes</th>
+              <th>Locataires</th>
+              <th>Montants encaissés & recouvrés en FCFA</th>
+              <th>Taux de commissions</th>
+              <th>Commissions en FCFA</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr key={`${row.locataire}-${index}`}>
+                {index === 0 && <td className="commission-period-cell" rowSpan={rows.length}>{values.periode || "Période"}</td>}
+                <td>
+                  <span>{row.locataire || "\u00a0"}</span>
+                  {row.periode && <small>{row.periode}</small>}
+                </td>
+                <td>{row.encaisse}</td>
+                <td>{row.taux}</td>
+                <td>{row.commission}</td>
+              </tr>
+            ))}
+            <tr className="commission-total-row">
+              <td colSpan={2}>TOTAL</td>
+              <td>{values.total}</td>
+              <td>{values.taux1 || "10%"}</td>
+              <td>{values.totalCommission}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        {values.observations && <p className="commission-source-note">{values.observations}</p>}
+        <p className="commission-source-net">Net propriétaire : <strong>{values.netProprietaire}</strong></p>
+
+        <footer className="source-signatures commission-source-signatures">
+          <strong>POUR ekIMMO SAS</strong>
+          <strong>POUR {values.partenaire || "NOM DU PARTENAIRE"}</strong>
+        </footer>
+      </section>
+    </article>
   );
 }
 
