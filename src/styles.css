@@ -3348,11 +3348,49 @@ td:last-child {
 }
 
 .invoice-table th:first-child {
-  width: 40%;
+  width: 38%;
 }
 
 .statement-table th:first-child {
-  width: 30%;
+  width: 28%;
+}
+
+.row-action-column {
+  width: 72px;
+  text-align: center !important;
+}
+
+.row-action-cell {
+  text-align: center;
+  vertical-align: middle !important;
+}
+
+.row-action-cell button {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  color: var(--muted);
+  background: #fff;
+}
+
+.row-action-cell button:not(:disabled):hover {
+  color: var(--red);
+  border-color: rgba(201, 0, 0, 0.24);
+  background: var(--red-bg);
+}
+
+.row-action-cell button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.document-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -8px;
 }
 
 .digital-totals {
@@ -3726,7 +3764,7 @@ td:last-child {
 }
 
 .invoice-source-table tbody td {
-  height: 170px;
+  height: 72px;
   font-size: 1rem;
 }
 

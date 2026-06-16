@@ -4453,7 +4453,67 @@ function DigitalCheck({ name, label, values, onChange, readOnly = false }) {
   );
 }
 
+function getInvoiceLines(values) {
+  if (Array.isArray(values.invoiceLines) && values.invoiceLines.length > 0) {
+    return values.invoiceLines;
+  }
+
+  return [{
+    id: "invoice-line-1",
+    designation: values.designation ?? "",
+    loyer: values.loyer ?? "",
+    quantite: values.quantite ?? "1",
+    montant: values.montant ?? "",
+  }];
+}
+
+function getCommissionLines(values) {
+  if (Array.isArray(values.commissionLines) && values.commissionLines.length > 0) {
+    return values.commissionLines;
+  }
+
+  const fallbackRows = [
+    { id: "commission-line-1", locataire: values.locataire1 ?? "", periode: values.periode1 ?? "", encaisse: values.encaisse1 ?? "", taux: values.taux1 ?? "", commission: values.commission1 ?? "" },
+    { id: "commission-line-2", locataire: values.locataire2 ?? "", periode: values.periode2 ?? "", encaisse: values.encaisse2 ?? "", taux: values.taux2 ?? "", commission: values.commission2 ?? "" },
+    { id: "commission-line-3", locataire: values.locataire3 ?? "", periode: values.periode3 ?? "", encaisse: values.encaisse3 ?? "", taux: values.taux3 ?? "", commission: values.commission3 ?? "" },
+  ].filter((row) => Object.entries(row).some(([key, value]) => key !== "id" && Boolean(value)));
+
+  return fallbackRows.length > 0 ? fallbackRows : [{ id: "commission-line-1", locataire: "", periode: "", encaisse: "", taux: "10%", commission: "" }];
+}
+
+function makeDocumentLineId(prefix) {
+  return `${prefix}-${Date.now()}-${Math.round(Math.random() * 1000)}`;
+}
+
+function EditableCell({ value, onChange, label, multiline = false, readOnly = false }) {
+  return (
+    <label className="digital-field hide-label">
+      <span className="sr-only">{label}</span>
+      {multiline ? (
+        <textarea value={value ?? ""} onChange={(event) => onChange(event.target.value)} readOnly={readOnly} />
+      ) : (
+        <input value={value ?? ""} onChange={(event) => onChange(event.target.value)} readOnly={readOnly} />
+      )}
+    </label>
+  );
+}
+
 function DigitalInvoice({ values, onChange, readOnly = false }) {
+  const rows = getInvoiceLines(values);
+  const updateLine = (rowId, field, value) => {
+    onChange("invoiceLines", rows.map((row) => (row.id === rowId ? { ...row, [field]: value } : row)));
+  };
+  const addLine = () => {
+    onChange("invoiceLines", [
+      ...rows,
+      { id: makeDocumentLineId("invoice-line"), designation: "", loyer: "", quantite: "1", montant: "" },
+    ]);
+  };
+  const removeLine = (rowId) => {
+    const nextRows = rows.filter((row) => row.id !== rowId);
+    onChange("invoiceLines", nextRows.length > 0 ? nextRows : [{ id: makeDocumentLineId("invoice-line"), designation: "", loyer: "", quantite: "1", montant: "" }]);
+  };
+
   return (
     <div className="digital-page invoice-page">
       <DigitalDocumentHeader title="Facture" subtitle="Document digital">
@@ -4483,17 +4543,28 @@ function DigitalInvoice({ values, onChange, readOnly = false }) {
               <th>Loyer mensuel</th>
               <th>Qté</th>
               <th>Montant FCFA</th>
+              <th className="row-action-column">Action</th>
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td><DigitalField name="designation" label="Désignation" values={values} onChange={onChange} multiline hideLabel /></td>
-              <td><DigitalField name="loyer" label="Loyer mensuel" values={values} onChange={onChange} hideLabel /></td>
-              <td><DigitalField name="quantite" label="Quantité" values={values} onChange={onChange} hideLabel /></td>
-              <td><DigitalField name="montant" label="Montant" values={values} onChange={onChange} hideLabel /></td>
-            </tr>
+            {rows.map((row, index) => (
+              <tr key={row.id}>
+                <td><EditableCell label={`Désignation ${index + 1}`} value={row.designation} onChange={(value) => updateLine(row.id, "designation", value)} multiline readOnly={readOnly} /></td>
+                <td><EditableCell label={`Loyer ${index + 1}`} value={row.loyer} onChange={(value) => updateLine(row.id, "loyer", value)} readOnly={readOnly} /></td>
+                <td><EditableCell label={`Quantité ${index + 1}`} value={row.quantite} onChange={(value) => updateLine(row.id, "quantite", value)} readOnly={readOnly} /></td>
+                <td><EditableCell label={`Montant ${index + 1}`} value={row.montant} onChange={(value) => updateLine(row.id, "montant", value)} readOnly={readOnly} /></td>
+                <td className="row-action-cell">
+                  <button type="button" onClick={() => removeLine(row.id)} disabled={readOnly || rows.length === 1} aria-label={`Supprimer la ligne ${index + 1}`}>
+                    <XCircle size={17} />
+                  </button>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
+      </div>
+      <div className="document-row-actions">
+        <Button onClick={addLine}><Plus size={17} /> Ajouter une ligne de désignation</Button>
       </div>
 
       <section className="digital-footer-grid">
@@ -4563,11 +4634,20 @@ function DigitalReceipt({ values, onChange }) {
 }
 
 function DigitalCommissionStatement({ values, onChange }) {
-  const rows = [
-    ["locataire1", "periode1", "encaisse1", "taux1", "commission1"],
-    ["locataire2", "periode2", "encaisse2", "taux2", "commission2"],
-    ["locataire3", "periode3", "encaisse3", "taux3", "commission3"],
-  ];
+  const rows = getCommissionLines(values);
+  const updateLine = (rowId, field, value) => {
+    onChange("commissionLines", rows.map((row) => (row.id === rowId ? { ...row, [field]: value } : row)));
+  };
+  const addLine = () => {
+    onChange("commissionLines", [
+      ...rows,
+      { id: makeDocumentLineId("commission-line"), locataire: "", periode: "", encaisse: "", taux: "10%", commission: "" },
+    ]);
+  };
+  const removeLine = (rowId) => {
+    const nextRows = rows.filter((row) => row.id !== rowId);
+    onChange("commissionLines", nextRows.length > 0 ? nextRows : [{ id: makeDocumentLineId("commission-line"), locataire: "", periode: "", encaisse: "", taux: "10%", commission: "" }]);
+  };
 
   return (
     <div className="digital-page statement-page">
@@ -4592,20 +4672,29 @@ function DigitalCommissionStatement({ values, onChange }) {
               <th>Montant encaissé</th>
               <th>Taux</th>
               <th>Commission E.K immo</th>
+              <th className="row-action-column">Action</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map(([client, period, collected, rate, commission], index) => (
-              <tr key={client}>
-                <td><DigitalField name={client} label={`Locataire ${index + 1}`} values={values} onChange={onChange} hideLabel /></td>
-                <td><DigitalField name={period} label={`Période ${index + 1}`} values={values} onChange={onChange} hideLabel /></td>
-                <td><DigitalField name={collected} label={`Montant ${index + 1}`} values={values} onChange={onChange} hideLabel /></td>
-                <td><DigitalField name={rate} label={`Taux ${index + 1}`} values={values} onChange={onChange} hideLabel /></td>
-                <td><DigitalField name={commission} label={`Commission ${index + 1}`} values={values} onChange={onChange} hideLabel /></td>
+            {rows.map((row, index) => (
+              <tr key={row.id}>
+                <td><EditableCell label={`Locataire ${index + 1}`} value={row.locataire} onChange={(value) => updateLine(row.id, "locataire", value)} /></td>
+                <td><EditableCell label={`Période ${index + 1}`} value={row.periode} onChange={(value) => updateLine(row.id, "periode", value)} /></td>
+                <td><EditableCell label={`Montant ${index + 1}`} value={row.encaisse} onChange={(value) => updateLine(row.id, "encaisse", value)} /></td>
+                <td><EditableCell label={`Taux ${index + 1}`} value={row.taux} onChange={(value) => updateLine(row.id, "taux", value)} /></td>
+                <td><EditableCell label={`Commission ${index + 1}`} value={row.commission} onChange={(value) => updateLine(row.id, "commission", value)} /></td>
+                <td className="row-action-cell">
+                  <button type="button" onClick={() => removeLine(row.id)} disabled={rows.length === 1} aria-label={`Supprimer la ligne ${index + 1}`}>
+                    <XCircle size={17} />
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
+      </div>
+      <div className="document-row-actions">
+        <Button onClick={addLine}><Plus size={17} /> Ajouter une ligne locataire</Button>
       </div>
 
       <section className="digital-footer-grid">
@@ -4797,6 +4886,7 @@ function ReceiptMethod({ label, checked }) {
 
 function OriginalInvoiceDocument({ values }) {
   const clientLines = getDocumentLines(values.client, ["Nom et prénom du client", "Adresse"]);
+  const rows = getInvoiceLines(values);
 
   return (
     <article className="original-document original-invoice-document">
@@ -4819,16 +4909,18 @@ function OriginalInvoiceDocument({ values }) {
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>
-                <strong>{values.designation || "Loyer de..."}</strong>
-                <span>{values.bien}</span>
-                <span>{values.adresse}</span>
-              </td>
-              <td>{values.loyer}</td>
-              <td>{values.quantite}</td>
-              <td>{values.montant}</td>
-            </tr>
+            {rows.map((row) => (
+              <tr key={row.id}>
+                <td>
+                  <strong>{row.designation || "Loyer de..."}</strong>
+                  <span>{values.bien}</span>
+                  <span>{values.adresse}</span>
+                </td>
+                <td>{row.loyer}</td>
+                <td>{row.quantite}</td>
+                <td>{row.montant}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
 
@@ -4906,11 +4998,7 @@ function OriginalReceiptDocument({ values }) {
 }
 
 function OriginalCommissionStatement({ values }) {
-  const filledRows = [
-    { locataire: values.locataire1, periode: values.periode1, encaisse: values.encaisse1, taux: values.taux1, commission: values.commission1 },
-    { locataire: values.locataire2, periode: values.periode2, encaisse: values.encaisse2, taux: values.taux2, commission: values.commission2 },
-    { locataire: values.locataire3, periode: values.periode3, encaisse: values.encaisse3, taux: values.taux3, commission: values.commission3 },
-  ].filter((row) => Object.values(row).some(Boolean));
+  const filledRows = getCommissionLines(values).filter((row) => ["locataire", "periode", "encaisse", "taux", "commission"].some((key) => Boolean(row[key])));
   const rows = [
     ...filledRows,
     ...Array.from({ length: Math.max(0, 10 - filledRows.length) }, () => ({
@@ -5258,6 +5346,11 @@ function getDocumentDefaults(key, data = {}) {
       commission1: commission.commission,
       commission2: "35 400",
       commission3: "44 250",
+      commissionLines: [
+        { id: "commission-line-1", locataire: `${tenant.name} - ${property.name}`, periode: "Janvier 2026", encaisse: "1 504 500", taux: "10%", commission: commission.commission },
+        { id: "commission-line-2", locataire: `${invoice.client} - Résidence ACI Baobab`, periode: "Février 2026", encaisse: "354 000", taux: "10%", commission: "35 400" },
+        { id: "commission-line-3", locataire: "Cabinet Diarra & Associés - Plateau Office Center", periode: "Mars 2026", encaisse: "442 500", taux: "10%", commission: "44 250" },
+      ],
       total: "16 599 920",
       totalCommission: "1 659 992",
       netProprietaire: "14 939 928",
@@ -5319,6 +5412,9 @@ function getDocumentDefaults(key, data = {}) {
     loyer: amountNumber,
     quantite: "1",
     montant: amountNumber,
+    invoiceLines: [
+      { id: "invoice-line-1", designation: `Loyer de ${invoice.property}`, loyer: amountNumber, quantite: "1", montant: amountNumber },
+    ],
     totalHt: amountNumber,
     tva: "0",
     totalTtc: amountNumber,
