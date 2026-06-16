@@ -1754,6 +1754,41 @@ function getSearchEntries() {
 
 const searchEntries = getSearchEntries();
 
+const notificationAlerts = [
+  {
+    id: "rent-late",
+    title: "Loyers en retard",
+    detail: "3 locataires a relancer aujourd'hui",
+    meta: "3.2M FCFA",
+    tone: "danger",
+    page: "Finance",
+  },
+  {
+    id: "visit-day",
+    title: "Visites du jour",
+    detail: "4 visites programmees entre ACI 2000 et Sotuba",
+    meta: "Agenda",
+    tone: "info",
+    page: "Clients",
+  },
+  {
+    id: "maintenance",
+    title: "Entretien urgent",
+    detail: "Fuite signalee au Studio Badalabougou",
+    meta: "A traiter",
+    tone: "warning",
+    page: "Finance",
+  },
+  {
+    id: "contract-end",
+    title: "Contrats a echeance",
+    detail: "2 baux se terminent ce mois-ci",
+    meta: "Docs",
+    tone: "muted",
+    page: "Contrats",
+  },
+];
+
 function getSearchResults(query) {
   const normalizedQuery = normalizeSearch(query).trim();
   if (!normalizedQuery) return [];
@@ -2079,12 +2114,24 @@ function DemoTour({ step, index, total, rect, onNext, onPrevious, onStop }) {
 
 function Topbar({ activePage, globalQuery, onQueryChange, onNav, onProfile, onStartDemo, demoActive }) {
   const [searchOpen, setSearchOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [readNotificationIds, setReadNotificationIds] = useState([]);
   const results = useMemo(() => getSearchResults(globalQuery), [globalQuery]);
   const hasQuery = globalQuery.trim().length > 0;
+  const unreadCount = notificationAlerts.filter((item) => !readNotificationIds.includes(item.id)).length;
 
   const handleResultClick = (page) => {
     onNav(page);
     setSearchOpen(false);
+  };
+
+  const handleNotificationView = (page) => {
+    onNav(page);
+    setNotificationsOpen(false);
+  };
+
+  const markNotificationAsRead = (id) => {
+    setReadNotificationIds((ids) => (ids.includes(id) ? ids : [...ids, id]));
   };
 
   return (
@@ -2144,10 +2191,59 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onProfile, onSt
             </section>
           )}
         </div>
-        <button className="icon-only" aria-label="Notifications">
-          <Bell size={20} />
-          <span />
-        </button>
+        <div className="notification-menu">
+          <button
+            className={notificationsOpen ? "icon-only active" : "icon-only"}
+            aria-label="Notifications"
+            aria-expanded={notificationsOpen}
+            onClick={() => {
+              setNotificationsOpen((value) => !value);
+              setSearchOpen(false);
+            }}
+          >
+            <Bell size={20} />
+            {unreadCount > 0 && <span>{unreadCount}</span>}
+          </button>
+          {notificationsOpen && (
+            <section className="notification-panel" onKeyDown={(event) => event.key === "Escape" && setNotificationsOpen(false)}>
+              <div className="notification-head">
+                <span>
+                  <strong>Alertes en cours</strong>
+                  <small>{unreadCount} non lue{unreadCount > 1 ? "s" : ""}</small>
+                </span>
+                <button className="notification-close" onClick={() => setNotificationsOpen(false)} aria-label="Fermer les notifications">
+                  Fermer
+                </button>
+              </div>
+              <div className="notification-list">
+                {notificationAlerts.map((item) => {
+                  const isRead = readNotificationIds.includes(item.id);
+
+                  return (
+                    <article className={isRead ? `notification-item ${item.tone} read` : `notification-item ${item.tone}`} key={item.id}>
+                      <div className="notification-copy">
+                        <span className="notification-dot" />
+                        <span>
+                          <strong>{item.title}</strong>
+                          <small>{item.detail}</small>
+                        </span>
+                        <b>{item.meta}</b>
+                      </div>
+                      <div className="notification-actions">
+                        <button onClick={() => handleNotificationView(item.page)}>
+                          <Eye size={15} /> Voir
+                        </button>
+                        <button onClick={() => markNotificationAsRead(item.id)} disabled={isRead}>
+                          <CheckCircle2 size={15} /> Marquer comme lu
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+        </div>
         <button className="icon-only" aria-label="Paramètres" onClick={() => onNav("Plus")}>
           <Settings size={20} />
         </button>
