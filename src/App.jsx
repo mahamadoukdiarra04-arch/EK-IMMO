@@ -1376,8 +1376,8 @@ const dashboardKpiDetailsByPeriod = {
     [["Loyers", "3.4M"], ["Entretien", "420K"]],
     [["Loyers", "360K"], ["Forfaits", "60K"]],
     [["Commissions", "520K"], ["Forfaits", "90K"]],
-    [["Entretien", "140K"], ["Refact.", "35K"]],
-    [["Prop.", "2.4M"], ["Déductions", "95K"]],
+    [["Entretiens", "140K"], ["Refacturations", "35K"]],
+    [["Propriétaires", "2.4M"], ["Déductions", "95K"]],
   ],
   Semaine: [
     [["Gestion locative", "45"], ["Entretien seul", "9"]],
@@ -1386,8 +1386,8 @@ const dashboardKpiDetailsByPeriod = {
     [["Loyers", "16.9M"], ["Entretien", "1.7M"]],
     [["Loyers", "940K"], ["Forfaits", "160K"]],
     [["Commissions", "1.9M"], ["Forfaits", "420K"]],
-    [["Entretien", "360K"], ["Refact.", "120K"]],
-    [["Prop.", "9.8M"], ["Déductions", "180K"]],
+    [["Entretiens", "360K"], ["Refacturations", "120K"]],
+    [["Propriétaires", "9.8M"], ["Déductions", "180K"]],
   ],
   Mois: [
     [["Gestion locative", "126"], ["Entretien seul", "16"]],
@@ -1396,8 +1396,8 @@ const dashboardKpiDetailsByPeriod = {
     [["Loyers", "81.2M"], ["Entretien", "4.2M"]],
     [["Loyers", "3.2M"], ["Forfaits", "0.3M"]],
     [["Commissions", "10.6M"], ["Forfaits", "1.8M"]],
-    [["Entretien", "1.2M"], ["Refact.", "275K"]],
-    [["Prop.", "45.2M"], ["Déductions", "120K"]],
+    [["Entretiens", "1.2M"], ["Refacturations", "275K"]],
+    [["Propriétaires", "45.2M"], ["Déductions", "120K"]],
   ],
   Année: [
     [["Gestion locative", "1 096"], ["Entretien seul", "188"]],
@@ -1406,8 +1406,8 @@ const dashboardKpiDetailsByPeriod = {
     [["Loyers", "862.1M"], ["Entretien", "44.7M"]],
     [["Loyers", "38.6M"], ["Forfaits", "3.8M"]],
     [["Commissions", "111.2M"], ["Forfaits", "15.5M"]],
-    [["Entretien", "13.8M"], ["Refact.", "4.9M"]],
-    [["Prop.", "372.4M"], ["Déductions", "8.2M"]],
+    [["Entretiens", "13.8M"], ["Refacturations", "4.9M"]],
+    [["Propriétaires", "372.4M"], ["Déductions", "8.2M"]],
   ],
   "Période personnalisée": [
     [["Gestion locative", "64"], ["Entretien seul", "12"]],
@@ -1416,8 +1416,8 @@ const dashboardKpiDetailsByPeriod = {
     [["Loyers", "40.6M"], ["Entretien", "2.3M"]],
     [["Loyers", "1.9M"], ["Forfaits", "210K"]],
     [["Commissions", "5.8M"], ["Forfaits", "1.0M"]],
-    [["Entretien", "780K"], ["Refact.", "180K"]],
-    [["Prop.", "24.7M"], ["Déductions", "95K"]],
+    [["Entretiens", "780K"], ["Refacturations", "180K"]],
+    [["Propriétaires", "24.7M"], ["Déductions", "95K"]],
   ],
 };
 
@@ -2173,7 +2173,7 @@ function DashboardPage({ onAction, onOpenProperty }) {
     { label: "Flux attendus", value: kpiValues[3], icon: Banknote, tone: "gray", details: kpiDetails[3] },
     { label: "Impayés", value: kpiValues[4], icon: AlertTriangle, tone: "danger", details: kpiDetails[4] },
     { label: "Honoraires générés", value: kpiValues[5], icon: WalletCards, tone: "gray", details: kpiDetails[5] },
-    { label: "Charges & interventions", value: kpiValues[6], icon: ReceiptText, tone: "gray", details: kpiDetails[6] },
+    { label: "Charges et interventions", value: kpiValues[6], icon: ReceiptText, tone: "gray", details: kpiDetails[6] },
     { label: "Reversements en attente", value: kpiValues[7], icon: RefreshCw, tone: "gray", details: kpiDetails[7] },
   ];
 

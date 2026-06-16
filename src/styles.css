@@ -527,7 +527,7 @@ a {
 
 .dashboard-shell .stat-card {
   gap: 7px;
-  min-height: 126px;
+  min-height: 138px;
   padding: 12px 14px;
 }
 
@@ -599,8 +599,8 @@ a {
 }
 
 .dashboard-shell .stat-breakdown {
-  gap: 3px;
-  padding-top: 6px;
+  gap: 5px;
+  padding-top: 8px;
 }
 
 .stat-breakdown p {
@@ -616,14 +616,15 @@ a {
 }
 
 .dashboard-shell .stat-breakdown p {
-  font-size: 0.63rem;
+  font-size: 0.84rem;
+  line-height: 1.25;
 }
 
 .stat-breakdown span {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .stat-breakdown b {
