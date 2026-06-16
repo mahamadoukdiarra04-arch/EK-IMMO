@@ -2544,9 +2544,9 @@ function PropertyCard({ property, onSelect }) {
       </button>
       <div className="property-card-body">
         <div className="property-meta">
-          <span>{property.code}</span>
-          <strong>
-            {property.price} <small>{property.period}</small>
+          <span className="property-code">{property.code}</span>
+          <strong className="property-price">
+            <span>{property.price}</span> <small>{property.period}</small>
           </strong>
         </div>
         <h3>{property.name}</h3>
