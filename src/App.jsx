@@ -1986,6 +1986,7 @@ function App() {
   const [propertyTab, setPropertyTab] = useState("Résumé");
   const [clientTab, setClientTab] = useState("Propriétaires");
   const [selectedOwner, setSelectedOwner] = useState(owners[0]);
+  const [createdOwners, setCreatedOwners] = useState([]);
   const [selectedTenant, setSelectedTenant] = useState(tenants[0]);
   const [contractTab, setContractTab] = useState("Contrats");
   const [generatedContracts, setGeneratedContracts] = useState([]);
@@ -1998,6 +1999,7 @@ function App() {
   const [propertyHistoryOverrides, setPropertyHistoryOverrides] = useState({});
   const [documentContext, setDocumentContext] = useState(null);
   const [documentDraft, setDocumentDraft] = useState(null);
+  const [propertyOwnerPrefill, setPropertyOwnerPrefill] = useState("");
   const [propertyPdfContext, setPropertyPdfContext] = useState(null);
   const [propertyPdfArchives, setPropertyPdfArchives] = useState([]);
   const [archiveContext, setArchiveContext] = useState(null);
@@ -2011,6 +2013,7 @@ function App() {
   const allRentRows = useMemo(() => mergeRentRowsWithPayments(rentRows, recordedPayments), [recordedPayments]);
   const allMaintenances = useMemo(() => [...scheduledMaintenances, ...maintenances], [scheduledMaintenances]);
   const allCharges = useMemo(() => [...maintenanceCharges, ...charges], [maintenanceCharges]);
+  const allOwners = useMemo(() => [...createdOwners, ...owners], [createdOwners]);
   const propertiesWithArchiveState = useMemo(() => properties.map((property) => {
     const archive = archivedProperties[property.code];
     if (!archive) return property;
@@ -2029,6 +2032,12 @@ function App() {
   );
 
   const openAction = (label, context = {}) => {
+    if (normalizeSearch(label) === "nouveau proprietaire") {
+      setClientTab("Propriétaires");
+      setModal("Nouveau propriétaire");
+      return;
+    }
+
     if (shouldOpenPaymentModal(label)) {
       const normalizedLabel = normalizeSearch(label);
       const tenantFromLabel = normalizedLabel.startsWith("paiement ")
@@ -2113,6 +2122,27 @@ function App() {
     setSelectedProperty(propertiesWithArchiveState.find((item) => item.code === property.code) ?? property);
     setPropertyView("detail");
     setActivePage("Biens");
+  };
+
+  const handleOwnerSave = ({ owner, addProperty = false }) => {
+    setCreatedOwners((current) => {
+      const existingIndex = current.findIndex((item) => item.id === owner.id);
+      if (existingIndex >= 0) {
+        return current.map((item, index) => (index === existingIndex ? owner : item));
+      }
+      return [owner, ...current];
+    });
+    setSelectedOwner(owner);
+    setClientTab("Propriétaires");
+    setActivePage("Clients");
+
+    if (addProperty) {
+      setPropertyOwnerPrefill(owner.name);
+      setModal("Ajouter un bien");
+      return;
+    }
+
+    setModal(null);
   };
 
   const handleTenantAttachment = ({ tenantName, tenantProfile, rent, deposit, entryDate, createContract }) => {
@@ -2416,6 +2446,7 @@ function App() {
             onTab={setClientTab}
             selectedOwner={selectedOwner}
             onOwner={setSelectedOwner}
+            ownersList={allOwners}
             selectedTenant={selectedTenant}
             onTenant={setSelectedTenant}
             onAction={openAction}
@@ -2447,7 +2478,22 @@ function App() {
       {modal && (["Ajouter une charge"].includes(modal) || modal.startsWith("Modifier charge") ? (
         <ChargeFormModal title={modal} onClose={() => setModal(null)} />
       ) : ["Ajouter un bien", "Modifier le bien"].includes(modal) ? (
-        <PropertyFormModal title={modal} property={selectedProperty} onClose={() => setModal(null)} />
+        <PropertyFormModal
+          title={modal}
+          property={selectedProperty}
+          ownersList={allOwners}
+          ownerPrefill={propertyOwnerPrefill}
+          onClose={() => {
+            setPropertyOwnerPrefill("");
+            setModal(null);
+          }}
+        />
+      ) : modal === "Nouveau propriétaire" ? (
+        <OwnerFormModal
+          sequence={owners.length + createdOwners.length + 1}
+          onSave={handleOwnerSave}
+          onClose={() => setModal(null)}
+        />
       ) : modal === "Ajouter locataire" ? (
         <AttachTenantModal property={selectedProperty} onClose={() => setModal(null)} onAttach={handleTenantAttachment} />
       ) : modal === "Créer contrat" ? (
@@ -3807,7 +3853,7 @@ function PropertyHistory({ property, historyItems = [] }) {
   );
 }
 
-function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, selectedTenant, onTenant, onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows }) {
+function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = owners, selectedTenant, onTenant, onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows }) {
   const tabs = ["Propriétaires", "Locataires", "Prospects", "Visites"];
   const [detailView, setDetailView] = useState(null);
   const [selectedProspect, setSelectedProspect] = useState(prospects[0]);
@@ -3885,7 +3931,7 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, selectedTenant,
           </Button>
         </div>
       </Panel>
-      {activeTab === "Propriétaires" && <OwnersView selected={selectedOwner} onOpenDetail={(owner) => openDetail("owner", owner)} />}
+      {activeTab === "Propriétaires" && <OwnersView ownersList={ownersList} selected={selectedOwner} onOpenDetail={(owner) => openDetail("owner", owner)} />}
       {activeTab === "Locataires" && <TenantsView onOpenDetail={(tenant) => openDetail("tenant", tenant)} rentRowsList={rentRowsList} />}
       {activeTab === "Prospects" && <ProspectsView onOpenDetail={(prospect) => openDetail("prospect", prospect)} onAction={onAction} />}
       {activeTab === "Visites" && <VisitsView onOpenDetail={(visit) => openDetail("visit", visit)} onAction={onAction} />}
@@ -3927,10 +3973,10 @@ function useDetailNavigation() {
   return { detailOpen, openDetail, closeDetail };
 }
 
-function OwnersView({ selected, onOpenDetail }) {
+function OwnersView({ ownersList = owners, selected, onOpenDetail }) {
   return (
     <section className="client-list-workspace" data-demo="owner-workspace">
-      <Panel title="Liste des propriétaires" toolbar={<span className="muted">124 propriétaires</span>}>
+      <Panel title="Liste des propriétaires" toolbar={<span className="muted">{120 + ownersList.length} propriétaires</span>}>
         <div className="owner-list">
           <div className="owner-list-header" aria-hidden="true">
             <span />
@@ -3940,7 +3986,7 @@ function OwnersView({ selected, onOpenDetail }) {
             <span>Solde</span>
             <span>Statut</span>
           </div>
-          {owners.map((owner) => (
+          {ownersList.map((owner) => (
             <button
               className={selected.id === owner.id ? "owner-row active" : "owner-row"}
               key={owner.id}
@@ -3993,17 +4039,19 @@ function OwnerProfilePanel({ owner, onAction, contractsList = contracts, payment
       {tab === "Résumé" && (
         <>
           <div className="simple-list">
+            <p><span>Type</span><strong>{owner.type ?? "Personne physique"}</strong></p>
             <p><span>Téléphone</span><strong>{owner.phone}</strong></p>
             <p><span>Email</span><strong>{owner.email}</strong></p>
+            <p><span>Adresse</span><strong>{owner.address ?? "Adresse à compléter"}</strong></p>
             <p><span>Nombre de biens</span><strong>{owner.properties}</strong></p>
-            <p><span>Conditions de gestion</span><strong>Mandat actif</strong></p>
+            <p><span>Conditions de gestion</span><strong>{owner.mandateType ?? "Mandat actif"}</strong></p>
             <p><span>Commission</span><strong>{owner.commission}</strong></p>
+            <p><span>Reversement</span><strong>{owner.reversementMode ? `${owner.reversementMode} · ${owner.reversementPeriod}` : "Mensuel"}</strong></p>
+            {owner.focalPoint && <p><span>Point focal</span><strong>{owner.focalPoint}</strong></p>}
             <p><span>Solde à reverser</span><strong>{owner.balance}</strong></p>
           </div>
           <div className="document-pills">
-            <span>Pièce d'identité</span>
-            <span>Mandat</span>
-            <span>RIB</span>
+            {(owner.documents ?? ["Pièce d'identité", "Mandat", "RIB"]).map((document) => <span key={document}>{document}</span>)}
           </div>
         </>
       )}
@@ -7660,6 +7708,16 @@ function Button({ children, variant = "secondary", compact = false, onClick, dis
   );
 }
 
+function getInitials(name) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
 function Badge({ label }) {
   const tone = statusTone(label);
   return <span className={`badge ${tone}`}>{label}</span>;
@@ -7824,6 +7882,120 @@ function DocumentActions() {
       <Button compact><Eye size={15} /> Voir</Button>
       <Button compact><Download size={15} /> PDF</Button>
       <Button compact><Send size={15} /> Envoyer</Button>
+    </div>
+  );
+}
+
+function OwnerFormModal({ sequence = owners.length + 1, onSave, onClose }) {
+  const generatedId = useMemo(() => `PRO-2026-${String(sequence).padStart(3, "0")}`, [sequence]);
+  const [values, setValues] = useState({
+    type: "Personne physique",
+    name: "Aminata Coulibaly",
+    id: generatedId,
+    phone: "+223 76 45 18 92",
+    email: "a.coulibaly@exemple.ml",
+    address: "ACI 2000, Bamako",
+    focalPoint: "",
+    mandateType: "Mandat de gestion locative",
+    commission: "5% des loyers encaissés",
+    reversementMode: "Virement bancaire",
+    reversementPeriod: "Mensuel",
+    observations: "Propriétaire à rattacher aux biens après validation du mandat.",
+  });
+  const isCompany = values.type === "Société";
+  const canSave = values.name.trim() && values.phone.trim();
+
+  const update = (key, value) => {
+    setValues((current) => ({
+      ...current,
+      [key]: value,
+      ...(key === "type" && value === "Personne physique" ? { focalPoint: "" } : {}),
+    }));
+  };
+
+  const submit = (addProperty = false) => {
+    if (!canSave) return;
+    const owner = {
+      id: values.id,
+      name: values.name.trim(),
+      phone: values.phone.trim(),
+      email: values.email.trim(),
+      address: values.address.trim(),
+      type: values.type,
+      properties: 0,
+      rent: "0 FCFA",
+      charges: "0 FCFA",
+      commission: values.commission,
+      balance: "0 FCFA",
+      lastPayment: "N/A",
+      status: "Actif",
+      initials: getInitials(values.name),
+      focalPoint: isCompany ? values.focalPoint.trim() : "",
+      mandateType: values.mandateType,
+      reversementMode: values.reversementMode,
+      reversementPeriod: values.reversementPeriod,
+      observations: values.observations,
+      documents: ["Pièce d'identité", "Mandat", "RIB", "Autre document"],
+    };
+
+    onSave({ owner, addProperty });
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal owner-form-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Fiche client</span>
+            <h2>Nouveau propriétaire</h2>
+            <p>Créer une fiche propriétaire et lier ses biens par la suite.</p>
+          </div>
+          <Badge label={values.id} />
+        </div>
+
+        <div className="form-section">
+          <h3>Identité</h3>
+          <div className="form-grid compact-form">
+            <label>Type<select value={values.type} onChange={(event) => update("type", event.target.value)}><option>Personne physique</option><option>Société</option></select></label>
+            <label>Nom complet ou raison sociale<input value={values.name} onChange={(event) => update("name", event.target.value)} /></label>
+            <label>Identifiant propriétaire généré automatiquement<input value={values.id} readOnly /></label>
+            <label>Téléphone<input value={values.phone} onChange={(event) => update("phone", event.target.value)} /></label>
+            <label>Email<input value={values.email} onChange={(event) => update("email", event.target.value)} /></label>
+            <label>Adresse<input value={values.address} onChange={(event) => update("address", event.target.value)} /></label>
+            {isCompany && (
+              <label className="full">Point focal, si société<input value={values.focalPoint} onChange={(event) => update("focalPoint", event.target.value)} placeholder="Nom, fonction et téléphone du contact principal" /></label>
+            )}
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Conditions de gestion</h3>
+          <div className="form-grid compact-form">
+            <label>Type de mandat<select value={values.mandateType} onChange={(event) => update("mandateType", event.target.value)}><option>Mandat de gestion locative</option><option>Mandat entretien seul</option><option>Mandat de mise en location</option><option>Mandat de vente</option><option>Mandat mixte</option></select></label>
+            <label>Commission agence<input value={values.commission} onChange={(event) => update("commission", event.target.value)} /></label>
+            <label>Mode de reversement<select value={values.reversementMode} onChange={(event) => update("reversementMode", event.target.value)}><option>Virement bancaire</option><option>Orange Money</option><option>Moov Money</option><option>Chèque</option><option>Espèces</option></select></label>
+            <label>Périodicité de reversement<select value={values.reversementPeriod} onChange={(event) => update("reversementPeriod", event.target.value)}><option>Mensuel</option><option>Bimensuel</option><option>Trimestriel</option><option>À la demande</option></select></label>
+            <label className="full">Observations<textarea value={values.observations} onChange={(event) => update("observations", event.target.value)} /></label>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Documents</h3>
+          <div className="document-upload-grid owner-document-grid">
+            <label>Pièce d'identité<input type="file" /><small>Carte NINA, passeport ou registre de commerce.</small></label>
+            <label>Mandat<input type="file" /><small>Mandat signé ou projet de mandat.</small></label>
+            <label>RIB<input type="file" /><small>Compte bancaire ou référence mobile money.</small></label>
+            <label>Autre document<input type="file" multiple /><small>Titre, procuration, pièce complémentaire.</small></label>
+          </div>
+        </div>
+
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" disabled={!canSave} onClick={() => submit(false)}><CheckCircle2 size={17} /> Enregistrer</Button>
+          <Button disabled={!canSave} onClick={() => submit(true)}><Plus size={17} /> Enregistrer et ajouter un bien</Button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -8401,24 +8573,24 @@ function ContractFormModal({ property: initialProperty = properties[0], tenant: 
   );
 }
 
-function PropertyFormModal({ title, property = properties[0], onClose }) {
+function PropertyFormModal({ title, property = properties[0], ownersList = owners, ownerPrefill = "", onClose }) {
   const isEditMode = title === "Modifier le bien";
   const sensitiveInitialValues = useMemo(() => ({
     rent: property?.price ?? "850 000 FCFA",
     status: property?.status ?? "Disponible",
-    owner: property?.owner ?? owners[0].name,
+    owner: isEditMode ? (property?.owner ?? ownersList[0].name) : (ownerPrefill || property?.owner || ownersList[0].name),
     tenant: property?.tenant ?? "Libre",
     financialMode: property?.financialMode ?? "Encaissement par l'agence",
     commission: property?.commission ?? "50% du loyer",
     deposit: property?.deposit ?? "1 700 000 FCFA",
-  }), [property]);
+  }), [isEditMode, ownerPrefill, ownersList, property]);
   const [propertyNature, setPropertyNature] = useState(property?.parentCode ? "Appartement rattaché" : isBuildingProperty(property) ? "Immeuble parent" : "Bien individuel");
   const [hasFocalPoint, setHasFocalPoint] = useState(true);
   const [sensitiveValues, setSensitiveValues] = useState(sensitiveInitialValues);
   const [confirmSensitiveChange, setConfirmSensitiveChange] = useState(false);
   const sensitiveOptions = {
     status: ["Disponible", "Loué", "Réservé", "Gestion multi-lots", "Entretien seul", "Vendu", "En travaux", "Indisponible"],
-    owner: owners.map((owner) => owner.name),
+    owner: ownersList.map((owner) => owner.name),
     tenant: ["Libre", ...tenants.map((tenant) => tenant.name)],
     financialMode: ["Encaissement par l'agence", "Encaissement direct par le propriétaire", "Contrat entretien seul"],
   };
