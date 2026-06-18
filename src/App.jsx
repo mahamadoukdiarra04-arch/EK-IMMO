@@ -1823,10 +1823,12 @@ function App() {
   const [selectedOwner, setSelectedOwner] = useState(owners[0]);
   const [selectedTenant, setSelectedTenant] = useState(tenants[0]);
   const [contractTab, setContractTab] = useState("Contrats");
+  const [generatedContracts, setGeneratedContracts] = useState([]);
   const [financeTab, setFinanceTab] = useState("Loyers");
   const [adminTab, setAdminTab] = useState("Utilisateurs");
   const [reportType, setReportType] = useState(reports[0][0]);
   const demoStep = demoSteps[demoIndex];
+  const allContracts = useMemo(() => [...generatedContracts, ...contracts], [generatedContracts]);
 
   const openAction = (label) => setModal(label);
 
@@ -1894,6 +1896,29 @@ function App() {
     setPropertyView("detail");
     setActivePage("Biens");
     setModal(createContract ? "Créer contrat" : null);
+  };
+
+  const handleContractGeneration = (contract) => {
+    setGeneratedContracts((current) => {
+      const existingIndex = current.findIndex((item) => item.number === contract.number);
+      if (existingIndex >= 0) {
+        return current.map((item, index) => (index === existingIndex ? contract : item));
+      }
+      return [contract, ...current];
+    });
+    setSelectedProperty((current) => ({
+      ...current,
+      status: current.name === contract.property ? "Loué" : current.status,
+      tenant: current.name === contract.property ? contract.client : current.tenant,
+      activeContractNumber: contract.number,
+      history: [
+        ...(current.history ?? []),
+        ["Contrat généré", `${contract.number} créé et archivé pour ${contract.client}.`, "18/06/2026"],
+      ],
+      lastAction: current.name === contract.property ? `Contrat ${contract.number} généré` : current.lastAction,
+    }));
+    setPropertyTab("Contrats");
+    setContractTab("Archives");
   };
 
   useEffect(() => {
@@ -2002,6 +2027,7 @@ function App() {
             onSelect={showPropertyDetail}
             onBack={() => setPropertyView("list")}
             onAction={openAction}
+            contractsList={allContracts}
           />
         )}
         {activePage === "Clients" && (
@@ -2013,9 +2039,10 @@ function App() {
             selectedTenant={selectedTenant}
             onTenant={setSelectedTenant}
             onAction={openAction}
+            contractsList={allContracts}
           />
         )}
-        {activePage === "Contrats" && <ContractsPage activeTab={contractTab} onTab={setContractTab} onAction={openAction} />}
+        {activePage === "Contrats" && <ContractsPage activeTab={contractTab} onTab={setContractTab} onAction={openAction} contractsList={allContracts} />}
         {activePage === "Finance" && <FinancePage activeTab={financeTab} onTab={setFinanceTab} onAction={openAction} />}
         {activePage === "Rapports" && (
           <ReportsPage selected={reportType} onSelect={setReportType} onAction={openAction} />
@@ -2042,7 +2069,7 @@ function App() {
       ) : modal === "Ajouter locataire" ? (
         <AttachTenantModal property={selectedProperty} onClose={() => setModal(null)} onAttach={handleTenantAttachment} />
       ) : modal === "Créer contrat" ? (
-        <ContractFormModal property={selectedProperty} tenant={selectedProperty.attachedTenant} onClose={() => setModal(null)} />
+        <ContractFormModal property={selectedProperty} tenant={selectedProperty.attachedTenant} onGenerate={handleContractGeneration} onClose={() => setModal(null)} />
       ) : (
         <DemoModal title={modal} onClose={() => setModal(null)} />
       ))}
@@ -2473,6 +2500,7 @@ function PropertiesPage({
   onSelect,
   onBack,
   onAction,
+  contractsList = contracts,
 }) {
   const [statusFilter, setStatusFilter] = useState("Tous statuts");
   const [typeFilter, setTypeFilter] = useState("Tous types");
@@ -2606,6 +2634,7 @@ function PropertiesPage({
         onBack={onBack}
         onOpenProperty={onSelect}
         onAction={onAction}
+        contractsList={contractsList}
       />
     );
   }
@@ -2761,7 +2790,7 @@ function PropertyCard({ property, onSelect }) {
   );
 }
 
-function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, onAction }) {
+function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, onAction, contractsList = contracts }) {
   const hasHierarchy = isBuildingProperty(property) || Boolean(property.parentCode);
   const tabs = ["Résumé", ...(hasHierarchy ? ["Lots & blocs"] : []), "Propriétaire", "Locataire", "Contrats", "Paiements", "Charges & entretiens", "Documents", "Historique"];
   const effectiveTab = tabs.includes(activeTab) ? activeTab : "Résumé";
@@ -2840,7 +2869,7 @@ function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, on
         items={[
           ["Loyer / prix", `${property.price} ${property.period}`],
           ["Statut", property.status],
-          ["Contrat", contracts.find((contract) => contract.property === property.name)?.status ?? "À créer"],
+          ["Contrat", contractsList.find((contract) => contract.property === property.name)?.status ?? "À créer"],
           ["Structure", getPropertyStructureSummary(property)],
           ["Dernier paiement", paymentRecords.find((payment) => payment.property === property.name)?.paid ?? "N/A"],
           ["Prochaine action", property.lastAction],
@@ -2853,7 +2882,7 @@ function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, on
       {effectiveTab === "Lots & blocs" && <PropertyHierarchy property={property} onOpenProperty={onOpenProperty} />}
       {effectiveTab === "Propriétaire" && <PropertyOwner property={property} />}
       {effectiveTab === "Locataire" && <PropertyTenant property={property} />}
-      {effectiveTab === "Contrats" && <PropertyContracts property={property} />}
+      {effectiveTab === "Contrats" && <PropertyContracts property={property} contractsList={contractsList} />}
       {effectiveTab === "Paiements" && <PropertyPayments property={property} />}
       {effectiveTab === "Charges & entretiens" && <PropertyMaintenance property={property} />}
       {effectiveTab === "Documents" && <PropertyDocuments property={property} onAction={onAction} />}
@@ -3197,20 +3226,21 @@ function PropertyTenant({ property }) {
   );
 }
 
-function PropertyContracts({ property }) {
+function PropertyContracts({ property, contractsList = contracts }) {
+  const relatedContracts = contractsList.filter((contract) => contract.property === property.name || contract.owner === property.owner);
+
   return (
     <Panel title="Contrats liés au bien">
       <DataTable
         columns={["Numéro", "Type", "Début", "Fin", "Statut", "Document joint", "Actions"]}
-        rows={contracts
-          .filter((contract) => contract.property === property.name || contract.owner === property.owner)
+        rows={(relatedContracts.length ? relatedContracts : contracts.filter((contract) => contract.property === property.name || contract.owner === property.owner))
           .map((contract) => [
             contract.number,
             contract.type,
             contract.start,
             contract.end,
             <Badge label={contract.status} />,
-            "PDF signé",
+            contract.generated ? "Contrat généré" : "PDF signé",
             <div className="table-actions">
               <Button compact><Eye size={16} /> Voir</Button>
               <Button compact><RefreshCw size={15} /> Renouveler</Button>
@@ -3339,7 +3369,7 @@ function PropertyHistory({ property }) {
   );
 }
 
-function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, selectedTenant, onTenant, onAction }) {
+function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, selectedTenant, onTenant, onAction, contractsList = contracts }) {
   const tabs = ["Propriétaires", "Locataires", "Prospects", "Visites"];
   const [detailView, setDetailView] = useState(null);
   const [selectedProspect, setSelectedProspect] = useState(prospects[0]);
@@ -3373,11 +3403,11 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, selectedTenant,
 
   const detailContent = detailView === "owner" ? (
     <DetailPageShell title="Fiche propriétaire" subtitle={selectedOwner.name} onBack={closeDetail}>
-      <OwnerProfilePanel owner={selectedOwner} onAction={onAction} />
+      <OwnerProfilePanel owner={selectedOwner} onAction={onAction} contractsList={contractsList} />
     </DetailPageShell>
   ) : detailView === "tenant" ? (
     <DetailPageShell title="Fiche locataire" subtitle={selectedTenant.name} onBack={closeDetail}>
-      <TenantProfilePanel tenant={selectedTenant} onAction={onAction} />
+      <TenantProfilePanel tenant={selectedTenant} onAction={onAction} contractsList={contractsList} />
     </DetailPageShell>
   ) : detailView === "prospect" ? (
     <DetailPageShell title="Fiche prospect" subtitle={selectedProspect.name} onBack={closeDetail}>
@@ -3498,11 +3528,12 @@ function OwnersView({ selected, onOpenDetail }) {
   );
 }
 
-function OwnerProfilePanel({ owner, onAction }) {
+function OwnerProfilePanel({ owner, onAction, contractsList = contracts }) {
   const [tab, setTab] = useState("Résumé");
   const ownedProperties = properties.filter((property) => property.owner === owner.name);
   const ownerCharges = charges.filter((charge) => charge.owner === owner.name);
   const ownerReversals = reversals.filter((reversal) => reversal.owner === owner.name);
+  const ownerContracts = contractsList.filter((contract) => contract.owner === owner.name);
   const tabs = ["Résumé", "Biens", "Situation financière", "Charges", "Reversements", "Documents", "Historique"];
 
   return (
@@ -3587,6 +3618,9 @@ function OwnerProfilePanel({ owner, onAction }) {
       )}
       {tab === "Documents" && (
         <div className="mini-list">
+          {ownerContracts.map((contract) => (
+            <p key={contract.number}><span>{contract.number} · {contract.property}</span><Badge label={contract.status} /></p>
+          ))}
           {["Pièce d'identité", "Mandat de gestion", "État propriétaire", "Reçus", "Documents divers"].map((item) => (
             <p key={item}><span>{item}</span><Badge label="Archivé" /></p>
           ))}
@@ -3649,10 +3683,11 @@ function TenantsView({ onOpenDetail }) {
   );
 }
 
-function TenantProfilePanel({ tenant, onAction }) {
+function TenantProfilePanel({ tenant, onAction, contractsList = contracts }) {
   const [tab, setTab] = useState("Résumé");
   const property = properties.find((item) => item.name === tenant.property) ?? properties[0];
-  const contract = contracts.find((item) => item.number === tenant.contract) ?? contracts[0];
+  const tenantContracts = contractsList.filter((item) => item.client === tenant.name);
+  const contract = tenantContracts.find((item) => item.number === tenant.contract) ?? tenantContracts[0] ?? contracts.find((item) => item.number === tenant.contract) ?? contracts[0];
   const paymentRows = rentRows.filter((row) => row.tenant === tenant.name);
   const tabs = ["Résumé", "Contrat", "Paiements", "Impayés & relances", "Documents"];
 
@@ -3665,7 +3700,7 @@ function TenantProfilePanel({ tenant, onAction }) {
           ["Loyer", tenant.rent],
           ["Statut", tenant.paymentStatus],
           ["Solde dû", paymentRows.find((row) => row.balance !== "0 FCFA")?.balance ?? "0 FCFA"],
-          ["Contrat", tenant.contract],
+          ["Contrat", contract.number],
         ]}
       />
       <MiniTabs tabs={tabs} active={tab} onChange={setTab} />
@@ -3684,7 +3719,7 @@ function TenantProfilePanel({ tenant, onAction }) {
       )}
       {tab === "Contrat" && (
         <div className="simple-list">
-          <p><span>Contrat actif</span><strong>{tenant.contract}</strong></p>
+          <p><span>Contrat actif</span><strong>{contract.number}</strong></p>
           <p><span>Date début</span><strong>{contract.start}</strong></p>
           <p><span>Date fin</span><strong>{contract.end}</strong></p>
           <p><span>Conditions particulières</span><strong>Paiement au plus tard le 05</strong></p>
@@ -3716,6 +3751,9 @@ function TenantProfilePanel({ tenant, onAction }) {
       )}
       {tab === "Documents" && (
         <div className="mini-list">
+          {tenantContracts.map((item) => (
+            <p key={item.number}><span>{item.number} · {item.property}</span><Badge label={item.status} /></p>
+          ))}
           {["Pièce d'identité", "Contrat", "Reçus", "Quittances", "Documents divers"].map((item) => (
             <p key={item}><span>{item}</span><Badge label="Archivé" /></p>
           ))}
@@ -3734,7 +3772,7 @@ function TenantProfilePanel({ tenant, onAction }) {
         <Button onClick={() => onAction("Ajouter relance")}>
           <Bell size={17} /> Ajouter relance
         </Button>
-        <Button onClick={() => onAction(`Voir contrat ${tenant.contract}`)}>
+        <Button onClick={() => onAction(`Voir contrat ${contract.number}`)}>
           <FileText size={17} /> Contrat
         </Button>
         <Button onClick={() => onAction("Situation locataire")}>
@@ -3904,7 +3942,7 @@ function VisitProfilePanel({ visit, onAction }) {
   );
 }
 
-function ContractsPage({ activeTab, onTab, onAction }) {
+function ContractsPage({ activeTab, onTab, onAction, contractsList = contracts }) {
   const tabs = ["Contrats", "Génération de document", "Archives"];
   const effectiveTab = activeTab === "Factures & reçus" ? "Archives" : activeTab;
   return (
@@ -3913,15 +3951,15 @@ function ContractsPage({ activeTab, onTab, onAction }) {
         title="Contrats & documents"
       />
       <Tabs tabs={tabs} active={effectiveTab} onChange={onTab} demo="contract-tabs" />
-      {effectiveTab === "Contrats" && <ContractsList onAction={onAction} />}
+      {effectiveTab === "Contrats" && <ContractsList onAction={onAction} contractsList={contractsList} />}
       {effectiveTab === "Génération de document" && <DocumentGeneration onAction={onAction} />}
-      {effectiveTab === "Archives" && <ArchivesView onAction={onAction} />}
+      {effectiveTab === "Archives" && <ArchivesView onAction={onAction} contractsList={contractsList} />}
     </>
   );
 }
 
-function ContractsList({ onAction }) {
-  const [selected, setSelected] = useState(contracts[0]);
+function ContractsList({ onAction, contractsList = contracts }) {
+  const [selected, setSelected] = useState(contractsList[0] ?? contracts[0]);
   const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
 
   const openContract = (contract) => {
@@ -3955,7 +3993,7 @@ function ContractsList({ onAction }) {
         <Panel title="Liste des contrats">
           <DataTable
             columns={["Numéro contrat", "Type", "Bien", "Propriétaire", "Locataire / client", "Date début", "Date fin", "Statut", "Échéance", "Action"]}
-            rows={contracts.map((contract) => [
+            rows={contractsList.map((contract) => [
               contract.number,
               contract.type,
               contract.property,
@@ -4133,16 +4171,16 @@ function InvoicesView({ onAction }) {
   );
 }
 
-function getArchiveRecords() {
-  const contractArchives = contracts
-    .filter((contract) => ["Archivé", "Expiré"].includes(contract.status))
+function getArchiveRecords(contractsList = contracts) {
+  const contractArchives = contractsList
+    .filter((contract) => contract.generated || ["Archivé", "Expiré"].includes(contract.status))
     .map((contract) => ({
       id: `contract-${contract.number}`,
       category: "Contrats et mandats",
       reference: contract.number,
       title: contract.type,
       linked: `${contract.property} · ${contract.client}`,
-      date: contract.end === "Vendu" ? "02/11/2024" : contract.end,
+      date: contract.generated ? "18/06/2026" : contract.end === "Vendu" ? "02/11/2024" : contract.end,
       status: contract.status === "Expiré" ? "Archivé" : contract.status,
       module: "Docs",
       owner: contract.owner,
@@ -4332,8 +4370,8 @@ function getArchiveCategoryIcon(category) {
   return Archive;
 }
 
-function ArchivesView({ onAction }) {
-  const records = useMemo(() => getArchiveRecords(), []);
+function ArchivesView({ onAction, contractsList = contracts }) {
+  const records = useMemo(() => getArchiveRecords(contractsList), [contractsList]);
   const [category, setCategory] = useState("Tous les éléments");
   const [status, setStatus] = useState("Tous statuts");
   const [query, setQuery] = useState("");
@@ -7379,7 +7417,7 @@ function AttachTenantModal({ property, onClose, onAttach }) {
   );
 }
 
-function ContractFormModal({ property: initialProperty = properties[0], tenant: initialTenant = tenants[0], onClose }) {
+function ContractFormModal({ property: initialProperty = properties[0], tenant: initialTenant = tenants[0], onGenerate, onClose }) {
   const [preview, setPreview] = useState(false);
   const initialOwner = owners.find((item) => item.name === initialProperty.owner) ?? owners[0];
   const tenantOptions = Array.from(new Set([initialTenant?.name, ...tenants.map((tenant) => tenant.name), ...prospects.map((prospect) => prospect.name)].filter(Boolean)));
@@ -7427,6 +7465,33 @@ function ContractFormModal({ property: initialProperty = properties[0], tenant: 
     }));
   };
 
+  const buildGeneratedContract = (status = "Généré") => {
+    const property = properties.find((item) => item.code === propertyCode) ?? initialProperty;
+    const tenant = initialTenant?.name === tenantName ? initialTenant : tenants.find((item) => item.name === tenantName) ?? { name: tenantName };
+
+    return {
+      number: values.contratNo || `CON-2026-${String(Date.now()).slice(-3)}`,
+      type: values.objet?.includes("Mandat") ? "Mandat de gestion" : "Contrat de bail",
+      property: property.name,
+      owner: property.owner,
+      client: tenant.name,
+      start: values.effetDate || values.souscritLe,
+      end: values.expirationDate || "18/06/2027",
+      status,
+      generated: true,
+    };
+  };
+
+  const generateContract = () => {
+    onGenerate?.(buildGeneratedContract("Généré"));
+    setPreview(true);
+  };
+
+  const archiveContract = () => {
+    onGenerate?.(buildGeneratedContract("Archivé"));
+    onClose();
+  };
+
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section className="modal-card wide-modal contract-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
@@ -7448,8 +7513,8 @@ function ContractFormModal({ property: initialProperty = properties[0], tenant: 
         <LeaseVariableForm values={values} onChange={updateLease} includeReference={false} />
         <div className="action-row compact-row">
           <Button onClick={onClose}><Archive size={17} /> Enregistrer brouillon</Button>
-          <Button variant="primary" onClick={() => setPreview(true)}><Download size={17} /> Générer PDF</Button>
-          <Button onClick={onClose}><Archive size={17} /> Archiver</Button>
+          <Button variant="primary" onClick={generateContract}><Download size={17} /> Générer PDF</Button>
+          <Button onClick={archiveContract}><Archive size={17} /> Archiver</Button>
         </div>
         {preview && (
           <DocumentPreviewModal
