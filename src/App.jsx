@@ -1766,6 +1766,21 @@ function getDocumentDataForProperty(property, paymentsList = paymentRecords) {
   };
 }
 
+function makePropertyPdfArchive(property) {
+  return {
+    id: `property-pdf-${property.code}`,
+    category: "Biens et clients",
+    reference: `FBI-${property.code}`,
+    title: `Fiche PDF - ${property.name}`,
+    linked: `${property.type} · ${property.district}`,
+    date: "18/06/2026",
+    status: "Archivé",
+    module: "Biens",
+    owner: property.owner,
+    property: property.name,
+  };
+}
+
 function isSensitiveAction(title) {
   const text = normalizeSearch(title);
   return [
@@ -1983,6 +1998,8 @@ function App() {
   const [propertyHistoryOverrides, setPropertyHistoryOverrides] = useState({});
   const [documentContext, setDocumentContext] = useState(null);
   const [documentDraft, setDocumentDraft] = useState(null);
+  const [propertyPdfContext, setPropertyPdfContext] = useState(null);
+  const [propertyPdfArchives, setPropertyPdfArchives] = useState([]);
   const [financeTab, setFinanceTab] = useState("Loyers");
   const [adminTab, setAdminTab] = useState("Utilisateurs");
   const [reportType, setReportType] = useState(reports[0][0]);
@@ -2024,6 +2041,12 @@ function App() {
     if (normalizeSearch(label) === "generer document") {
       setDocumentContext({ property: context.property ?? selectedProperty });
       setModal("Choisir document");
+      return;
+    }
+
+    if (normalizeSearch(label) === "fiche bien pdf") {
+      setPropertyPdfContext(context.property ?? selectedProperty);
+      setModal("Fiche PDF");
       return;
     }
 
@@ -2195,6 +2218,22 @@ function App() {
     setModal(null);
   };
 
+  const handlePropertyPdfArchive = (property) => {
+    const archive = makePropertyPdfArchive(property);
+    setPropertyPdfArchives((current) => {
+      if (current.some((item) => item.reference === archive.reference)) return current;
+      return [archive, ...current];
+    });
+    setPropertyHistoryOverrides((current) => ({
+      ...current,
+      [property.name]: [
+        ["Fiche PDF archivée", `${archive.reference} ajoutée aux documents du bien.`, "18/06/2026"],
+        ...(current[property.name] ?? []),
+      ],
+    }));
+    setPropertyTab("Documents");
+  };
+
   useEffect(() => {
     if (!demoActive) return;
 
@@ -2307,6 +2346,7 @@ function App() {
             chargesList={allCharges}
             maintenancesList={allMaintenances}
             propertyHistoryOverrides={propertyHistoryOverrides}
+            propertyPdfArchives={propertyPdfArchives}
           />
         )}
         {activePage === "Clients" && (
@@ -2323,7 +2363,7 @@ function App() {
             rentRowsList={allRentRows}
           />
         )}
-        {activePage === "Contrats" && <ContractsPage activeTab={contractTab} onTab={setContractTab} onAction={openAction} contractsList={allContracts} paymentsList={allPayments} documentDraft={documentDraft} />}
+        {activePage === "Contrats" && <ContractsPage activeTab={contractTab} onTab={setContractTab} onAction={openAction} contractsList={allContracts} paymentsList={allPayments} documentDraft={documentDraft} propertyPdfArchives={propertyPdfArchives} />}
         {activePage === "Finance" && <FinancePage activeTab={financeTab} onTab={setFinanceTab} onAction={openAction} paymentsList={allPayments} rentRowsList={allRentRows} chargesList={allCharges} maintenancesList={allMaintenances} />}
         {activePage === "Rapports" && (
           <ReportsPage selected={reportType} onSelect={setReportType} onAction={openAction} />
@@ -2357,6 +2397,8 @@ function App() {
         <MaintenanceFormModal context={maintenanceContext} onSave={handleMaintenanceSchedule} onClose={() => setModal(null)} />
       ) : modal === "Choisir document" ? (
         <DocumentContextMenu property={documentContext?.property ?? selectedProperty} onSelect={handleDocumentTemplateSelection} onClose={() => setModal(null)} />
+      ) : modal === "Fiche PDF" ? (
+        <PropertyPdfModal property={propertyPdfContext ?? selectedProperty} archived={propertyPdfArchives.some((item) => item.property === (propertyPdfContext ?? selectedProperty).name)} onArchive={handlePropertyPdfArchive} onClose={() => setModal(null)} />
       ) : modal === "Aperçu reçu paiement" && receiptPreviewValues ? (
         <DocumentPreviewModal
           template={documentTemplates.find((item) => item.key === "recu") ?? documentTemplates[1]}
@@ -2800,6 +2842,7 @@ function PropertiesPage({
   chargesList = charges,
   maintenancesList = maintenances,
   propertyHistoryOverrides = {},
+  propertyPdfArchives = [],
 }) {
   const [statusFilter, setStatusFilter] = useState("Tous statuts");
   const [typeFilter, setTypeFilter] = useState("Tous types");
@@ -2939,6 +2982,7 @@ function PropertiesPage({
         chargesList={chargesList}
         maintenancesList={maintenancesList}
         historyItems={propertyHistoryOverrides[selectedProperty.name] ?? []}
+        propertyPdfArchives={propertyPdfArchives}
       />
     );
   }
@@ -3094,7 +3138,7 @@ function PropertyCard({ property, onSelect }) {
   );
 }
 
-function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, chargesList = charges, maintenancesList = maintenances, historyItems = [] }) {
+function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, chargesList = charges, maintenancesList = maintenances, historyItems = [], propertyPdfArchives = [] }) {
   const hasHierarchy = isBuildingProperty(property) || Boolean(property.parentCode);
   const tabs = ["Résumé", ...(hasHierarchy ? ["Lots & blocs"] : []), "Propriétaire", "Locataire", "Contrats", "Paiements", "Charges & entretiens", "Documents", "Historique"];
   const effectiveTab = tabs.includes(activeTab) ? activeTab : "Résumé";
@@ -3166,7 +3210,7 @@ function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, on
           <Button onClick={() => onAction("Générer document")}>
             <FileText size={17} /> Générer document
           </Button>
-          <Button onClick={() => onAction("Fiche bien PDF")}>
+          <Button onClick={() => onAction("Fiche bien PDF", { property })}>
             <Download size={17} /> Fiche PDF
           </Button>
           <Button onClick={() => onAction("Archiver le bien")}>
@@ -3195,7 +3239,7 @@ function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, on
       {effectiveTab === "Contrats" && <PropertyContracts property={property} contractsList={contractsList} />}
       {effectiveTab === "Paiements" && <PropertyPayments property={property} rentRowsList={rentRowsList} />}
       {effectiveTab === "Charges & entretiens" && <PropertyMaintenance property={property} chargesList={chargesList} maintenancesList={maintenancesList} />}
-      {effectiveTab === "Documents" && <PropertyDocuments property={property} onAction={onAction} />}
+      {effectiveTab === "Documents" && <PropertyDocuments property={property} onAction={onAction} propertyPdfArchives={propertyPdfArchives} />}
       {effectiveTab === "Historique" && <PropertyHistory property={property} historyItems={historyItems} />}
     </>
   );
@@ -3640,12 +3684,17 @@ function PropertyMaintenance({ property, chargesList = charges, maintenancesList
   );
 }
 
-function PropertyDocuments({ property, onAction }) {
+function PropertyDocuments({ property, onAction, propertyPdfArchives = [] }) {
+  const pdfRows = propertyPdfArchives
+    .filter((archive) => archive.property === property.name)
+    .map((archive) => [archive.title, "Fiche PDF", archive.date, <Badge label={archive.status} />, <DocumentActions />]);
+
   return (
     <Panel title={`Documents - ${property.code}`} toolbar={<Button compact onClick={() => onAction("Importer document")}><Upload size={16} /> Importer</Button>}>
       <DataTable
         columns={["Document", "Type", "Date", "Statut", "Actions"]}
         rows={[
+          ...pdfRows,
           ["Contrat de location signé", "Contrat", "01/01/2026", <Badge label="Archivé" />, <DocumentActions />],
           ["Titre foncier scanné", "Titre", "14/03/2026", <Badge label="Archivé" />, <DocumentActions />],
           ["Facture entretien jardin", "Facture", "05/05/2026", <Badge label="Généré" />, <DocumentActions />],
@@ -4256,7 +4305,7 @@ function VisitProfilePanel({ visit, onAction }) {
   );
 }
 
-function ContractsPage({ activeTab, onTab, onAction, contractsList = contracts, paymentsList = paymentRecords, documentDraft = null }) {
+function ContractsPage({ activeTab, onTab, onAction, contractsList = contracts, paymentsList = paymentRecords, documentDraft = null, propertyPdfArchives = [] }) {
   const tabs = ["Contrats", "Génération de document", "Archives"];
   const effectiveTab = activeTab === "Factures & reçus" ? "Archives" : activeTab;
   return (
@@ -4267,7 +4316,7 @@ function ContractsPage({ activeTab, onTab, onAction, contractsList = contracts, 
       <Tabs tabs={tabs} active={effectiveTab} onChange={onTab} demo="contract-tabs" />
       {effectiveTab === "Contrats" && <ContractsList onAction={onAction} contractsList={contractsList} />}
       {effectiveTab === "Génération de document" && <DocumentGeneration onAction={onAction} documentDraft={documentDraft} />}
-      {effectiveTab === "Archives" && <ArchivesView onAction={onAction} contractsList={contractsList} paymentsList={paymentsList} />}
+      {effectiveTab === "Archives" && <ArchivesView onAction={onAction} contractsList={contractsList} paymentsList={paymentsList} propertyPdfArchives={propertyPdfArchives} />}
     </>
   );
 }
@@ -4488,7 +4537,7 @@ function InvoicesView({ onAction }) {
   );
 }
 
-function getArchiveRecords(contractsList = contracts, paymentsList = paymentRecords) {
+function getArchiveRecords(contractsList = contracts, paymentsList = paymentRecords, propertyPdfArchives = []) {
   const contractArchives = contractsList
     .filter((contract) => contract.generated || ["Archivé", "Expiré"].includes(contract.status))
     .map((contract) => ({
@@ -4671,6 +4720,7 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
     ...receiptArchives,
     ...chargeArchives,
     ...maintenanceArchives,
+    ...propertyPdfArchives,
     ...draftArchives,
     ...propertyClientArchives,
     ...reportArchives,
@@ -4687,8 +4737,8 @@ function getArchiveCategoryIcon(category) {
   return Archive;
 }
 
-function ArchivesView({ onAction, contractsList = contracts, paymentsList = paymentRecords }) {
-  const records = useMemo(() => getArchiveRecords(contractsList, paymentsList), [contractsList, paymentsList]);
+function ArchivesView({ onAction, contractsList = contracts, paymentsList = paymentRecords, propertyPdfArchives = [] }) {
+  const records = useMemo(() => getArchiveRecords(contractsList, paymentsList, propertyPdfArchives), [contractsList, paymentsList, propertyPdfArchives]);
   const [category, setCategory] = useState("Tous les éléments");
   const [status, setStatus] = useState("Tous statuts");
   const [query, setQuery] = useState("");
@@ -4939,6 +4989,153 @@ function DocumentPreviewModal({ template, values, onChange, onClose }) {
         <FillableDocument template={template} values={values} onChange={onChange} readOnly preview />
       </section>
     </div>
+  );
+}
+
+function PropertyPdfModal({ property, archived, onArchive, onClose }) {
+  const owner = owners.find((item) => item.name === property.owner);
+  const tenant = tenants.find((item) => item.name === property.tenant);
+
+  const archive = () => {
+    onArchive(property);
+  };
+
+  return (
+    <div className="modal-backdrop document-print-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card document-print-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="document-print-head">
+          <div>
+            <span>Fiche PDF du bien</span>
+            <h2>{property.name}</h2>
+            <p>Fiche prête à transmettre au client, à imprimer ou à archiver dans les documents du bien.</p>
+          </div>
+          <div className="document-editor-actions">
+            <Button variant="primary" onClick={() => window.print()}><Download size={17} /> Télécharger PDF</Button>
+            <Button onClick={() => window.print()}><Printer size={17} /> Imprimer</Button>
+            <Button onClick={archive} disabled={archived}><Archive size={17} /> {archived ? "Archivé" : "Archiver dans documents"}</Button>
+          </div>
+        </div>
+        <PropertyPdfDocument property={property} owner={owner} tenant={tenant} />
+      </section>
+    </div>
+  );
+}
+
+function PropertyPdfDocument({ property, owner, tenant }) {
+  const characteristics = [
+    ["Surface", property.surface],
+    ["Pièces", property.rooms],
+    ["Chambres", property.bedrooms],
+    ["Salles de bain", property.baths],
+    ["Mode financier", property.financialMode],
+  ].filter(([, value]) => value !== undefined && value !== null && value !== "");
+  const observations = [
+    property.lastAction,
+    isMaintenanceOnlyProperty(property) ? "Bien suivi en entretien seul par E.K immo." : "Bien suivi dans le portefeuille de gestion E.K immo.",
+    property.focalPoint ? `Point focal : ${property.focalPoint.name} (${property.focalPoint.phone}).` : "",
+  ].filter(Boolean);
+
+  return (
+    <article className="original-document property-pdf-document">
+      <section className="source-sheet property-pdf-sheet">
+        <header className="property-pdf-header">
+          <img src={ekimmoAssets.logo} alt="E.K immo" />
+          <div>
+            <span>Fiche du bien</span>
+            <h3>{property.name}</h3>
+            <p>{property.code}</p>
+          </div>
+          <Badge label={property.status} />
+        </header>
+
+        <img className="property-pdf-photo" src={property.image} alt={property.name} />
+
+        <section className="property-pdf-summary">
+          <div>
+            <small>Référence</small>
+            <strong>{property.code}</strong>
+          </div>
+          <div>
+            <small>Type</small>
+            <strong>{property.type}</strong>
+          </div>
+          <div>
+            <small>Quartier</small>
+            <strong>{property.district}</strong>
+          </div>
+          <div>
+            <small>Prix</small>
+            <strong>{property.price} {property.period}</strong>
+          </div>
+          <div>
+            <small>Caution</small>
+            <strong>{property.deposit}</strong>
+          </div>
+          <div>
+            <small>Statut</small>
+            <strong>{property.status}</strong>
+          </div>
+        </section>
+
+        <section className="property-pdf-section">
+          <h4>Adresse</h4>
+          <p>{property.address}</p>
+        </section>
+
+        <section className="property-pdf-two">
+          <div className="property-pdf-section">
+            <h4>Propriétaire</h4>
+            <p><strong>{property.owner}</strong></p>
+            <p>{owner?.phone ?? "Téléphone à confirmer"}</p>
+            <p>{owner?.email ?? "Email à confirmer"}</p>
+          </div>
+          <div className="property-pdf-section">
+            <h4>Locataire</h4>
+            {tenant ? (
+              <>
+                <p><strong>{tenant.name}</strong></p>
+                <p>{tenant.phone}</p>
+                <p>{tenant.email}</p>
+              </>
+            ) : (
+              <p>{property.tenant && property.tenant !== "Libre" ? property.tenant : "Non applicable"}</p>
+            )}
+          </div>
+        </section>
+
+        <section className="property-pdf-section">
+          <h4>Caractéristiques</h4>
+          <div className="property-pdf-facts">
+            {characteristics.map(([label, value]) => (
+              <p key={label}><span>{label}</span><strong>{value}</strong></p>
+            ))}
+          </div>
+        </section>
+
+        <section className="property-pdf-section">
+          <h4>Équipements</h4>
+          <div className="property-pdf-tags">
+            {(property.tags?.length ? property.tags : ["Équipements à compléter"]).map((tag) => <span key={tag}>{tag}</span>)}
+          </div>
+        </section>
+
+        <section className="property-pdf-section">
+          <h4>Observations</h4>
+          {observations.map((item) => <p key={item}>{item}</p>)}
+        </section>
+
+        <footer className="property-pdf-footer">
+          <img src={ekimmoAssets.logo} alt="E.K immo" />
+          <div>
+            <strong>E.K immo SAS</strong>
+            <span>Niaréla, face mairie - Bamako, Mali</span>
+            <span>Contact : +223 72 77 71 77 / +223 44 44 13 31</span>
+            <span>www.ekimmo-mali.com</span>
+          </div>
+        </footer>
+      </section>
+    </article>
   );
 }
 
@@ -7376,9 +7573,9 @@ function Segmented({ value, onChange, options }) {
   );
 }
 
-function Button({ children, variant = "secondary", compact = false, onClick }) {
+function Button({ children, variant = "secondary", compact = false, onClick, disabled = false }) {
   return (
-    <button className={`button ${variant} ${compact ? "compact" : ""}`} onClick={onClick}>
+    <button className={`button ${variant} ${compact ? "compact" : ""}`} onClick={onClick} disabled={disabled}>
       {children}
     </button>
   );
