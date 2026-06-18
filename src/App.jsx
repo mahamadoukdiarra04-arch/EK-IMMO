@@ -2000,6 +2000,8 @@ function App() {
   const [documentDraft, setDocumentDraft] = useState(null);
   const [propertyPdfContext, setPropertyPdfContext] = useState(null);
   const [propertyPdfArchives, setPropertyPdfArchives] = useState([]);
+  const [archiveContext, setArchiveContext] = useState(null);
+  const [archivedProperties, setArchivedProperties] = useState({});
   const [financeTab, setFinanceTab] = useState("Loyers");
   const [adminTab, setAdminTab] = useState("Utilisateurs");
   const [reportType, setReportType] = useState(reports[0][0]);
@@ -2009,6 +2011,22 @@ function App() {
   const allRentRows = useMemo(() => mergeRentRowsWithPayments(rentRows, recordedPayments), [recordedPayments]);
   const allMaintenances = useMemo(() => [...scheduledMaintenances, ...maintenances], [scheduledMaintenances]);
   const allCharges = useMemo(() => [...maintenanceCharges, ...charges], [maintenanceCharges]);
+  const propertiesWithArchiveState = useMemo(() => properties.map((property) => {
+    const archive = archivedProperties[property.code];
+    if (!archive) return property;
+    return {
+      ...property,
+      status: "Archivé",
+      archived: true,
+      archiveReason: archive.reason,
+      archiveDate: archive.date,
+      lastAction: `Archivé : ${archive.reason}`,
+    };
+  }), [archivedProperties]);
+  const activeProperties = useMemo(
+    () => propertiesWithArchiveState.filter((property) => !property.archived),
+    [propertiesWithArchiveState]
+  );
 
   const openAction = (label, context = {}) => {
     if (shouldOpenPaymentModal(label)) {
@@ -2050,6 +2068,12 @@ function App() {
       return;
     }
 
+    if (normalizeSearch(label) === "archiver le bien") {
+      setArchiveContext(context.property ?? selectedProperty);
+      setModal("Archiver bien");
+      return;
+    }
+
     setModal(label);
   };
 
@@ -2086,7 +2110,7 @@ function App() {
   };
 
   const showPropertyDetail = (property) => {
-    setSelectedProperty(property);
+    setSelectedProperty(propertiesWithArchiveState.find((item) => item.code === property.code) ?? property);
     setPropertyView("detail");
     setActivePage("Biens");
   };
@@ -2234,6 +2258,42 @@ function App() {
     setPropertyTab("Documents");
   };
 
+  const handlePropertyArchive = ({ property, reason }) => {
+    const target = property ?? archiveContext ?? selectedProperty;
+    const cleanReason = reason.trim().replace(/\s+/g, " ");
+    if (!target || !cleanReason) return;
+    const reasonSentence = cleanReason.replace(/[.!?]+$/, "");
+
+    const archive = {
+      reason: cleanReason,
+      date: "18/06/2026",
+    };
+
+    setArchivedProperties((current) => ({
+      ...current,
+      [target.code]: archive,
+    }));
+    setPropertyHistoryOverrides((current) => ({
+      ...current,
+      [target.name]: [
+        ["Bien archivé", `${reasonSentence}. Historique, documents, paiements et contrats conservés.`, archive.date],
+        ...(current[target.name] ?? []),
+      ],
+    }));
+    setSelectedProperty((current) => current.code === target.code ? {
+      ...current,
+      status: "Archivé",
+      archived: true,
+      archiveReason: cleanReason,
+      archiveDate: archive.date,
+      lastAction: `Archivé : ${cleanReason}`,
+    } : current);
+    setPropertyTab("Historique");
+    setPropertyView("list");
+    setModal(null);
+    setArchiveContext(null);
+  };
+
   useEffect(() => {
     if (!demoActive) return;
 
@@ -2326,7 +2386,7 @@ function App() {
       />
 
       <main className={activePage === "Dashboard" ? "page-shell dashboard-shell" : "page-shell"}>
-        {activePage === "Dashboard" && <DashboardPage onAction={openAction} onOpenProperty={showPropertyDetail} />}
+        {activePage === "Dashboard" && <DashboardPage onAction={openAction} onOpenProperty={showPropertyDetail} propertiesList={activeProperties} />}
         {activePage === "Biens" && (
           <PropertiesPage
             query={globalQuery}
@@ -2347,6 +2407,7 @@ function App() {
             maintenancesList={allMaintenances}
             propertyHistoryOverrides={propertyHistoryOverrides}
             propertyPdfArchives={propertyPdfArchives}
+            propertiesList={propertiesWithArchiveState}
           />
         )}
         {activePage === "Clients" && (
@@ -2399,6 +2460,15 @@ function App() {
         <DocumentContextMenu property={documentContext?.property ?? selectedProperty} onSelect={handleDocumentTemplateSelection} onClose={() => setModal(null)} />
       ) : modal === "Fiche PDF" ? (
         <PropertyPdfModal property={propertyPdfContext ?? selectedProperty} archived={propertyPdfArchives.some((item) => item.property === (propertyPdfContext ?? selectedProperty).name)} onArchive={handlePropertyPdfArchive} onClose={() => setModal(null)} />
+      ) : modal === "Archiver bien" ? (
+        <ArchivePropertyModal
+          property={archiveContext ?? selectedProperty}
+          onConfirm={handlePropertyArchive}
+          onClose={() => {
+            setArchiveContext(null);
+            setModal(null);
+          }}
+        />
       ) : modal === "Aperçu reçu paiement" && receiptPreviewValues ? (
         <DocumentPreviewModal
           template={documentTemplates.find((item) => item.key === "recu") ?? documentTemplates[1]}
@@ -2698,7 +2768,7 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onPro
   );
 }
 
-function DashboardPage({ onAction, onOpenProperty }) {
+function DashboardPage({ onAction, onOpenProperty, propertiesList = properties }) {
   const [kpiPeriod, setKpiPeriod] = useState("Mois");
   const [dashboardState, setDashboardState] = useState("Données");
   const kpiValues = dashboardKpisByPeriod[kpiPeriod] ?? dashboardKpisByPeriod.Mois;
@@ -2773,7 +2843,7 @@ function DashboardPage({ onAction, onOpenProperty }) {
       <section className="three-grid dashboard-bottom">
         <Panel title="Biens à suivre" toolbar={<ArrowRight size={17} />}>
           <div className="watch-list">
-            {properties.slice(0, 4).map((property) => (
+            {propertiesList.slice(0, 4).map((property) => (
               <button className="watch-row" key={property.code} onClick={() => onOpenProperty(property)}>
                 <img src={property.image} alt="" />
                 <span>
@@ -2843,6 +2913,7 @@ function PropertiesPage({
   maintenancesList = maintenances,
   propertyHistoryOverrides = {},
   propertyPdfArchives = [],
+  propertiesList = properties,
 }) {
   const [statusFilter, setStatusFilter] = useState("Tous statuts");
   const [typeFilter, setTypeFilter] = useState("Tous types");
@@ -2864,14 +2935,18 @@ function PropertiesPage({
     minBaths: "",
   });
 
-  const propertyTypes = useMemo(() => uniqueValues(properties.map((property) => property.type)), []);
-  const districts = useMemo(() => uniqueValues(properties.map((property) => property.district)), []);
-  const ownersList = useMemo(() => uniqueValues(properties.map((property) => property.owner)), []);
-  const tenantsList = useMemo(() => uniqueValues(properties.map((property) => property.tenant)), []);
-  const financialModes = useMemo(() => uniqueValues(properties.map((property) => property.financialMode)), []);
-  const commissions = useMemo(() => uniqueValues(properties.map((property) => property.commission)), []);
-  const periods = useMemo(() => uniqueValues(properties.map((property) => property.period)), []);
-  const tags = useMemo(() => uniqueValues(properties.flatMap((property) => property.tags)), []);
+  const displayedSelectedProperty = useMemo(
+    () => propertiesList.find((property) => property.code === selectedProperty?.code) ?? selectedProperty,
+    [propertiesList, selectedProperty]
+  );
+  const propertyTypes = useMemo(() => uniqueValues(propertiesList.map((property) => property.type)), [propertiesList]);
+  const districts = useMemo(() => uniqueValues(propertiesList.map((property) => property.district)), [propertiesList]);
+  const ownersList = useMemo(() => uniqueValues(propertiesList.map((property) => property.owner)), [propertiesList]);
+  const tenantsList = useMemo(() => uniqueValues(propertiesList.map((property) => property.tenant)), [propertiesList]);
+  const financialModes = useMemo(() => uniqueValues(propertiesList.map((property) => property.financialMode)), [propertiesList]);
+  const commissions = useMemo(() => uniqueValues(propertiesList.map((property) => property.commission)), [propertiesList]);
+  const periods = useMemo(() => uniqueValues(propertiesList.map((property) => property.period)), [propertiesList]);
+  const tags = useMemo(() => uniqueValues(propertiesList.flatMap((property) => property.tags)), [propertiesList]);
 
   const updateAdvancedFilter = (key, value) => {
     setAdvancedFilters((current) => ({ ...current, [key]: value }));
@@ -2918,12 +2993,14 @@ function PropertiesPage({
   ].filter(Boolean).length;
 
   const filteredProperties = useMemo(() => {
-    return properties.filter((property) => {
+    return propertiesList.filter((property) => {
       const haystack = normalizeSearch(
         `${property.code} ${property.name} ${property.type} ${property.district} ${property.address} ${property.owner} ${property.tenant} ${property.price} ${property.block ?? ""} ${property.unitNumber ?? ""} ${getPropertyRelationLabel(property)} ${property.tags.join(" ")}`
       );
       const queryMatch = !query || haystack.includes(normalizeSearch(query));
-      const statusMatch = statusFilter === "Tous statuts" || property.status === statusFilter;
+      const archiveFilter = statusFilter === "Archivés";
+      const archiveMatch = archiveFilter ? property.archived : !property.archived;
+      const statusMatch = statusFilter === "Tous statuts" || archiveFilter || property.status === statusFilter;
       const typeMatch = typeFilter === "Tous types" || property.type === typeFilter;
       const districtMatch = advancedFilters.district === "Tous quartiers" || property.district === advancedFilters.district;
       const ownerMatch = advancedFilters.owner === "Tous propriétaires" || property.owner === advancedFilters.owner;
@@ -2947,6 +3024,7 @@ function PropertiesPage({
 
       return (
         queryMatch &&
+        archiveMatch &&
         statusMatch &&
         typeMatch &&
         districtMatch &&
@@ -2965,12 +3043,12 @@ function PropertiesPage({
         minBathsMatch
       );
     });
-  }, [advancedFilters, query, statusFilter, typeFilter]);
+  }, [advancedFilters, propertiesList, query, statusFilter, typeFilter]);
 
   if (view === "detail") {
     return (
       <PropertyDetail
-        property={selectedProperty}
+        property={displayedSelectedProperty}
         activeTab={propertyTab}
         onTab={onTab}
         onBack={onBack}
@@ -2981,7 +3059,7 @@ function PropertiesPage({
         rentRowsList={rentRowsList}
         chargesList={chargesList}
         maintenancesList={maintenancesList}
-        historyItems={propertyHistoryOverrides[selectedProperty.name] ?? []}
+        historyItems={propertyHistoryOverrides[displayedSelectedProperty.name] ?? []}
         propertyPdfArchives={propertyPdfArchives}
       />
     );
@@ -3009,7 +3087,7 @@ function PropertiesPage({
             />
           </label>
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Statut">
-            {["Tous statuts", "Disponible", "Loué", "Réservé", "Vendu", "En travaux", "Indisponible", "Entretien seul", "Gestion multi-lots"].map((option) => (
+            {["Tous statuts", "Disponible", "Loué", "Réservé", "Vendu", "En travaux", "Indisponible", "Entretien seul", "Gestion multi-lots", "Archivés"].map((option) => (
               <option key={option}>{option}</option>
             ))}
           </select>
@@ -3143,6 +3221,7 @@ function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, on
   const tabs = ["Résumé", ...(hasHierarchy ? ["Lots & blocs"] : []), "Propriétaire", "Locataire", "Contrats", "Paiements", "Charges & entretiens", "Documents", "Historique"];
   const effectiveTab = tabs.includes(activeTab) ? activeTab : "Résumé";
   const relationLabel = getPropertyRelationLabel(property);
+  const isArchived = property.archived || property.status === "Archivé";
 
   return (
     <>
@@ -3213,8 +3292,8 @@ function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, on
           <Button onClick={() => onAction("Fiche bien PDF", { property })}>
             <Download size={17} /> Fiche PDF
           </Button>
-          <Button onClick={() => onAction("Archiver le bien")}>
-            <Archive size={17} /> Archiver
+          <Button onClick={() => onAction("Archiver le bien", { property })} disabled={isArchived}>
+            <Archive size={17} /> {isArchived ? "Archivé" : "Archiver"}
           </Button>
         </div>
       </article>
@@ -8554,6 +8633,49 @@ function ActionDocumentModal({ context, onClose }) {
       onChange={updateField}
       onClose={onClose}
     />
+  );
+}
+
+function ArchivePropertyModal({ property, onConfirm, onClose }) {
+  const [reason, setReason] = useState("");
+  const canConfirm = reason.trim().length > 0;
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card archive-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="round-icon large">
+          <Archive size={22} />
+        </div>
+        <h2>Archiver ce bien ?</h2>
+        <p>
+          Ce bien ne sera plus visible dans la liste active, mais son historique, ses documents,
+          paiements et contrats seront conservés.
+        </p>
+        <div className="archive-target">
+          <span>Bien concerné</span>
+          <strong>{property.code} · {property.name}</strong>
+          <small>{property.owner} · {property.district}</small>
+        </div>
+        <div className="form-grid compact-form">
+          <label>
+            Motif d’archivage
+            <textarea
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              placeholder="Ex. Bien sorti du mandat, vente finalisée, dossier clôturé..."
+              required
+            />
+          </label>
+        </div>
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" disabled={!canConfirm} onClick={() => onConfirm({ property, reason })}>
+            <Archive size={17} /> Confirmer l’archivage
+          </Button>
+        </div>
+      </section>
+    </div>
   );
 }
 

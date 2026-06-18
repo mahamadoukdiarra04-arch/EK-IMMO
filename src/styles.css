@@ -5568,6 +5568,26 @@ td:last-child {
   background: var(--orange-bg);
 }
 
+.archive-target {
+  display: grid;
+  gap: 5px;
+  margin: 18px 0;
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.archive-target span,
+.archive-target small {
+  color: var(--muted);
+}
+
+.archive-target strong {
+  color: var(--ink);
+  font-size: 1.06rem;
+}
+
 .sensitive-confirmation {
   display: grid;
   gap: 14px;
