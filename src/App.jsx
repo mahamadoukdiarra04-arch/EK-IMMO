@@ -2010,7 +2010,7 @@ function App() {
       {modal && (["Ajouter une charge"].includes(modal) || modal.startsWith("Modifier charge") ? (
         <ChargeFormModal title={modal} onClose={() => setModal(null)} />
       ) : ["Ajouter un bien", "Modifier le bien"].includes(modal) ? (
-        <PropertyFormModal title={modal} onClose={() => setModal(null)} />
+        <PropertyFormModal title={modal} property={selectedProperty} onClose={() => setModal(null)} />
       ) : modal === "Créer contrat" ? (
         <ContractFormModal onClose={() => setModal(null)} />
       ) : (
@@ -7307,9 +7307,59 @@ function ContractFormModal({ onClose }) {
   );
 }
 
-function PropertyFormModal({ title, onClose }) {
-  const [propertyNature, setPropertyNature] = useState("Appartement rattaché");
+function PropertyFormModal({ title, property = properties[0], onClose }) {
+  const isEditMode = title === "Modifier le bien";
+  const sensitiveInitialValues = useMemo(() => ({
+    rent: property?.price ?? "850 000 FCFA",
+    status: property?.status ?? "Disponible",
+    owner: property?.owner ?? owners[0].name,
+    tenant: property?.tenant ?? "Libre",
+    financialMode: property?.financialMode ?? "Encaissement par l'agence",
+    commission: property?.commission ?? "50% du loyer",
+    deposit: property?.deposit ?? "1 700 000 FCFA",
+  }), [property]);
+  const [propertyNature, setPropertyNature] = useState(property?.parentCode ? "Appartement rattaché" : isBuildingProperty(property) ? "Immeuble parent" : "Bien individuel");
   const [hasFocalPoint, setHasFocalPoint] = useState(true);
+  const [sensitiveValues, setSensitiveValues] = useState(sensitiveInitialValues);
+  const [confirmSensitiveChange, setConfirmSensitiveChange] = useState(false);
+  const sensitiveOptions = {
+    status: ["Disponible", "Loué", "Réservé", "Gestion multi-lots", "Entretien seul", "Vendu", "En travaux", "Indisponible"],
+    owner: owners.map((owner) => owner.name),
+    tenant: ["Libre", ...tenants.map((tenant) => tenant.name)],
+    financialMode: ["Encaissement par l'agence", "Encaissement direct par le propriétaire", "Contrat entretien seul"],
+  };
+  const sensitiveLabels = {
+    rent: "loyer",
+    status: "statut",
+    owner: "propriétaire",
+    tenant: "locataire",
+    financialMode: "mode financier",
+    commission: "commission",
+    deposit: "caution",
+  };
+  const changedSensitiveFields = Object.entries(sensitiveValues)
+    .filter(([key, value]) => String(value).trim() !== String(sensitiveInitialValues[key]).trim())
+    .map(([key]) => sensitiveLabels[key]);
+
+  const updateSensitiveValue = (key, value) => {
+    setSensitiveValues((current) => ({ ...current, [key]: value }));
+    setConfirmSensitiveChange(false);
+  };
+
+  const handleSave = () => {
+    if (isEditMode && changedSensitiveFields.length > 0) {
+      setConfirmSensitiveChange(true);
+      return;
+    }
+    onClose();
+  };
+
+  const confirmSave = () => {
+    setConfirmSensitiveChange(false);
+    onClose();
+  };
+
+  const withCurrentOption = (key) => Array.from(new Set([sensitiveValues[key], ...(sensitiveOptions[key] ?? [])].filter(Boolean)));
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
@@ -7325,11 +7375,11 @@ function PropertyFormModal({ title, onClose }) {
             <label>Quartier<input defaultValue="ACI 2000, Bamako" /></label>
             <label className="full">Adresse détaillée<input defaultValue="Adresse complète du bien" /></label>
             <label className="full">Description<textarea defaultValue="Description du bien, de ses accès et de ses caractéristiques principales." /></label>
-            <label>Statut<select><option>Disponible</option><option>Loué</option><option>Réservé</option><option>Gestion multi-lots</option><option>Entretien seul</option><option>Vendu</option><option>En travaux</option><option>Indisponible</option></select></label>
-            <label>Prix de location<input defaultValue="850 000 FCFA" /></label>
+            <label>Statut<select value={sensitiveValues.status} onChange={(event) => updateSensitiveValue("status", event.target.value)}>{withCurrentOption("status").map((option) => <option key={option}>{option}</option>)}</select></label>
+            <label>Prix de location<input value={sensitiveValues.rent} onChange={(event) => updateSensitiveValue("rent", event.target.value)} /></label>
             <label>Prix de vente<input placeholder="Si applicable" /></label>
-            <label>Montant de caution<input defaultValue="1 700 000 FCFA" /></label>
-            <label>Commission applicable<input defaultValue="50% du loyer" /></label>
+            <label>Montant de caution<input value={sensitiveValues.deposit} onChange={(event) => updateSensitiveValue("deposit", event.target.value)} /></label>
+            <label>Commission applicable<input value={sensitiveValues.commission} onChange={(event) => updateSensitiveValue("commission", event.target.value)} /></label>
           </div>
         </div>
         <div className="form-section">
@@ -7364,10 +7414,10 @@ function PropertyFormModal({ title, onClose }) {
         <div className="form-section">
           <h3>Propriétaire & point focal</h3>
           <div className="form-grid compact-form">
-            <label>Propriétaire<select>{owners.map((owner) => <option key={owner.id}>{owner.name}</option>)}</select></label>
-            <label>Locataire actuel<select><option>Libre</option>{tenants.map((tenant) => <option key={tenant.id}>{tenant.name}</option>)}</select></label>
+            <label>Propriétaire<select value={sensitiveValues.owner} onChange={(event) => updateSensitiveValue("owner", event.target.value)}>{withCurrentOption("owner").map((option) => <option key={option}>{option}</option>)}</select></label>
+            <label>Locataire actuel<select value={sensitiveValues.tenant} onChange={(event) => updateSensitiveValue("tenant", event.target.value)}>{withCurrentOption("tenant").map((option) => <option key={option}>{option}</option>)}</select></label>
             <label>Agent responsable<select><option>Aïssata Diarra</option><option>Mariam Traoré</option><option>Issa Maïga</option><option>Cheick Camara</option></select></label>
-            <label>Mode de gestion financière<select><option>Encaissement par l'agence</option><option>Encaissement direct par le propriétaire</option><option>Contrat entretien seul</option></select></label>
+            <label>Mode de gestion financière<select value={sensitiveValues.financialMode} onChange={(event) => updateSensitiveValue("financialMode", event.target.value)}>{withCurrentOption("financialMode").map((option) => <option key={option}>{option}</option>)}</select></label>
             <label className="check-line full">
               <input type="checkbox" checked={hasFocalPoint} onChange={(event) => setHasFocalPoint(event.target.checked)} />
               <span>Point focal différent du propriétaire</span>
@@ -7396,9 +7446,24 @@ function PropertyFormModal({ title, onClose }) {
             <label>Autres documents<input type="file" multiple /></label>
           </div>
         </div>
+        {confirmSensitiveChange && (
+          <div className="sensitive-confirmation" role="alert">
+            <div>
+              <AlertTriangle size={20} />
+              <span>
+                <strong>Cette modification peut impacter les contrats, paiements ou situations propriétaires. Confirmer la modification ?</strong>
+                <small>Champs sensibles modifiés : {changedSensitiveFields.join(", ")}.</small>
+              </span>
+            </div>
+            <div className="action-row compact-row">
+              <Button variant="primary" onClick={confirmSave}><CheckCircle2 size={17} /> Confirmer la modification</Button>
+              <Button onClick={() => setConfirmSensitiveChange(false)}>Revenir au formulaire</Button>
+            </div>
+          </div>
+        )}
         <div className="action-row compact-row">
-          <Button variant="primary" onClick={onClose}><CheckCircle2 size={17} /> Enregistrer</Button>
-          <Button onClick={onClose}>Enregistrer comme brouillon</Button>
+          <Button variant="primary" onClick={handleSave}><CheckCircle2 size={17} /> Enregistrer</Button>
+          <Button onClick={handleSave}>Enregistrer comme brouillon</Button>
           <Button onClick={onClose}>Annuler</Button>
         </div>
       </section>

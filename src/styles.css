@@ -5425,6 +5425,40 @@ td:last-child {
   background: var(--orange-bg);
 }
 
+.sensitive-confirmation {
+  display: grid;
+  gap: 14px;
+  margin: 18px 0;
+  padding: 16px;
+  border: 1px solid rgba(201, 103, 0, 0.34);
+  border-left: 4px solid var(--orange);
+  border-radius: 10px;
+  color: #4b3000;
+  background: var(--orange-bg);
+}
+
+.sensitive-confirmation > div:first-child {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.sensitive-confirmation strong,
+.sensitive-confirmation small {
+  display: block;
+}
+
+.sensitive-confirmation strong {
+  line-height: 1.35;
+}
+
+.sensitive-confirmation small {
+  margin-top: 6px;
+  color: #705000;
+  font-size: 0.9rem;
+}
+
 .form-section {
   margin-top: 22px;
   padding-top: 18px;
