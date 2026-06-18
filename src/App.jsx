@@ -1868,6 +1868,34 @@ function App() {
     setActivePage("Biens");
   };
 
+  const handleTenantAttachment = ({ tenantName, tenantProfile, rent, deposit, entryDate, createContract }) => {
+    setSelectedProperty((current) => ({
+      ...current,
+      tenant: tenantName,
+      status: "Loué",
+      price: rent || current.price,
+      deposit: deposit || current.deposit,
+      attachedTenant: {
+        ...tenantProfile,
+        name: tenantName,
+        rent: rent || tenantProfile.rent || current.price,
+        deposit: deposit || tenantProfile.deposit || current.deposit,
+        entryDate,
+        contract: createContract ? "À créer maintenant" : "À créer",
+        paymentStatus: tenantProfile.paymentStatus ?? "À jour",
+      },
+      history: [
+        ...(current.history ?? []),
+        ["Locataire rattaché", `${tenantName} rattaché au bien. Statut passé à Loué.`, "18/06/2026"],
+      ],
+      lastAction: `Locataire ${tenantName} rattaché`,
+    }));
+    setPropertyTab("Locataire");
+    setPropertyView("detail");
+    setActivePage("Biens");
+    setModal(createContract ? "Créer contrat" : null);
+  };
+
   useEffect(() => {
     if (!demoActive) return;
 
@@ -2011,8 +2039,10 @@ function App() {
         <ChargeFormModal title={modal} onClose={() => setModal(null)} />
       ) : ["Ajouter un bien", "Modifier le bien"].includes(modal) ? (
         <PropertyFormModal title={modal} property={selectedProperty} onClose={() => setModal(null)} />
+      ) : modal === "Ajouter locataire" ? (
+        <AttachTenantModal property={selectedProperty} onClose={() => setModal(null)} onAttach={handleTenantAttachment} />
       ) : modal === "Créer contrat" ? (
-        <ContractFormModal onClose={() => setModal(null)} />
+        <ContractFormModal property={selectedProperty} tenant={selectedProperty.attachedTenant} onClose={() => setModal(null)} />
       ) : (
         <DemoModal title={modal} onClose={() => setModal(null)} />
       ))}
@@ -3131,7 +3161,7 @@ function PropertyOwner({ property }) {
 }
 
 function PropertyTenant({ property }) {
-  const tenant = tenants.find((item) => property.tenant.includes(item.name)) ?? tenants[0];
+  const tenant = property.attachedTenant ?? tenants.find((item) => property.tenant.includes(item.name)) ?? tenants[0];
   return (
     <section className="detail-grid">
       <Panel title="Locataire actuel" className="detail-main">
@@ -3144,7 +3174,7 @@ function PropertyTenant({ property }) {
           <Info label="Montant du loyer" value={tenant.rent} />
           <Info label="Caution" value={tenant.deposit} />
           <Info label="Situation de paiement" value={tenant.paymentStatus} />
-          <Info label="Date d'entrée" value="01/01/2026" />
+          <Info label="Date d'entrée" value={tenant.entryDate ?? "01/01/2026"} />
         </div>
       </Panel>
       <Panel title="Relances & documents" className="detail-side">
@@ -3287,10 +3317,12 @@ function PropertyDocuments({ property, onAction }) {
 }
 
 function PropertyHistory({ property }) {
+  const customHistory = property.history ?? [];
   return (
     <Panel title={`Historique - ${property.name}`}>
       <div className="timeline">
         {[
+          ...customHistory,
           ["Bien créé", "Dossier ouvert par Aïssata Diarra", "12/02/2026"],
           ["Statut modifié", `Passage en statut ${property.status}`, "18/03/2026"],
           ["Document généré", "Mandat de gestion exporté en PDF", "20/03/2026"],
@@ -7224,11 +7256,136 @@ function ChargeFormModal({ title, onClose }) {
   );
 }
 
-function ContractFormModal({ onClose }) {
+function AttachTenantModal({ property, onClose, onAttach }) {
+  const [mode, setMode] = useState("Locataire existant");
+  const [existingTenantName, setExistingTenantName] = useState(tenants[0].name);
+  const [contractNow, setContractNow] = useState("Oui");
+  const [existingValues, setExistingValues] = useState({
+    entryDate: "2026-06-18",
+    rent: property.price,
+    deposit: property.deposit,
+    observations: `Rattachement locataire au bien ${property.name}.`,
+  });
+  const [newValues, setNewValues] = useState({
+    name: "Nouveau locataire Bamako",
+    phone: "+223 76 00 00 00",
+    address: "Hamdallaye ACI, Bamako",
+    profession: "Cadre administratif",
+    identity: "Passeport / carte NINA",
+    entryDate: "2026-06-18",
+    deposit: property.deposit,
+    observations: `Création et rattachement au bien ${property.name}.`,
+  });
+  const selectedTenant = tenants.find((tenant) => tenant.name === existingTenantName) ?? tenants[0];
+
+  const updateExisting = (key, value) => setExistingValues((current) => ({ ...current, [key]: value }));
+  const updateNew = (key, value) => setNewValues((current) => ({ ...current, [key]: value }));
+
+  const submit = (forceContract = false) => {
+    const createContract = forceContract || (mode === "Locataire existant" && contractNow === "Oui");
+
+    if (mode === "Locataire existant") {
+      onAttach({
+        tenantName: selectedTenant.name,
+        tenantProfile: selectedTenant,
+        rent: existingValues.rent,
+        deposit: existingValues.deposit,
+        entryDate: existingValues.entryDate,
+        createContract,
+      });
+      return;
+    }
+
+    onAttach({
+      tenantName: newValues.name,
+      tenantProfile: {
+        id: `LOC-2026-${Math.floor(Math.random() * 80 + 120)}`,
+        name: newValues.name,
+        phone: newValues.phone,
+        email: "locataire@ekimmo.ml",
+        property: property.name,
+        owner: property.owner,
+        rent: property.price,
+        deposit: newValues.deposit,
+        contract: createContract ? "À créer maintenant" : "À créer",
+        paymentStatus: "À jour",
+        address: newValues.address,
+        profession: newValues.profession,
+        identity: newValues.identity,
+      },
+      rent: property.price,
+      deposit: newValues.deposit,
+      entryDate: newValues.entryDate,
+      createContract,
+    });
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal tenant-attach-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <h2>Rattacher un locataire</h2>
+        <p>Bien concerné : <strong>{property.name}</strong> · {property.address}</p>
+
+        <Segmented value={mode} onChange={setMode} options={["Locataire existant", "Nouveau locataire"]} />
+
+        {mode === "Locataire existant" ? (
+          <div className="form-section">
+            <h3>Cas 1 — Locataire existant</h3>
+            <div className="form-grid compact-form">
+              <label>Sélectionner locataire<select value={existingTenantName} onChange={(event) => setExistingTenantName(event.target.value)}>{tenants.map((tenant) => <option key={tenant.id}>{tenant.name}</option>)}</select></label>
+              <label>Date d'entrée<input type="date" value={existingValues.entryDate} onChange={(event) => updateExisting("entryDate", event.target.value)} /></label>
+              <label>Loyer mensuel<input value={existingValues.rent} onChange={(event) => updateExisting("rent", event.target.value)} /></label>
+              <label>Caution<input value={existingValues.deposit} onChange={(event) => updateExisting("deposit", event.target.value)} /></label>
+              <label>Contrat à créer maintenant ?<select value={contractNow} onChange={(event) => setContractNow(event.target.value)}><option>Oui</option><option>Non</option></select></label>
+              <label className="full">Observations<textarea value={existingValues.observations} onChange={(event) => updateExisting("observations", event.target.value)} /></label>
+            </div>
+            <div className="tenant-link-preview">
+              <Avatar name={selectedTenant.name} />
+              <span>
+                <strong>{selectedTenant.name}</strong>
+                <small>{selectedTenant.phone} · {selectedTenant.id}</small>
+              </span>
+              <Badge label={contractNow === "Oui" ? "Contrat à créer" : "Rattachement simple"} />
+            </div>
+          </div>
+        ) : (
+          <div className="form-section">
+            <h3>Cas 2 — Nouveau locataire</h3>
+            <div className="form-grid compact-form">
+              <label>Nom complet<input value={newValues.name} onChange={(event) => updateNew("name", event.target.value)} /></label>
+              <label>Téléphone<input value={newValues.phone} onChange={(event) => updateNew("phone", event.target.value)} /></label>
+              <label className="full">Adresse<input value={newValues.address} onChange={(event) => updateNew("address", event.target.value)} /></label>
+              <label>Profession<input value={newValues.profession} onChange={(event) => updateNew("profession", event.target.value)} /></label>
+              <label>Pièce d'identité<input value={newValues.identity} onChange={(event) => updateNew("identity", event.target.value)} /></label>
+              <label>Date d'entrée<input type="date" value={newValues.entryDate} onChange={(event) => updateNew("entryDate", event.target.value)} /></label>
+              <label>Caution<input value={newValues.deposit} onChange={(event) => updateNew("deposit", event.target.value)} /></label>
+              <label className="full">Observations<textarea value={newValues.observations} onChange={(event) => updateNew("observations", event.target.value)} /></label>
+            </div>
+          </div>
+        )}
+
+        <div className="sensitive-warning">
+          Après validation, le bien passe au statut Loué, l'onglet Locataire et l'historique sont mis à jour. Si un contrat est demandé, le formulaire de création de contrat s'ouvre ensuite.
+        </div>
+
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => submit(false)}><UsersRound size={17} /> Rattacher locataire</Button>
+          <Button onClick={() => submit(true)}><FileText size={17} /> Rattacher et créer contrat</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ContractFormModal({ property: initialProperty = properties[0], tenant: initialTenant = tenants[0], onClose }) {
   const [preview, setPreview] = useState(false);
-  const [propertyCode, setPropertyCode] = useState(properties[0].code);
-  const [tenantName, setTenantName] = useState(tenants[0].name);
-  const [values, setValues] = useState(() => getDocumentDefaults("bail", { property: properties[0], owner: owners[0], tenant: tenants[0] }));
+  const initialOwner = owners.find((item) => item.name === initialProperty.owner) ?? owners[0];
+  const tenantOptions = Array.from(new Set([initialTenant?.name, ...tenants.map((tenant) => tenant.name), ...prospects.map((prospect) => prospect.name)].filter(Boolean)));
+  const [propertyCode, setPropertyCode] = useState(initialProperty.code);
+  const [tenantName, setTenantName] = useState(initialTenant?.name ?? tenants[0].name);
+  const [values, setValues] = useState(() => getDocumentDefaults("bail", { property: initialProperty, owner: initialOwner, tenant: initialTenant ?? tenants[0] }));
 
   const updateLease = (name, value) => {
     setValues((current) => ({ ...current, [name]: value }));
@@ -7237,7 +7394,7 @@ function ContractFormModal({ onClose }) {
   const handlePropertyChange = (code) => {
     const property = properties.find((item) => item.code === code) ?? properties[0];
     const owner = owners.find((item) => item.name === property.owner) ?? owners[0];
-    const tenant = tenants.find((item) => item.name === tenantName) ?? tenants[0];
+    const tenant = initialTenant?.name === tenantName ? initialTenant : tenants.find((item) => item.name === tenantName) ?? tenants[0];
     const nextDefaults = getDocumentDefaults("bail", { property, owner, tenant });
 
     setPropertyCode(code);
@@ -7258,7 +7415,7 @@ function ContractFormModal({ onClose }) {
   const handleTenantChange = (name) => {
     const property = properties.find((item) => item.code === propertyCode) ?? properties[0];
     const owner = owners.find((item) => item.name === property.owner) ?? owners[0];
-    const tenant = tenants.find((item) => item.name === name) ?? tenants[0];
+    const tenant = initialTenant?.name === name ? initialTenant : tenants.find((item) => item.name === name) ?? tenants[0];
     const nextDefaults = getDocumentDefaults("bail", { property, owner, tenant });
 
     setTenantName(name);
@@ -7284,7 +7441,7 @@ function ContractFormModal({ onClose }) {
             <label>Date de souscription<input value={values.souscritLe} onChange={(event) => updateLease("souscritLe", event.target.value)} /></label>
             <label>Bien concerné<select value={propertyCode} onChange={(event) => handlePropertyChange(event.target.value)}>{properties.map((property) => <option value={property.code} key={property.code}>{property.name}</option>)}</select></label>
             <label>Propriétaire / bailleur<select value={values.bailleurRep} onChange={(event) => updateLease("bailleurRep", event.target.value)}><option>M. Tidiane Niaro</option><option>Mamadou Keita</option><option>Sira Coulibaly</option><option>Foncière Mandé</option></select></label>
-            <label>Locataire ou client<select value={tenantName} onChange={(event) => handleTenantChange(event.target.value)}>{[...tenants.map((tenant) => tenant.name), ...prospects.map((prospect) => prospect.name)].map((name) => <option key={name}>{name}</option>)}</select></label>
+            <label>Locataire ou client<select value={tenantName} onChange={(event) => handleTenantChange(event.target.value)}>{tenantOptions.map((name) => <option key={name}>{name}</option>)}</select></label>
           </div>
         </div>
 

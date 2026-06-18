@@ -5459,6 +5459,32 @@ td:last-child {
   font-size: 0.9rem;
 }
 
+.tenant-attach-modal .segmented {
+  margin: 18px 0 4px;
+}
+
+.tenant-link-preview {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.tenant-link-preview strong,
+.tenant-link-preview small {
+  display: block;
+}
+
+.tenant-link-preview small {
+  margin-top: 3px;
+  color: var(--muted);
+}
+
 .form-section {
   margin-top: 22px;
   padding-top: 18px;
