@@ -1616,6 +1616,92 @@ function getAgencyRentRows() {
   return rentRows.filter((row) => isAgencyCollectedProperty(row.property));
 }
 
+function getPaymentKey(item) {
+  return `${item.period}|${item.tenant}|${item.property}`;
+}
+
+function getPaymentStatus(expected, paid) {
+  const expectedAmount = parseFCFA(expected);
+  const paidAmount = parseFCFA(paid);
+  if (paidAmount >= expectedAmount && expectedAmount > 0) return "Payé";
+  if (paidAmount > 0) return "Partiel";
+  return "En retard";
+}
+
+function mergeRentRowsWithPayments(baseRows, extraPayments = []) {
+  const rows = [...baseRows];
+
+  extraPayments.forEach((payment) => {
+    const key = getPaymentKey(payment);
+    const existingIndex = rows.findIndex((row) => getPaymentKey(row) === key);
+    const expected = payment.due ?? payment.expected;
+    const paid = payment.paid;
+    const balance = payment.balance ?? formatFCFA(Math.max(parseFCFA(expected) - parseFCFA(paid), 0));
+    const status = payment.status ?? getPaymentStatus(expected, paid);
+    const nextRow = {
+      period: payment.period,
+      tenant: payment.tenant,
+      property: payment.property,
+      owner: payment.owner,
+      expected,
+      paid,
+      balance,
+      status,
+    };
+
+    if (existingIndex >= 0) {
+      rows[existingIndex] = { ...rows[existingIndex], ...nextRow };
+    } else {
+      rows.unshift(nextRow);
+    }
+  });
+
+  return rows;
+}
+
+function mergePaymentRecords(baseRecords, extraPayments = []) {
+  const records = [...baseRecords];
+
+  extraPayments.forEach((payment) => {
+    const key = getPaymentKey(payment);
+    const existingIndex = records.findIndex((item) => getPaymentKey(item) === key);
+    if (existingIndex >= 0) {
+      records[existingIndex] = { ...records[existingIndex], ...payment };
+    } else {
+      records.unshift(payment);
+    }
+  });
+
+  return records;
+}
+
+function shouldOpenPaymentModal(label) {
+  const text = normalizeSearch(label);
+  if (text.includes("reversement") || text.includes("commission") || text.includes("rattacher") || text.includes("fiche paiement")) return false;
+  return ["enregistrer paiement", "enregistrer un paiement", "paiement enregistre"].includes(text) || text.startsWith("paiement ");
+}
+
+function getPaymentReceiptValues(payment) {
+  const isMobileMoney = ["Orange Money", "Moov Money"].includes(payment.mode);
+
+  return {
+    numero: payment.receipt,
+    date: payment.date,
+    nom: payment.tenant,
+    structure: payment.property,
+    telephone: tenants.find((tenant) => tenant.name === payment.tenant)?.phone ?? "+223 72 77 71 77",
+    montantChiffres: payment.amountNow ?? payment.paid,
+    montantLettres: "Montant encaissé pour loyer en francs CFA",
+    espece: payment.mode === "Espèces",
+    cheque: payment.mode === "Chèque",
+    virement: payment.mode === "Virement",
+    mobileMoney: isMobileMoney,
+    objet: `Encaissement ${payment.period} - ${payment.property}`,
+    lieu: "Bamako",
+    agent: "Aïssata Diarra",
+  };
+}
+
 function isSensitiveAction(title) {
   const text = normalizeSearch(title);
   return [
@@ -1824,13 +1910,38 @@ function App() {
   const [selectedTenant, setSelectedTenant] = useState(tenants[0]);
   const [contractTab, setContractTab] = useState("Contrats");
   const [generatedContracts, setGeneratedContracts] = useState([]);
+  const [recordedPayments, setRecordedPayments] = useState([]);
+  const [paymentContext, setPaymentContext] = useState(null);
+  const [receiptPreviewValues, setReceiptPreviewValues] = useState(null);
   const [financeTab, setFinanceTab] = useState("Loyers");
   const [adminTab, setAdminTab] = useState("Utilisateurs");
   const [reportType, setReportType] = useState(reports[0][0]);
   const demoStep = demoSteps[demoIndex];
   const allContracts = useMemo(() => [...generatedContracts, ...contracts], [generatedContracts]);
+  const allPayments = useMemo(() => mergePaymentRecords(paymentRecords, recordedPayments), [recordedPayments]);
+  const allRentRows = useMemo(() => mergeRentRowsWithPayments(rentRows, recordedPayments), [recordedPayments]);
 
-  const openAction = (label) => setModal(label);
+  const openAction = (label, context = {}) => {
+    if (shouldOpenPaymentModal(label)) {
+      const normalizedLabel = normalizeSearch(label);
+      const tenantFromLabel = normalizedLabel.startsWith("paiement ")
+        ? label.replace(/^paiement\s+/i, "").trim()
+        : "";
+      const rowFromLabel = tenantFromLabel
+        ? allRentRows.find((row) => normalizeSearch(row.tenant) === normalizeSearch(tenantFromLabel))
+        : null;
+
+      setPaymentContext({
+        property: context.property ?? (context.row || rowFromLabel ? properties.find((property) => property.name === (context.row ?? rowFromLabel).property) : selectedProperty),
+        row: context.row ?? rowFromLabel ?? null,
+        payment: context.payment ?? null,
+      });
+      setModal("Enregistrer paiement");
+      return;
+    }
+
+    setModal(label);
+  };
 
   const startDemo = () => {
     setDemoIndex(0);
@@ -1919,6 +2030,38 @@ function App() {
     }));
     setPropertyTab("Contrats");
     setContractTab("Archives");
+  };
+
+  const handlePaymentRegistration = (payment) => {
+    const paymentKey = getPaymentKey(payment);
+
+    setRecordedPayments((current) => {
+      const existingIndex = current.findIndex((item) => getPaymentKey(item) === paymentKey);
+      if (existingIndex >= 0) {
+        return current.map((item, index) => (index === existingIndex ? payment : item));
+      }
+      return [payment, ...current];
+    });
+
+    setSelectedProperty((current) => current.name === payment.property ? {
+      ...current,
+      lastPayment: `${payment.paid} le ${payment.date}`,
+      lastAction: `Paiement ${payment.status.toLowerCase()} enregistré`,
+      history: [
+        ...(current.history ?? []),
+        ["Paiement enregistré", `${payment.amountNow ?? payment.paid} encaissé pour ${payment.period}.`, payment.date],
+      ],
+    } : current);
+
+    setPropertyTab("Paiements");
+    setFinanceTab("Paiements");
+    if (payment.receipt && payment.receipt !== "Non généré") {
+      setReceiptPreviewValues(getPaymentReceiptValues(payment));
+      setContractTab("Archives");
+      setModal("Aperçu reçu paiement");
+    } else {
+      setModal(null);
+    }
   };
 
   useEffect(() => {
@@ -2028,6 +2171,8 @@ function App() {
             onBack={() => setPropertyView("list")}
             onAction={openAction}
             contractsList={allContracts}
+            paymentsList={allPayments}
+            rentRowsList={allRentRows}
           />
         )}
         {activePage === "Clients" && (
@@ -2040,10 +2185,12 @@ function App() {
             onTenant={setSelectedTenant}
             onAction={openAction}
             contractsList={allContracts}
+            paymentsList={allPayments}
+            rentRowsList={allRentRows}
           />
         )}
-        {activePage === "Contrats" && <ContractsPage activeTab={contractTab} onTab={setContractTab} onAction={openAction} contractsList={allContracts} />}
-        {activePage === "Finance" && <FinancePage activeTab={financeTab} onTab={setFinanceTab} onAction={openAction} />}
+        {activePage === "Contrats" && <ContractsPage activeTab={contractTab} onTab={setContractTab} onAction={openAction} contractsList={allContracts} paymentsList={allPayments} />}
+        {activePage === "Finance" && <FinancePage activeTab={financeTab} onTab={setFinanceTab} onAction={openAction} paymentsList={allPayments} rentRowsList={allRentRows} />}
         {activePage === "Rapports" && (
           <ReportsPage selected={reportType} onSelect={setReportType} onAction={openAction} />
         )}
@@ -2070,6 +2217,15 @@ function App() {
         <AttachTenantModal property={selectedProperty} onClose={() => setModal(null)} onAttach={handleTenantAttachment} />
       ) : modal === "Créer contrat" ? (
         <ContractFormModal property={selectedProperty} tenant={selectedProperty.attachedTenant} onGenerate={handleContractGeneration} onClose={() => setModal(null)} />
+      ) : modal === "Enregistrer paiement" ? (
+        <PaymentRegistrationModal context={paymentContext} paymentsList={allPayments} rentRowsList={allRentRows} onSave={handlePaymentRegistration} onClose={() => setModal(null)} />
+      ) : modal === "Aperçu reçu paiement" && receiptPreviewValues ? (
+        <DocumentPreviewModal
+          template={documentTemplates.find((item) => item.key === "recu") ?? documentTemplates[1]}
+          values={receiptPreviewValues}
+          onChange={(name, value) => setReceiptPreviewValues((current) => ({ ...current, [name]: value }))}
+          onClose={() => setModal(null)}
+        />
       ) : (
         <DemoModal title={modal} onClose={() => setModal(null)} />
       ))}
@@ -2501,6 +2657,8 @@ function PropertiesPage({
   onBack,
   onAction,
   contractsList = contracts,
+  paymentsList = paymentRecords,
+  rentRowsList = rentRows,
 }) {
   const [statusFilter, setStatusFilter] = useState("Tous statuts");
   const [typeFilter, setTypeFilter] = useState("Tous types");
@@ -2635,6 +2793,8 @@ function PropertiesPage({
         onOpenProperty={onSelect}
         onAction={onAction}
         contractsList={contractsList}
+        paymentsList={paymentsList}
+        rentRowsList={rentRowsList}
       />
     );
   }
@@ -2790,7 +2950,7 @@ function PropertyCard({ property, onSelect }) {
   );
 }
 
-function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, onAction, contractsList = contracts }) {
+function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows }) {
   const hasHierarchy = isBuildingProperty(property) || Boolean(property.parentCode);
   const tabs = ["Résumé", ...(hasHierarchy ? ["Lots & blocs"] : []), "Propriétaire", "Locataire", "Contrats", "Paiements", "Charges & entretiens", "Documents", "Historique"];
   const effectiveTab = tabs.includes(activeTab) ? activeTab : "Résumé";
@@ -2844,9 +3004,15 @@ function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, on
           <Button onClick={() => onAction("Créer contrat")}>
             <FileText size={17} /> Créer contrat
           </Button>
-          <Button onClick={() => onAction("Enregistrer paiement")}>
-            <Banknote size={17} /> Paiement
-          </Button>
+          {isAgencyCollectedProperty(property.name) ? (
+            <Button onClick={() => onAction("Enregistrer paiement", { property })}>
+              <Banknote size={17} /> Paiement
+            </Button>
+          ) : (
+            <Button onClick={() => onAction("Enregistrer paiement", { property })}>
+              <Banknote size={17} /> Paiement
+            </Button>
+          )}
           <Button onClick={() => onAction("Ajouter entretien")}>
             <Wrench size={17} /> Ajouter entretien
           </Button>
@@ -2871,7 +3037,7 @@ function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, on
           ["Statut", property.status],
           ["Contrat", contractsList.find((contract) => contract.property === property.name)?.status ?? "À créer"],
           ["Structure", getPropertyStructureSummary(property)],
-          ["Dernier paiement", paymentRecords.find((payment) => payment.property === property.name)?.paid ?? "N/A"],
+          ["Dernier paiement", paymentsList.find((payment) => payment.property === property.name)?.paid ?? "N/A"],
           ["Prochaine action", property.lastAction],
           ["Documents", "8 pièces"],
         ]}
@@ -2883,7 +3049,7 @@ function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, on
       {effectiveTab === "Propriétaire" && <PropertyOwner property={property} />}
       {effectiveTab === "Locataire" && <PropertyTenant property={property} />}
       {effectiveTab === "Contrats" && <PropertyContracts property={property} contractsList={contractsList} />}
-      {effectiveTab === "Paiements" && <PropertyPayments property={property} />}
+      {effectiveTab === "Paiements" && <PropertyPayments property={property} rentRowsList={rentRowsList} />}
       {effectiveTab === "Charges & entretiens" && <PropertyMaintenance property={property} />}
       {effectiveTab === "Documents" && <PropertyDocuments property={property} onAction={onAction} />}
       {effectiveTab === "Historique" && <PropertyHistory property={property} />}
@@ -3252,13 +3418,12 @@ function PropertyContracts({ property, contractsList = contracts }) {
   );
 }
 
-function PropertyPayments({ property }) {
+function PropertyPayments({ property, rentRowsList = rentRows }) {
   if (!isAgencyCollectedProperty(property.name)) {
     return (
       <Panel title="Paiements liés au bien">
         <div className="notice">
-          Encaissement effectué directement par le propriétaire. Ce bien reste suivi pour les visites, documents,
-          charges et entretiens, mais il n'apparaît pas comme loyer à encaisser par E.K immo.
+          Ce bien est en encaissement direct par le propriétaire. Aucun paiement agence ne peut être enregistré.
         </div>
       </Panel>
     );
@@ -3268,7 +3433,8 @@ function PropertyPayments({ property }) {
     <Panel title="Paiements liés au bien">
       <DataTable
         columns={["Période", "Locataire", "Montant attendu", "Montant payé", "Solde", "Statut"]}
-        rows={getAgencyRentRows()
+        rows={rentRowsList
+          .filter((row) => isAgencyCollectedProperty(row.property))
           .filter((row) => row.property === property.name || row.owner === property.owner)
           .map((row) => [row.period, row.tenant, row.expected, row.paid, row.balance, <Badge label={row.status} />])}
       />
@@ -3369,7 +3535,7 @@ function PropertyHistory({ property }) {
   );
 }
 
-function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, selectedTenant, onTenant, onAction, contractsList = contracts }) {
+function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, selectedTenant, onTenant, onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows }) {
   const tabs = ["Propriétaires", "Locataires", "Prospects", "Visites"];
   const [detailView, setDetailView] = useState(null);
   const [selectedProspect, setSelectedProspect] = useState(prospects[0]);
@@ -3403,11 +3569,11 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, selectedTenant,
 
   const detailContent = detailView === "owner" ? (
     <DetailPageShell title="Fiche propriétaire" subtitle={selectedOwner.name} onBack={closeDetail}>
-      <OwnerProfilePanel owner={selectedOwner} onAction={onAction} contractsList={contractsList} />
+      <OwnerProfilePanel owner={selectedOwner} onAction={onAction} contractsList={contractsList} paymentsList={paymentsList} />
     </DetailPageShell>
   ) : detailView === "tenant" ? (
     <DetailPageShell title="Fiche locataire" subtitle={selectedTenant.name} onBack={closeDetail}>
-      <TenantProfilePanel tenant={selectedTenant} onAction={onAction} contractsList={contractsList} />
+      <TenantProfilePanel tenant={selectedTenant} onAction={onAction} contractsList={contractsList} rentRowsList={rentRowsList} />
     </DetailPageShell>
   ) : detailView === "prospect" ? (
     <DetailPageShell title="Fiche prospect" subtitle={selectedProspect.name} onBack={closeDetail}>
@@ -3448,7 +3614,7 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, selectedTenant,
         </div>
       </Panel>
       {activeTab === "Propriétaires" && <OwnersView selected={selectedOwner} onOpenDetail={(owner) => openDetail("owner", owner)} />}
-      {activeTab === "Locataires" && <TenantsView onOpenDetail={(tenant) => openDetail("tenant", tenant)} />}
+      {activeTab === "Locataires" && <TenantsView onOpenDetail={(tenant) => openDetail("tenant", tenant)} rentRowsList={rentRowsList} />}
       {activeTab === "Prospects" && <ProspectsView onOpenDetail={(prospect) => openDetail("prospect", prospect)} onAction={onAction} />}
       {activeTab === "Visites" && <VisitsView onOpenDetail={(visit) => openDetail("visit", visit)} onAction={onAction} />}
         </>
@@ -3528,12 +3694,15 @@ function OwnersView({ selected, onOpenDetail }) {
   );
 }
 
-function OwnerProfilePanel({ owner, onAction, contractsList = contracts }) {
+function OwnerProfilePanel({ owner, onAction, contractsList = contracts, paymentsList = paymentRecords }) {
   const [tab, setTab] = useState("Résumé");
   const ownedProperties = properties.filter((property) => property.owner === owner.name);
   const ownerCharges = charges.filter((charge) => charge.owner === owner.name);
   const ownerReversals = reversals.filter((reversal) => reversal.owner === owner.name);
   const ownerContracts = contractsList.filter((contract) => contract.owner === owner.name);
+  const ownerPayments = paymentsList.filter((payment) => payment.owner === owner.name);
+  const collectedForOwner = ownerPayments.reduce((sum, payment) => sum + parseFCFA(payment.paid), 0);
+  const lastOwnerPayment = ownerPayments[0];
   const tabs = ["Résumé", "Biens", "Situation financière", "Charges", "Reversements", "Documents", "Historique"];
 
   return (
@@ -3542,7 +3711,7 @@ function OwnerProfilePanel({ owner, onAction, contractsList = contracts }) {
       <DetailMetrics
         items={[
           ["Biens confiés", owner.properties],
-          ["Loyers encaissés", owner.rent],
+          ["Loyers encaissés", ownerPayments.length ? formatFCFA(collectedForOwner) : owner.rent],
           ["Charges", owner.charges],
           ["Commissions", owner.commission],
           ["Solde à reverser", owner.balance],
@@ -3582,11 +3751,12 @@ function OwnerProfilePanel({ owner, onAction, contractsList = contracts }) {
       )}
       {tab === "Situation financière" && (
         <div className="simple-list">
-          <p><span>Loyers encaissés pour son compte</span><strong>{owner.rent}</strong></p>
+          <p><span>Loyers encaissés pour son compte</span><strong>{ownerPayments.length ? formatFCFA(collectedForOwner) : owner.rent}</strong></p>
           <p><span>Commissions retenues</span><strong>{owner.commission}</strong></p>
           <p><span>Charges déduites</span><strong>{owner.charges}</strong></p>
           <p><span>Reversements effectués</span><strong>{owner.lastPayment}</strong></p>
           <p><span>Solde restant à reverser</span><strong>{owner.balance}</strong></p>
+          <p><span>Dernier paiement agence</span><strong>{lastOwnerPayment ? `${lastOwnerPayment.paid} · ${lastOwnerPayment.tenant}` : "Aucun nouveau paiement"}</strong></p>
         </div>
       )}
       {tab === "Charges" && (
@@ -3657,7 +3827,7 @@ function OwnerProfilePanel({ owner, onAction, contractsList = contracts }) {
   );
 }
 
-function TenantsView({ onOpenDetail }) {
+function TenantsView({ onOpenDetail, rentRowsList = rentRows }) {
   return (
     <section className="client-list-workspace">
       <Panel title="Liste des locataires">
@@ -3672,7 +3842,7 @@ function TenantsView({ onOpenDetail }) {
             tenant.property,
             properties.find((property) => property.name === tenant.property)?.owner ?? "-",
             tenant.rent,
-            tenant.paymentStatus === "À jour" ? "0 FCFA" : rentRows.find((row) => row.tenant === tenant.name)?.balance ?? "0 FCFA",
+            rentRowsList.find((row) => row.tenant === tenant.name)?.balance ?? (tenant.paymentStatus === "À jour" ? "0 FCFA" : "0 FCFA"),
             tenant.contract,
             <Badge label={tenant.paymentStatus} />,
             <Button compact onClick={() => onOpenDetail(tenant)}><Eye size={15} /> Fiche</Button>,
@@ -3683,12 +3853,12 @@ function TenantsView({ onOpenDetail }) {
   );
 }
 
-function TenantProfilePanel({ tenant, onAction, contractsList = contracts }) {
+function TenantProfilePanel({ tenant, onAction, contractsList = contracts, rentRowsList = rentRows }) {
   const [tab, setTab] = useState("Résumé");
   const property = properties.find((item) => item.name === tenant.property) ?? properties[0];
   const tenantContracts = contractsList.filter((item) => item.client === tenant.name);
   const contract = tenantContracts.find((item) => item.number === tenant.contract) ?? tenantContracts[0] ?? contracts.find((item) => item.number === tenant.contract) ?? contracts[0];
-  const paymentRows = rentRows.filter((row) => row.tenant === tenant.name);
+  const paymentRows = rentRowsList.filter((row) => row.tenant === tenant.name);
   const tabs = ["Résumé", "Contrat", "Paiements", "Impayés & relances", "Documents"];
 
   return (
@@ -3763,7 +3933,7 @@ function TenantProfilePanel({ tenant, onAction, contractsList = contracts }) {
         <Button onClick={() => onAction("Modifier locataire")}>
           <Pencil size={17} /> Modifier
         </Button>
-        <Button variant="primary" onClick={() => onAction("Paiement enregistré")}>
+        <Button variant="primary" onClick={() => onAction("Enregistrer paiement", { row: paymentRows[0], property })}>
           <Banknote size={17} /> Enregistrer paiement
         </Button>
         <Button onClick={() => onAction("Générer reçu")}>
@@ -3942,7 +4112,7 @@ function VisitProfilePanel({ visit, onAction }) {
   );
 }
 
-function ContractsPage({ activeTab, onTab, onAction, contractsList = contracts }) {
+function ContractsPage({ activeTab, onTab, onAction, contractsList = contracts, paymentsList = paymentRecords }) {
   const tabs = ["Contrats", "Génération de document", "Archives"];
   const effectiveTab = activeTab === "Factures & reçus" ? "Archives" : activeTab;
   return (
@@ -3953,7 +4123,7 @@ function ContractsPage({ activeTab, onTab, onAction, contractsList = contracts }
       <Tabs tabs={tabs} active={effectiveTab} onChange={onTab} demo="contract-tabs" />
       {effectiveTab === "Contrats" && <ContractsList onAction={onAction} contractsList={contractsList} />}
       {effectiveTab === "Génération de document" && <DocumentGeneration onAction={onAction} />}
-      {effectiveTab === "Archives" && <ArchivesView onAction={onAction} contractsList={contractsList} />}
+      {effectiveTab === "Archives" && <ArchivesView onAction={onAction} contractsList={contractsList} paymentsList={paymentsList} />}
     </>
   );
 }
@@ -4171,7 +4341,7 @@ function InvoicesView({ onAction }) {
   );
 }
 
-function getArchiveRecords(contractsList = contracts) {
+function getArchiveRecords(contractsList = contracts, paymentsList = paymentRecords) {
   const contractArchives = contractsList
     .filter((contract) => contract.generated || ["Archivé", "Expiré"].includes(contract.status))
     .map((contract) => ({
@@ -4198,7 +4368,7 @@ function getArchiveRecords(contractsList = contracts) {
     owner: invoice.client,
   }));
 
-  const receiptArchives = paymentRecords
+  const receiptArchives = paymentsList
     .filter((payment) => payment.receipt && payment.receipt !== "Non généré")
     .map((payment) => ({
       id: `payment-${payment.reference}`,
@@ -4370,8 +4540,8 @@ function getArchiveCategoryIcon(category) {
   return Archive;
 }
 
-function ArchivesView({ onAction, contractsList = contracts }) {
-  const records = useMemo(() => getArchiveRecords(contractsList), [contractsList]);
+function ArchivesView({ onAction, contractsList = contracts, paymentsList = paymentRecords }) {
+  const records = useMemo(() => getArchiveRecords(contractsList, paymentsList), [contractsList, paymentsList]);
   const [category, setCategory] = useState("Tous les éléments");
   const [status, setStatus] = useState("Tous statuts");
   const [query, setQuery] = useState("");
@@ -4849,6 +5019,7 @@ function DigitalReceipt({ values, onChange }) {
         <DigitalCheck name="espece" label="Espèces" values={values} onChange={onChange} />
         <DigitalCheck name="cheque" label="Chèque" values={values} onChange={onChange} />
         <DigitalCheck name="virement" label="Virement" values={values} onChange={onChange} />
+        <DigitalCheck name="mobileMoney" label="Mobile Money" values={values} onChange={onChange} />
       </section>
 
       <section className="digital-box">
@@ -5216,6 +5387,7 @@ function OriginalReceiptDocument({ values }) {
             <ReceiptMethod label="en espèce" checked={values.espece} />
             <ReceiptMethod label="par chèque" checked={values.cheque} />
             <ReceiptMethod label="par virement" checked={values.virement} />
+            <ReceiptMethod label="Mobile Money" checked={values.mobileMoney} />
           </div>
           <ReceiptLine label="Objet :" value={values.objet} className="tall" />
           <ReceiptLine label="A :" value={values.lieu} />
@@ -5555,6 +5727,7 @@ function getDocumentDefaults(key, data = {}) {
       espece: payment.mode === "Espèces",
       cheque: payment.mode === "Chèque",
       virement: payment.mode === "Virement",
+      mobileMoney: ["Orange Money", "Moov Money"].includes(payment.mode),
       objet: `Encaissement ${payment.period} - ${invoice.property}`,
       lieu: "Bamako",
       agent: "Aïssata Diarra",
@@ -5711,11 +5884,12 @@ function InvoiceActions({ invoice, onAction }) {
   );
 }
 
-function FinancePage({ activeTab, onTab, onAction }) {
+function FinancePage({ activeTab, onTab, onAction, paymentsList = paymentRecords, rentRowsList = rentRows }) {
   const tabs = ["Loyers", "Paiements", "Impayés", "Commissions", "Charges", "Entretiens", "Reversements"];
   const effectiveTab = tabs.includes(activeTab) ? activeTab : "Loyers";
-  const agencyRentRows = getAgencyRentRows();
+  const agencyRentRows = rentRowsList.filter((row) => isAgencyCollectedProperty(row.property));
   const financeActions = {
+    Paiements: <Button variant="primary" onClick={() => onAction("Enregistrer paiement", { row: agencyRentRows[0] })}><Banknote size={17} /> Enregistrer un paiement</Button>,
     Charges: <Button variant="primary" onClick={() => onAction("Ajouter une charge")}><Plus size={17} /> Ajouter une charge</Button>,
     Entretiens: <Button variant="primary" onClick={() => onAction("Ajouter un entretien")}><Wrench size={17} /> Ajouter un entretien</Button>,
     Reversements: <Button variant="primary" onClick={() => onAction("Préparer un reversement")}><RefreshCw size={17} /> Préparer un reversement</Button>,
@@ -5729,8 +5903,8 @@ function FinancePage({ activeTab, onTab, onAction }) {
       />
       <Tabs tabs={tabs} active={effectiveTab} onChange={onTab} demo="finance-tabs" />
       {effectiveTab === "Loyers" && <FinanceTable title="Loyers attendus par E.K immo" rows={agencyRentRows.map((row) => [row.period, row.tenant, row.property, row.owner, row.expected, row.paid, row.balance, <Badge label={row.status} />, <RentActions row={row} onAction={onAction} />])} columns={["Période", "Locataire", "Bien", "Propriétaire", "Attendu", "Payé", "Solde", "Statut", "Actions"]} />}
-      {effectiveTab === "Paiements" && <PaymentForm onAction={onAction} />}
-      {effectiveTab === "Impayés" && <ArrearsView onAction={onAction} />}
+      {effectiveTab === "Paiements" && <PaymentForm onAction={onAction} paymentsList={paymentsList} rentRowsList={rentRowsList} />}
+      {effectiveTab === "Impayés" && <ArrearsView onAction={onAction} rentRowsList={rentRowsList} />}
       {effectiveTab === "Commissions" && <CommissionsView onAction={onAction} />}
       {effectiveTab === "Charges" && <ChargesView onAction={onAction} />}
       {effectiveTab === "Entretiens" && <MaintenancesView onAction={onAction} />}
@@ -5742,7 +5916,7 @@ function FinancePage({ activeTab, onTab, onAction }) {
 function RentActions({ row, onAction }) {
   return (
     <div className="table-actions">
-      <Button compact onClick={() => onAction(`Paiement ${row.tenant}`)}><Banknote size={15} /> Paiement</Button>
+      <Button compact onClick={() => onAction(`Paiement ${row.tenant}`, { row })}><Banknote size={15} /> Paiement</Button>
       <Button compact onClick={() => onAction(`Détail loyer ${row.tenant}`)}><Eye size={15} /> Détail</Button>
       <Button compact onClick={() => onAction(`État loyer ${row.tenant}`)}><FileText size={15} /> État</Button>
       <Button compact onClick={() => onAction(`Relance ${row.tenant}`)}><Bell size={15} /> Relance</Button>
@@ -6331,10 +6505,10 @@ function ReversalProfilePanel({ reversal, onAction }) {
   );
 }
 
-function PaymentForm({ onAction }) {
+function PaymentForm({ onAction, paymentsList = paymentRecords, rentRowsList = rentRows }) {
   const agencyProperties = properties.filter((property) => isAgencyCollectedProperty(property.name));
-  const paymentRows = paymentRecords.filter((payment) => isAgencyCollectedProperty(payment.property));
-  const [selected, setSelected] = useState(paymentRows[0] ?? paymentRecords[0]);
+  const paymentRows = paymentsList.filter((payment) => isAgencyCollectedProperty(payment.property));
+  const [selected, setSelected] = useState(paymentRows[0] ?? paymentsList[0] ?? paymentRecords[0]);
   const [receiptNumber, setReceiptNumber] = useState(selected.receipt);
   const modes = paymentModes.includes(selected.mode) ? paymentModes : [selected.mode, ...paymentModes];
 
@@ -6372,7 +6546,7 @@ function PaymentForm({ onAction }) {
           <label className="full">Observations<textarea defaultValue={selected.note} /></label>
         </div>
         <div className="action-row compact-row">
-          <Button variant="primary" onClick={() => onAction("Paiement enregistré")}><CheckCircle2 size={17} /> Valider</Button>
+          <Button variant="primary" onClick={() => onAction("Enregistrer paiement", { payment: selected, row: rentRowsList.find((row) => row.tenant === selected.tenant && row.property === selected.property) })}><CheckCircle2 size={17} /> Enregistrer paiement</Button>
           <Button onClick={() => onAction("Générer reçu")}><ReceiptText size={17} /> Générer reçu</Button>
           <Button onClick={() => onAction("Imprimer reçu")}><Printer size={17} /> Imprimer reçu</Button>
           <Button onClick={() => onAction("Annuler paiement")}><XCircle size={17} /> Annuler</Button>
@@ -6414,8 +6588,8 @@ function PaymentForm({ onAction }) {
   );
 }
 
-function ArrearsView({ onAction }) {
-  const rows = getAgencyRentRows().filter((row) => row.status === "Partiel" || row.status === "Impayé");
+function ArrearsView({ onAction, rentRowsList = rentRows }) {
+  const rows = rentRowsList.filter((row) => isAgencyCollectedProperty(row.property)).filter((row) => row.status === "Partiel" || row.status === "Impayé" || row.status === "En retard");
   const [selected, setSelected] = useState(rows[0]);
   const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
 
@@ -6472,7 +6646,7 @@ function ArrearsProfilePanel({ row, onAction }) {
         <Button variant="primary" onClick={() => onAction("Ajouter relance")}><Bell size={17} /> Ajouter relance</Button>
         <Button onClick={() => onAction("Promesse de paiement")}><FileText size={17} /> Promesse</Button>
         <Button onClick={() => onAction("Changer statut relance")}><RefreshCw size={17} /> Changer statut</Button>
-        <Button onClick={() => onAction("Enregistrer paiement")}><Banknote size={17} /> Paiement</Button>
+        <Button onClick={() => onAction("Enregistrer paiement", { row })}><Banknote size={17} /> Paiement</Button>
         <Button onClick={() => onAction("État impayé")}><FileText size={17} /> État impayé</Button>
         <Button onClick={() => onAction("Marquer régularisé")}><CheckCircle2 size={17} /> Régularisé</Button>
         <Button onClick={() => onAction("Historique relance")}><History size={17} /> Historique</Button>
@@ -7411,6 +7585,137 @@ function AttachTenantModal({ property, onClose, onAttach }) {
           <Button onClick={onClose}>Annuler</Button>
           <Button variant="primary" onClick={() => submit(false)}><UsersRound size={17} /> Rattacher locataire</Button>
           <Button onClick={() => submit(true)}><FileText size={17} /> Rattacher et créer contrat</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function PaymentRegistrationModal({ context, paymentsList = paymentRecords, rentRowsList = rentRows, onSave, onClose }) {
+  const contextRow = context?.row;
+  const contextPayment = context?.payment;
+  const initialProperty = context?.property ?? properties.find((property) => property.name === contextRow?.property || property.name === contextPayment?.property) ?? properties[0];
+  const isDirectCollection = !isAgencyCollectedProperty(initialProperty.name);
+  const initialTenant = contextRow?.tenant ?? contextPayment?.tenant ?? initialProperty.tenant ?? tenants[0].name;
+  const initialRow = contextRow
+    ?? rentRowsList.find((row) => row.property === initialProperty.name && row.tenant === initialTenant)
+    ?? rentRowsList.find((row) => row.property === initialProperty.name)
+    ?? {
+      period: "Juin 2026",
+      tenant: initialTenant,
+      property: initialProperty.name,
+      owner: initialProperty.owner,
+      expected: initialProperty.price,
+      paid: "0 FCFA",
+      balance: initialProperty.price,
+      status: "En retard",
+    };
+  const initialPayment = contextPayment
+    ?? paymentsList.find((payment) => payment.property === initialRow.property && payment.tenant === initialRow.tenant && payment.period === initialRow.period);
+  const [period, setPeriod] = useState(initialRow.period);
+  const [expected, setExpected] = useState(initialPayment?.due ?? initialRow.expected ?? initialProperty.price);
+  const [alreadyPaid, setAlreadyPaid] = useState(initialPayment?.paid ?? initialRow.paid ?? "0 FCFA");
+  const [paidNow, setPaidNow] = useState(initialRow.balance && parseFCFA(initialRow.balance) > 0 ? initialRow.balance : "0 FCFA");
+  const [mode, setMode] = useState(initialPayment?.mode ?? "Orange Money");
+  const [paymentRef, setPaymentRef] = useState(initialPayment?.paymentRef ?? "OM-2026-NEW");
+  const [paymentDate, setPaymentDate] = useState(initialPayment?.date ?? "18/06/2026");
+  const [note, setNote] = useState(initialPayment?.note ?? "Paiement enregistré depuis la fiche métier E.K immo.");
+  const [autoReceipt, setAutoReceipt] = useState(true);
+  const expectedAmount = parseFCFA(expected);
+  const alreadyPaidAmount = parseFCFA(alreadyPaid);
+  const paidNowAmount = parseFCFA(paidNow);
+  const totalPaidAmount = Math.min(expectedAmount || alreadyPaidAmount + paidNowAmount, alreadyPaidAmount + paidNowAmount);
+  const remainingAmount = Math.max(expectedAmount - totalPaidAmount, 0);
+  const totalPaid = formatFCFA(totalPaidAmount);
+  const remaining = formatFCFA(remainingAmount);
+  const status = getPaymentStatus(expected, totalPaid);
+  const tenant = tenants.find((item) => item.name === initialTenant);
+  const receiptNumber = initialPayment?.receipt && initialPayment.receipt !== "Non généré"
+    ? initialPayment.receipt
+    : makeDocumentNumber("REC", paymentsList.length + 101);
+
+  const submit = (forceReceipt = false) => {
+    const shouldGenerateReceipt = forceReceipt || autoReceipt;
+    const payment = {
+      reference: initialPayment?.reference ?? makeDocumentNumber("PAY", paymentsList.length + 101),
+      period,
+      tenant: initialTenant,
+      property: initialProperty.name,
+      owner: initialProperty.owner,
+      due: expected,
+      paid: totalPaid,
+      amountNow: formatFCFA(paidNowAmount),
+      balance: remaining,
+      mode,
+      paymentRef,
+      date: paymentDate,
+      receipt: shouldGenerateReceipt ? receiptNumber : "Non généré",
+      status,
+      note,
+    };
+
+    onSave(payment);
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal payment-registration-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Bien : {initialProperty.name}</span>
+            <h2>Enregistrer un paiement</h2>
+            <p>Locataire : {initialTenant}</p>
+          </div>
+          <Badge label={isDirectCollection ? "Encaissement direct propriétaire" : status} />
+        </div>
+
+        {isDirectCollection ? (
+          <div className="notice direct-payment-notice">
+            Ce bien est en encaissement direct par le propriétaire. Aucun paiement agence ne peut être enregistré.
+          </div>
+        ) : (
+          <>
+            <div className="form-section">
+              <h3>Montants</h3>
+              <div className="form-grid compact-form">
+                <label>Période concernée<input value={period} onChange={(event) => setPeriod(event.target.value)} /></label>
+                <label>Loyer attendu<input value={expected} onChange={(event) => setExpected(event.target.value)} /></label>
+                <label>Montant déjà payé<input value={alreadyPaid} onChange={(event) => setAlreadyPaid(event.target.value)} /></label>
+                <label>Montant payé maintenant<input value={paidNow} onChange={(event) => setPaidNow(event.target.value)} /></label>
+                <label>Solde restant calculé automatiquement<input value={remaining} readOnly /></label>
+                <label>Statut automatique<input value={status} readOnly /></label>
+              </div>
+            </div>
+
+            <div className="form-section">
+              <h3>Paiement</h3>
+              <div className="form-grid compact-form">
+                <label>Mode de paiement<select value={mode} onChange={(event) => setMode(event.target.value)}>{paymentModes.map((item) => <option key={item}>{item}</option>)}</select></label>
+                <label>Référence de paiement<input value={paymentRef} onChange={(event) => setPaymentRef(event.target.value)} /></label>
+                <label>Date de paiement<input value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} /></label>
+                <label>Locataire<input value={tenant?.name ?? initialTenant} readOnly /></label>
+                <label className="full">Observations<textarea value={note} onChange={(event) => setNote(event.target.value)} /></label>
+              </div>
+            </div>
+
+            <div className="form-section">
+              <h3>Document</h3>
+              <label className="check-card">
+                <input type="checkbox" checked={autoReceipt} onChange={(event) => setAutoReceipt(event.target.checked)} />
+                <span>
+                  <strong>Générer reçu automatiquement</strong>
+                  <small>{receiptNumber} · avec case Mobile Money pour Orange Money et Moov Money.</small>
+                </span>
+              </label>
+            </div>
+          </>
+        )}
+
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          {!isDirectCollection && <Button variant="primary" onClick={() => submit(false)}><CheckCircle2 size={17} /> Enregistrer paiement</Button>}
+          {!isDirectCollection && <Button onClick={() => submit(true)}><ReceiptText size={17} /> Enregistrer et générer reçu</Button>}
         </div>
       </section>
     </div>

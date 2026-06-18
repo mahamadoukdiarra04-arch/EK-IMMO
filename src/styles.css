@@ -5518,6 +5518,71 @@ td:last-child {
   width: min(1240px, 100%);
 }
 
+.payment-registration-modal {
+  width: min(1080px, 100%);
+}
+
+.payment-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding-right: 38px;
+}
+
+.payment-modal-head span {
+  display: inline-flex;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.payment-modal-head h2 {
+  margin-bottom: 6px;
+}
+
+.payment-modal-head p {
+  margin: 0;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.check-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel-soft);
+}
+
+.check-card input {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  accent-color: var(--primary);
+}
+
+.check-card span {
+  display: grid;
+  gap: 4px;
+}
+
+.check-card strong {
+  color: var(--ink);
+}
+
+.check-card small {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.direct-payment-notice {
+  margin-top: 26px;
+  font-size: 1.02rem;
+}
+
 .demo-tour {
   position: fixed;
   inset: 0;
