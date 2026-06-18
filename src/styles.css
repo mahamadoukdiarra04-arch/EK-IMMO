@@ -5522,6 +5522,10 @@ td:last-child {
   width: min(1080px, 100%);
 }
 
+.maintenance-modal {
+  width: min(1120px, 100%);
+}
+
 .payment-modal-head {
   display: flex;
   align-items: flex-start;
@@ -5581,6 +5585,36 @@ td:last-child {
 .direct-payment-notice {
   margin-top: 26px;
   font-size: 1.02rem;
+}
+
+.document-upload-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.document-upload-grid label {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  background: var(--panel-soft);
+  color: var(--ink);
+  font-weight: 850;
+}
+
+.document-upload-grid input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.document-upload-grid small {
+  color: var(--muted);
+  font-weight: 700;
 }
 
 .demo-tour {

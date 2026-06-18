@@ -1681,6 +1681,45 @@ function shouldOpenPaymentModal(label) {
   return ["enregistrer paiement", "enregistrer un paiement", "paiement enregistre"].includes(text) || text.startsWith("paiement ");
 }
 
+function shouldOpenMaintenanceModal(label) {
+  const text = normalizeSearch(label);
+  if (text.includes("visite") || text.includes("charge") || text.includes("justificatif") || text.includes("photos")) return false;
+  return ["ajouter entretien", "ajouter un entretien", "planifier entretien"].includes(text) || text.startsWith("planifier ");
+}
+
+function makeMaintenanceCharge(maintenance, sequence = 1) {
+  const property = getPropertyByName(maintenance.property) ?? properties[0];
+  const payer = maintenance.payer === "À déterminer" ? "À valider" : maintenance.payer;
+
+  return {
+    id: makeDocumentNumber("CHG", 200 + sequence),
+    date: maintenance.date,
+    type: maintenance.type,
+    category: "Entretien",
+    description: maintenance.note,
+    property: maintenance.property,
+    owner: property.owner,
+    tenant: property.tenant,
+    amount: maintenance.realCost && maintenance.realCost !== "0 FCFA" ? maintenance.realCost : maintenance.cost,
+    payer,
+    status: "À valider",
+    proof: maintenance.proof || "Justificatif à joindre",
+    proofStatus: maintenance.proof ? "Présent" : "Manquant",
+    period: "Juin 2026",
+    agent: maintenance.manager,
+    paymentMode: "À déterminer",
+    paymentRef: "À compléter",
+    linkedMaintenance: maintenance.type,
+    impact: payer === "Agence" ? "Supportée par l'agence" : payer === "Propriétaire" ? "À déduire du reversement propriétaire" : payer === "Locataire" ? "À refacturer au locataire" : "À déterminer après validation",
+    ownerCollection: false,
+    createdBy: maintenance.manager,
+    modifiedBy: maintenance.manager,
+    validatedBy: "À confirmer",
+    validationDate: "À valider",
+    history: [`Créée automatiquement depuis l'entretien ${maintenance.reference}`],
+  };
+}
+
 function getPaymentReceiptValues(payment) {
   const isMobileMoney = ["Orange Money", "Moov Money"].includes(payment.mode);
 
@@ -1913,6 +1952,10 @@ function App() {
   const [recordedPayments, setRecordedPayments] = useState([]);
   const [paymentContext, setPaymentContext] = useState(null);
   const [receiptPreviewValues, setReceiptPreviewValues] = useState(null);
+  const [scheduledMaintenances, setScheduledMaintenances] = useState([]);
+  const [maintenanceCharges, setMaintenanceCharges] = useState([]);
+  const [maintenanceContext, setMaintenanceContext] = useState(null);
+  const [propertyHistoryOverrides, setPropertyHistoryOverrides] = useState({});
   const [financeTab, setFinanceTab] = useState("Loyers");
   const [adminTab, setAdminTab] = useState("Utilisateurs");
   const [reportType, setReportType] = useState(reports[0][0]);
@@ -1920,6 +1963,8 @@ function App() {
   const allContracts = useMemo(() => [...generatedContracts, ...contracts], [generatedContracts]);
   const allPayments = useMemo(() => mergePaymentRecords(paymentRecords, recordedPayments), [recordedPayments]);
   const allRentRows = useMemo(() => mergeRentRowsWithPayments(rentRows, recordedPayments), [recordedPayments]);
+  const allMaintenances = useMemo(() => [...scheduledMaintenances, ...maintenances], [scheduledMaintenances]);
+  const allCharges = useMemo(() => [...maintenanceCharges, ...charges], [maintenanceCharges]);
 
   const openAction = (label, context = {}) => {
     if (shouldOpenPaymentModal(label)) {
@@ -1937,6 +1982,15 @@ function App() {
         payment: context.payment ?? null,
       });
       setModal("Enregistrer paiement");
+      return;
+    }
+
+    if (shouldOpenMaintenanceModal(label)) {
+      setMaintenanceContext({
+        property: context.property ?? selectedProperty,
+        maintenance: context.maintenance ?? null,
+      });
+      setModal("Ajouter entretien");
       return;
     }
 
@@ -2064,6 +2118,38 @@ function App() {
     }
   };
 
+  const handleMaintenanceSchedule = ({ maintenance, createCharge }) => {
+    const sequence = scheduledMaintenances.length + 1;
+    const nextMaintenance = {
+      ...maintenance,
+      reference: maintenance.reference ?? makeDocumentNumber("ENT", 80 + sequence),
+    };
+
+    setScheduledMaintenances((current) => [nextMaintenance, ...current]);
+
+    if (createCharge) {
+      setMaintenanceCharges((current) => [makeMaintenanceCharge(nextMaintenance, current.length + 1), ...current]);
+    }
+
+    setPropertyHistoryOverrides((current) => ({
+      ...current,
+      [nextMaintenance.property]: [
+        ["Entretien planifié", `${nextMaintenance.type} prévu le ${nextMaintenance.date}.`, "18/06/2026"],
+        ...(createCharge ? [["Charge créée", `Charge liée à l'entretien ${nextMaintenance.type}.`, "18/06/2026"]] : []),
+        ...(current[nextMaintenance.property] ?? []),
+      ],
+    }));
+
+    setSelectedProperty((current) => current.name === nextMaintenance.property ? {
+      ...current,
+      lastAction: `Entretien ${nextMaintenance.type} planifié`,
+    } : current);
+
+    setPropertyTab("Charges & entretiens");
+    setFinanceTab(createCharge ? "Charges" : "Entretiens");
+    setModal(null);
+  };
+
   useEffect(() => {
     if (!demoActive) return;
 
@@ -2173,6 +2259,9 @@ function App() {
             contractsList={allContracts}
             paymentsList={allPayments}
             rentRowsList={allRentRows}
+            chargesList={allCharges}
+            maintenancesList={allMaintenances}
+            propertyHistoryOverrides={propertyHistoryOverrides}
           />
         )}
         {activePage === "Clients" && (
@@ -2190,7 +2279,7 @@ function App() {
           />
         )}
         {activePage === "Contrats" && <ContractsPage activeTab={contractTab} onTab={setContractTab} onAction={openAction} contractsList={allContracts} paymentsList={allPayments} />}
-        {activePage === "Finance" && <FinancePage activeTab={financeTab} onTab={setFinanceTab} onAction={openAction} paymentsList={allPayments} rentRowsList={allRentRows} />}
+        {activePage === "Finance" && <FinancePage activeTab={financeTab} onTab={setFinanceTab} onAction={openAction} paymentsList={allPayments} rentRowsList={allRentRows} chargesList={allCharges} maintenancesList={allMaintenances} />}
         {activePage === "Rapports" && (
           <ReportsPage selected={reportType} onSelect={setReportType} onAction={openAction} />
         )}
@@ -2219,6 +2308,8 @@ function App() {
         <ContractFormModal property={selectedProperty} tenant={selectedProperty.attachedTenant} onGenerate={handleContractGeneration} onClose={() => setModal(null)} />
       ) : modal === "Enregistrer paiement" ? (
         <PaymentRegistrationModal context={paymentContext} paymentsList={allPayments} rentRowsList={allRentRows} onSave={handlePaymentRegistration} onClose={() => setModal(null)} />
+      ) : modal === "Ajouter entretien" ? (
+        <MaintenanceFormModal context={maintenanceContext} onSave={handleMaintenanceSchedule} onClose={() => setModal(null)} />
       ) : modal === "Aperçu reçu paiement" && receiptPreviewValues ? (
         <DocumentPreviewModal
           template={documentTemplates.find((item) => item.key === "recu") ?? documentTemplates[1]}
@@ -2659,6 +2750,9 @@ function PropertiesPage({
   contractsList = contracts,
   paymentsList = paymentRecords,
   rentRowsList = rentRows,
+  chargesList = charges,
+  maintenancesList = maintenances,
+  propertyHistoryOverrides = {},
 }) {
   const [statusFilter, setStatusFilter] = useState("Tous statuts");
   const [typeFilter, setTypeFilter] = useState("Tous types");
@@ -2795,6 +2889,9 @@ function PropertiesPage({
         contractsList={contractsList}
         paymentsList={paymentsList}
         rentRowsList={rentRowsList}
+        chargesList={chargesList}
+        maintenancesList={maintenancesList}
+        historyItems={propertyHistoryOverrides[selectedProperty.name] ?? []}
       />
     );
   }
@@ -2950,7 +3047,7 @@ function PropertyCard({ property, onSelect }) {
   );
 }
 
-function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows }) {
+function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, chargesList = charges, maintenancesList = maintenances, historyItems = [] }) {
   const hasHierarchy = isBuildingProperty(property) || Boolean(property.parentCode);
   const tabs = ["Résumé", ...(hasHierarchy ? ["Lots & blocs"] : []), "Propriétaire", "Locataire", "Contrats", "Paiements", "Charges & entretiens", "Documents", "Historique"];
   const effectiveTab = tabs.includes(activeTab) ? activeTab : "Résumé";
@@ -3013,7 +3110,7 @@ function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, on
               <Banknote size={17} /> Paiement
             </Button>
           )}
-          <Button onClick={() => onAction("Ajouter entretien")}>
+          <Button onClick={() => onAction("Ajouter entretien", { property })}>
             <Wrench size={17} /> Ajouter entretien
           </Button>
           <Button onClick={() => onAction("Ajouter charge")}>
@@ -3050,9 +3147,9 @@ function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, on
       {effectiveTab === "Locataire" && <PropertyTenant property={property} />}
       {effectiveTab === "Contrats" && <PropertyContracts property={property} contractsList={contractsList} />}
       {effectiveTab === "Paiements" && <PropertyPayments property={property} rentRowsList={rentRowsList} />}
-      {effectiveTab === "Charges & entretiens" && <PropertyMaintenance property={property} />}
+      {effectiveTab === "Charges & entretiens" && <PropertyMaintenance property={property} chargesList={chargesList} maintenancesList={maintenancesList} />}
       {effectiveTab === "Documents" && <PropertyDocuments property={property} onAction={onAction} />}
-      {effectiveTab === "Historique" && <PropertyHistory property={property} />}
+      {effectiveTab === "Historique" && <PropertyHistory property={property} historyItems={historyItems} />}
     </>
   );
 }
@@ -3442,9 +3539,9 @@ function PropertyPayments({ property, rentRowsList = rentRows }) {
   );
 }
 
-function PropertyMaintenance({ property }) {
-  const propertyCharges = charges.filter((item) => item.property === property.name);
-  const propertyMaintenances = maintenances.filter((item) => item.property === property.name);
+function PropertyMaintenance({ property, chargesList = charges, maintenancesList = maintenances }) {
+  const propertyCharges = chargesList.filter((item) => item.property === property.name);
+  const propertyMaintenances = maintenancesList.filter((item) => item.property === property.name);
   const rows = [
     ...propertyCharges.map((item) => ({
       date: item.date,
@@ -3462,7 +3559,7 @@ function PropertyMaintenance({ property }) {
       manager: item.manager,
       amount: item.cost,
       payer: item.payer,
-      proof: "Justificatif à joindre",
+      proof: item.proof ?? "Justificatif à joindre",
       status: item.status,
       kind: "Entretien",
     })),
@@ -3512,8 +3609,8 @@ function PropertyDocuments({ property, onAction }) {
   );
 }
 
-function PropertyHistory({ property }) {
-  const customHistory = property.history ?? [];
+function PropertyHistory({ property, historyItems = [] }) {
+  const customHistory = [...historyItems, ...(property.history ?? [])];
   return (
     <Panel title={`Historique - ${property.name}`}>
       <div className="timeline">
@@ -5884,7 +5981,7 @@ function InvoiceActions({ invoice, onAction }) {
   );
 }
 
-function FinancePage({ activeTab, onTab, onAction, paymentsList = paymentRecords, rentRowsList = rentRows }) {
+function FinancePage({ activeTab, onTab, onAction, paymentsList = paymentRecords, rentRowsList = rentRows, chargesList = charges, maintenancesList = maintenances }) {
   const tabs = ["Loyers", "Paiements", "Impayés", "Commissions", "Charges", "Entretiens", "Reversements"];
   const effectiveTab = tabs.includes(activeTab) ? activeTab : "Loyers";
   const agencyRentRows = rentRowsList.filter((row) => isAgencyCollectedProperty(row.property));
@@ -5906,8 +6003,8 @@ function FinancePage({ activeTab, onTab, onAction, paymentsList = paymentRecords
       {effectiveTab === "Paiements" && <PaymentForm onAction={onAction} paymentsList={paymentsList} rentRowsList={rentRowsList} />}
       {effectiveTab === "Impayés" && <ArrearsView onAction={onAction} rentRowsList={rentRowsList} />}
       {effectiveTab === "Commissions" && <CommissionsView onAction={onAction} />}
-      {effectiveTab === "Charges" && <ChargesView onAction={onAction} />}
-      {effectiveTab === "Entretiens" && <MaintenancesView onAction={onAction} />}
+      {effectiveTab === "Charges" && <ChargesView onAction={onAction} chargesList={chargesList} />}
+      {effectiveTab === "Entretiens" && <MaintenancesView onAction={onAction} maintenancesList={maintenancesList} />}
       {effectiveTab === "Reversements" && <ReversalsView onAction={onAction} />}
     </>
   );
@@ -6063,8 +6160,8 @@ function getChargeImpactLabel(charge) {
   return "Suivi interne uniquement";
 }
 
-function ChargesView({ onAction }) {
-  const [selected, setSelected] = useState(charges[0]);
+function ChargesView({ onAction, chargesList = charges }) {
+  const [selected, setSelected] = useState(chargesList[0] ?? charges[0]);
   const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
   const [query, setQuery] = useState("");
   const [period, setPeriod] = useState("Toutes périodes");
@@ -6080,7 +6177,7 @@ function ChargesView({ onAction }) {
 
   const filteredCharges = useMemo(() => {
     const normalizedQuery = normalizeSearch(query);
-    return charges.filter((charge) => {
+    return chargesList.filter((charge) => {
       const amount = parseFCFA(charge.amount);
       const matchesAmount =
         amountRange === "Tous montants" ||
@@ -6102,7 +6199,7 @@ function ChargesView({ onAction }) {
         chargeMatchesQuickFilter(charge, quickFilter)
       );
     });
-  }, [agent, amountRange, owner, payer, period, property, query, quickFilter, status, tenant, type]);
+  }, [agent, amountRange, chargesList, owner, payer, period, property, query, quickFilter, status, tenant, type]);
 
   useEffect(() => {
     if (filteredCharges.length === 0) return;
@@ -6112,15 +6209,15 @@ function ChargesView({ onAction }) {
   }, [filteredCharges, selected.id]);
 
   const chargeStats = useMemo(() => {
-    const currentMonthCharges = charges.filter((charge) => charge.period === "Juin 2026");
+    const currentMonthCharges = chargesList.filter((charge) => charge.period === "Juin 2026");
     return [
       ["Total charges du mois", formatFCFA(currentMonthCharges.reduce((sum, charge) => sum + parseFCFA(charge.amount), 0)), "Toutes les sorties enregistrées sur juin 2026.", ReceiptText],
-      ["Charges agence", formatFCFA(charges.filter((charge) => charge.payer === "Agence").reduce((sum, charge) => sum + parseFCFA(charge.amount), 0)), "Dépenses prises en charge directement par E.K immo.", Banknote],
-      ["Charges propriétaires", formatFCFA(charges.filter((charge) => charge.payer === "Propriétaire").reduce((sum, charge) => sum + parseFCFA(charge.amount), 0)), "Montants imputés aux propriétaires concernés.", HandCoins],
-      ["Charges refacturables", formatFCFA(charges.filter((charge) => charge.payer.includes("Locataire")).reduce((sum, charge) => sum + parseFCFA(charge.amount), 0)), "Sommes récupérables auprès des locataires ou dossiers.", WalletCards],
-      ["Charges à valider", String(charges.filter((charge) => ["À valider", "En attente", "Brouillon"].includes(charge.status)).length), "Dossiers encore à contrôler avant paiement ou archive.", AlertTriangle],
+      ["Charges agence", formatFCFA(chargesList.filter((charge) => charge.payer === "Agence").reduce((sum, charge) => sum + parseFCFA(charge.amount), 0)), "Dépenses prises en charge directement par E.K immo.", Banknote],
+      ["Charges propriétaires", formatFCFA(chargesList.filter((charge) => charge.payer === "Propriétaire").reduce((sum, charge) => sum + parseFCFA(charge.amount), 0)), "Montants imputés aux propriétaires concernés.", HandCoins],
+      ["Charges refacturables", formatFCFA(chargesList.filter((charge) => charge.payer.includes("Locataire")).reduce((sum, charge) => sum + parseFCFA(charge.amount), 0)), "Sommes récupérables auprès des locataires ou dossiers.", WalletCards],
+      ["Charges à valider", String(chargesList.filter((charge) => ["À valider", "En attente", "Brouillon"].includes(charge.status)).length), "Dossiers encore à contrôler avant paiement ou archive.", AlertTriangle],
     ];
-  }, []);
+  }, [chargesList]);
 
   const openCharge = (charge) => {
     setSelected(charge);
@@ -6153,15 +6250,15 @@ function ChargesView({ onAction }) {
             <Search size={19} />
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Rechercher une charge, un bien, un agent..." />
           </label>
-          <select value={period} onChange={(event) => setPeriod(event.target.value)}><option>Toutes périodes</option>{uniqueValues(charges.map((charge) => charge.period)).map((item) => <option key={item}>{item}</option>)}</select>
+          <select value={period} onChange={(event) => setPeriod(event.target.value)}><option>Toutes périodes</option>{uniqueValues(chargesList.map((charge) => charge.period)).map((item) => <option key={item}>{item}</option>)}</select>
           <select value={type} onChange={(event) => setType(event.target.value)}><option>Tous types</option>{chargeTypes.map((item) => <option key={item}>{item}</option>)}</select>
-          <select value={property} onChange={(event) => setProperty(event.target.value)}><option>Tous biens</option>{uniqueValues(charges.map((charge) => charge.property)).map((item) => <option key={item}>{item}</option>)}</select>
-          <select value={owner} onChange={(event) => setOwner(event.target.value)}><option>Tous propriétaires</option>{uniqueValues(charges.map((charge) => charge.owner)).map((item) => <option key={item}>{item}</option>)}</select>
-          <select value={tenant} onChange={(event) => setTenant(event.target.value)}><option>Tous locataires</option>{uniqueValues(charges.map((charge) => charge.tenant)).map((item) => <option key={item}>{item}</option>)}</select>
+          <select value={property} onChange={(event) => setProperty(event.target.value)}><option>Tous biens</option>{uniqueValues(chargesList.map((charge) => charge.property)).map((item) => <option key={item}>{item}</option>)}</select>
+          <select value={owner} onChange={(event) => setOwner(event.target.value)}><option>Tous propriétaires</option>{uniqueValues(chargesList.map((charge) => charge.owner)).map((item) => <option key={item}>{item}</option>)}</select>
+          <select value={tenant} onChange={(event) => setTenant(event.target.value)}><option>Tous locataires</option>{uniqueValues(chargesList.map((charge) => charge.tenant)).map((item) => <option key={item}>{item}</option>)}</select>
           <select value={payer} onChange={(event) => setPayer(event.target.value)}><option>Toutes prises en charge</option>{chargePayers.map((item) => <option key={item}>{item}</option>)}</select>
           <select value={status} onChange={(event) => setStatus(event.target.value)}><option>Tous statuts</option>{chargeStatuses.map((item) => <option key={item}>{item}</option>)}</select>
           <select value={amountRange} onChange={(event) => setAmountRange(event.target.value)}><option>Tous montants</option><option>Moins de 50 000 FCFA</option><option>50 000 à 200 000 FCFA</option><option>Plus de 200 000 FCFA</option></select>
-          <select value={agent} onChange={(event) => setAgent(event.target.value)}><option>Tous agents</option>{uniqueValues(charges.map((charge) => charge.agent)).map((item) => <option key={item}>{item}</option>)}</select>
+          <select value={agent} onChange={(event) => setAgent(event.target.value)}><option>Tous agents</option>{uniqueValues(chargesList.map((charge) => charge.agent)).map((item) => <option key={item}>{item}</option>)}</select>
           <Button onClick={() => {
             setQuery("");
             setPeriod("Toutes périodes");
@@ -6342,8 +6439,8 @@ function ChargeProfilePanel({ charge, onAction }) {
   );
 }
 
-function MaintenancesView({ onAction }) {
-  const [selected, setSelected] = useState(maintenances[0]);
+function MaintenancesView({ onAction, maintenancesList = maintenances }) {
+  const [selected, setSelected] = useState(maintenancesList[0] ?? maintenances[0]);
   const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
 
   const openMaintenance = (row) => {
@@ -6364,15 +6461,15 @@ function MaintenancesView({ onAction }) {
       <Panel title="Entretiens prévus ou réalisés">
         <DataTable
           columns={["Bien", "Type", "Date prévue", "Responsable", "Coût estimé", "Coût réel", "Prise en charge", "Justificatif", "Statut", "Action"]}
-          rows={maintenances.map((row) => [
+          rows={maintenancesList.map((row) => [
             row.property,
             row.type,
             row.date,
             row.manager,
             row.cost,
-            row.status === "En cours" ? "À confirmer" : row.cost,
+            row.realCost ?? (row.status === "En cours" ? "À confirmer" : row.cost),
             row.payer,
-            "Justificatif à joindre",
+            row.proof ?? "Justificatif à joindre",
             <Badge label={row.status} />,
             <Button compact onClick={() => openMaintenance(row)}><Eye size={16} /> Fiche</Button>,
           ])}
@@ -6403,18 +6500,18 @@ function MaintenanceProfilePanel({ maintenance, onAction }) {
         <p><span>Type d'entretien</span><strong>{maintenance.type}</strong></p>
         <p><span>Description</span><strong>{maintenance.note}</strong></p>
         <p><span>Responsable</span><strong>{maintenance.manager}</strong></p>
-        <p><span>Prestataire</span><strong>Prestataire local agréé</strong></p>
+        <p><span>Prestataire</span><strong>{maintenance.provider ?? "Prestataire local agréé"}</strong></p>
         <p><span>Date prévue</span><strong>{maintenance.date}</strong></p>
         <p><span>Date réalisée</span><strong>{maintenance.status === "Terminé" ? maintenance.date : "À confirmer"}</strong></p>
         <p><span>Coût estimé</span><strong>{maintenance.cost}</strong></p>
-        <p><span>Coût réel</span><strong>{maintenance.status === "En cours" ? "À confirmer" : maintenance.cost}</strong></p>
+        <p><span>Coût réel</span><strong>{maintenance.realCost ?? (maintenance.status === "En cours" ? "À confirmer" : maintenance.cost)}</strong></p>
         <p><span>Prise en charge</span><strong>{maintenance.payer}</strong></p>
         <p><span>Justificatif</span><Badge label="À valider" /></p>
         <p><span>Observations</span><strong>{maintenance.note}</strong></p>
         <p><span>Statut</span><Badge label={maintenance.status} /></p>
       </div>
       <div className="stack-actions">
-        <Button variant="primary" onClick={() => onAction(`Planifier ${maintenance.type}`)}><CalendarDays size={17} /> Planifier</Button>
+        <Button variant="primary" onClick={() => onAction("Planifier entretien", { maintenance, property })}><CalendarDays size={17} /> Planifier</Button>
         <Button onClick={() => onAction(`Modifier ${maintenance.type}`)}><Pencil size={17} /> Modifier</Button>
         <Button onClick={() => onAction(`Affecter responsable ${maintenance.type}`)}><UserCog size={17} /> Responsable</Button>
         <Button onClick={() => onAction(`Ajouter coût ${maintenance.type}`)}><Banknote size={17} /> Ajouter coût</Button>
@@ -7716,6 +7813,114 @@ function PaymentRegistrationModal({ context, paymentsList = paymentRecords, rent
           <Button onClick={onClose}>Annuler</Button>
           {!isDirectCollection && <Button variant="primary" onClick={() => submit(false)}><CheckCircle2 size={17} /> Enregistrer paiement</Button>}
           {!isDirectCollection && <Button onClick={() => submit(true)}><ReceiptText size={17} /> Enregistrer et générer reçu</Button>}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function MaintenanceFormModal({ context, onSave, onClose }) {
+  const baseProperty = context?.property ?? getPropertyByName(context?.maintenance?.property) ?? properties[0];
+  const baseMaintenance = context?.maintenance;
+  const [propertyName, setPropertyName] = useState(baseMaintenance?.property ?? baseProperty.name);
+  const selectedProperty = getPropertyByName(propertyName) ?? baseProperty;
+  const suggestedProvider = selectedProperty.serviceProvider?.company ?? baseMaintenance?.provider ?? "";
+  const [type, setType] = useState(baseMaintenance?.type ?? "Plomberie");
+  const [description, setDescription] = useState(baseMaintenance?.note ?? "Décrire le besoin, la zone concernée et le résultat attendu.");
+  const [priority, setPriority] = useState(baseMaintenance?.priority ?? "Normale");
+  const [date, setDate] = useState(baseMaintenance?.date ?? "22/06/2026");
+  const [manager, setManager] = useState(baseMaintenance?.manager ?? "Mariam Traoré");
+  const [provider, setProvider] = useState(suggestedProvider);
+  const [estimatedCost, setEstimatedCost] = useState(baseMaintenance?.cost ?? "95 000 FCFA");
+  const [realCost, setRealCost] = useState(baseMaintenance?.realCost ?? "");
+  const [payer, setPayer] = useState(baseMaintenance?.payer ?? "Propriétaire");
+  const [createCharge, setCreateCharge] = useState("Oui");
+  const [proofName, setProofName] = useState(baseMaintenance?.proof ?? "");
+  const [beforePhotos, setBeforePhotos] = useState("");
+  const [afterPhotos, setAfterPhotos] = useState("");
+  const maintenanceTypes = ["Nettoyage", "Plomberie", "Électricité", "Peinture", "Réparation", "Inspection", "Autre"];
+  const priorities = ["Normale", "Urgente", "Critique"];
+  const managers = ["Mariam Traoré", "Aïssata Diarra", "Issa Maïga", "Cheick Camara"];
+  const payers = ["Agence", "Propriétaire", "Locataire", "À déterminer"];
+
+  useEffect(() => {
+    const nextProperty = getPropertyByName(propertyName);
+    if (nextProperty?.serviceProvider?.company && !baseMaintenance?.provider) {
+      setProvider(nextProperty.serviceProvider.company);
+    }
+  }, [baseMaintenance?.provider, propertyName]);
+
+  const submit = (forceCharge = false) => {
+    const maintenance = {
+      reference: baseMaintenance?.reference,
+      property: propertyName,
+      type,
+      date,
+      manager,
+      cost: estimatedCost,
+      realCost: realCost || undefined,
+      payer,
+      status: "Planifié",
+      note: description,
+      priority,
+      provider: provider || "Prestataire à confirmer",
+      proof: proofName || undefined,
+      beforePhotos: beforePhotos || undefined,
+      afterPhotos: afterPhotos || undefined,
+    };
+
+    onSave({ maintenance, createCharge: forceCharge || createCharge === "Oui" });
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal maintenance-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Bien : {propertyName}</span>
+            <h2>Ajouter un entretien</h2>
+            <p>Suivi technique, coût et charge liée pour E.K immo.</p>
+          </div>
+          <Badge label={priority} />
+        </div>
+
+        <div className="form-section">
+          <h3>Informations de l'entretien</h3>
+          <div className="form-grid compact-form">
+            <label>Bien concerné<select value={propertyName} onChange={(event) => setPropertyName(event.target.value)}>{properties.map((property) => <option key={property.code}>{property.name}</option>)}</select></label>
+            <label>Type d'entretien<select value={type} onChange={(event) => setType(event.target.value)}>{maintenanceTypes.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <label>Priorité<select value={priority} onChange={(event) => setPriority(event.target.value)}>{priorities.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <label>Date prévue<input value={date} onChange={(event) => setDate(event.target.value)} /></label>
+            <label>Responsable interne<select value={manager} onChange={(event) => setManager(event.target.value)}>{managers.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <label>Prestataire, si connu<input value={provider} onChange={(event) => setProvider(event.target.value)} placeholder="À confirmer" /></label>
+            <label className="full">Description du besoin<textarea value={description} onChange={(event) => setDescription(event.target.value)} /></label>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Coût & prise en charge</h3>
+          <div className="form-grid compact-form">
+            <label>Coût estimé<input value={estimatedCost} onChange={(event) => setEstimatedCost(event.target.value)} /></label>
+            <label>Coût réel, si déjà réalisé<input value={realCost} onChange={(event) => setRealCost(event.target.value)} placeholder="À confirmer" /></label>
+            <label>Prise en charge<select value={payer} onChange={(event) => setPayer(event.target.value)}>{payers.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <label>Créer automatiquement une charge liée ?<select value={createCharge} onChange={(event) => setCreateCharge(event.target.value)}><option>Oui</option><option>Non</option></select></label>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Documents</h3>
+          <div className="document-upload-grid">
+            <label>Justificatif<input type="file" onChange={(event) => setProofName(event.target.files?.[0]?.name ?? "")} /><small>{proofName || "Aucun fichier sélectionné"}</small></label>
+            <label>Photos avant<input type="file" multiple onChange={(event) => setBeforePhotos(`${event.target.files?.length ?? 0} photo(s) avant`)} /><small>{beforePhotos || "Aucune photo sélectionnée"}</small></label>
+            <label>Photos après<input type="file" multiple onChange={(event) => setAfterPhotos(`${event.target.files?.length ?? 0} photo(s) après`)} /><small>{afterPhotos || "Aucune photo sélectionnée"}</small></label>
+          </div>
+        </div>
+
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => submit(false)}><CalendarDays size={17} /> Planifier entretien</Button>
+          <Button onClick={() => submit(true)}><ReceiptText size={17} /> Planifier et créer charge</Button>
         </div>
       </section>
     </div>
