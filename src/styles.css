@@ -5617,6 +5617,80 @@ td:last-child {
   font-weight: 700;
 }
 
+.document-menu-backdrop {
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding-top: 96px;
+  padding-right: 42px;
+}
+
+.document-context-menu {
+  position: relative;
+  width: min(430px, calc(100vw - 32px));
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--panel);
+  box-shadow: var(--shadow-lg);
+}
+
+.document-context-menu > span {
+  color: var(--gold-dark);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.document-context-menu h2 {
+  margin: 8px 34px 8px 0;
+  font-size: 1.35rem;
+}
+
+.document-context-menu p {
+  margin: 0 0 18px;
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.document-menu-list {
+  display: grid;
+  gap: 10px;
+}
+
+.document-menu-list button {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-soft);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.document-menu-list button:hover {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.document-menu-list strong,
+.document-menu-list small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-menu-list small {
+  margin-top: 3px;
+  color: var(--muted);
+}
+
 .demo-tour {
   position: fixed;
   inset: 0;

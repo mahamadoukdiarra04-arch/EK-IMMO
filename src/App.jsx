@@ -1741,6 +1741,31 @@ function getPaymentReceiptValues(payment) {
   };
 }
 
+function getDocumentDataForProperty(property, paymentsList = paymentRecords) {
+  const owner = owners.find((item) => item.name === property.owner) ?? owners[0];
+  const tenant = tenants.find((item) => item.name === property.tenant) ?? tenants[0];
+  const payment = paymentsList.find((item) => item.property === property.name) ?? paymentRecords.find((item) => item.property === property.name) ?? paymentRecords[0];
+  const invoice = invoices.find((item) => item.property === property.name) ?? {
+    number: makeDocumentNumber("FAC", 90),
+    type: "Facture",
+    client: tenant.name,
+    property: property.name,
+    amount: property.price,
+    date: "18/06/2026",
+    status: "Brouillon",
+  };
+  const commission = commissions.find((item) => item.property === property.name || item.owner === owner.name) ?? commissions[0];
+
+  return {
+    invoice,
+    payment: payment ?? paymentRecords[0],
+    commission,
+    property,
+    owner,
+    tenant,
+  };
+}
+
 function isSensitiveAction(title) {
   const text = normalizeSearch(title);
   return [
@@ -1956,6 +1981,8 @@ function App() {
   const [maintenanceCharges, setMaintenanceCharges] = useState([]);
   const [maintenanceContext, setMaintenanceContext] = useState(null);
   const [propertyHistoryOverrides, setPropertyHistoryOverrides] = useState({});
+  const [documentContext, setDocumentContext] = useState(null);
+  const [documentDraft, setDocumentDraft] = useState(null);
   const [financeTab, setFinanceTab] = useState("Loyers");
   const [adminTab, setAdminTab] = useState("Utilisateurs");
   const [reportType, setReportType] = useState(reports[0][0]);
@@ -1991,6 +2018,12 @@ function App() {
         maintenance: context.maintenance ?? null,
       });
       setModal("Ajouter entretien");
+      return;
+    }
+
+    if (normalizeSearch(label) === "generer document") {
+      setDocumentContext({ property: context.property ?? selectedProperty });
+      setModal("Choisir document");
       return;
     }
 
@@ -2150,6 +2183,18 @@ function App() {
     setModal(null);
   };
 
+  const handleDocumentTemplateSelection = (templateKey) => {
+    const property = documentContext?.property ?? selectedProperty;
+    setDocumentDraft({
+      templateKey,
+      property,
+      data: getDocumentDataForProperty(property, allPayments),
+    });
+    setActivePage("Contrats");
+    setContractTab("Génération de document");
+    setModal(null);
+  };
+
   useEffect(() => {
     if (!demoActive) return;
 
@@ -2278,7 +2323,7 @@ function App() {
             rentRowsList={allRentRows}
           />
         )}
-        {activePage === "Contrats" && <ContractsPage activeTab={contractTab} onTab={setContractTab} onAction={openAction} contractsList={allContracts} paymentsList={allPayments} />}
+        {activePage === "Contrats" && <ContractsPage activeTab={contractTab} onTab={setContractTab} onAction={openAction} contractsList={allContracts} paymentsList={allPayments} documentDraft={documentDraft} />}
         {activePage === "Finance" && <FinancePage activeTab={financeTab} onTab={setFinanceTab} onAction={openAction} paymentsList={allPayments} rentRowsList={allRentRows} chargesList={allCharges} maintenancesList={allMaintenances} />}
         {activePage === "Rapports" && (
           <ReportsPage selected={reportType} onSelect={setReportType} onAction={openAction} />
@@ -2310,6 +2355,8 @@ function App() {
         <PaymentRegistrationModal context={paymentContext} paymentsList={allPayments} rentRowsList={allRentRows} onSave={handlePaymentRegistration} onClose={() => setModal(null)} />
       ) : modal === "Ajouter entretien" ? (
         <MaintenanceFormModal context={maintenanceContext} onSave={handleMaintenanceSchedule} onClose={() => setModal(null)} />
+      ) : modal === "Choisir document" ? (
+        <DocumentContextMenu property={documentContext?.property ?? selectedProperty} onSelect={handleDocumentTemplateSelection} onClose={() => setModal(null)} />
       ) : modal === "Aperçu reçu paiement" && receiptPreviewValues ? (
         <DocumentPreviewModal
           template={documentTemplates.find((item) => item.key === "recu") ?? documentTemplates[1]}
@@ -4209,7 +4256,7 @@ function VisitProfilePanel({ visit, onAction }) {
   );
 }
 
-function ContractsPage({ activeTab, onTab, onAction, contractsList = contracts, paymentsList = paymentRecords }) {
+function ContractsPage({ activeTab, onTab, onAction, contractsList = contracts, paymentsList = paymentRecords, documentDraft = null }) {
   const tabs = ["Contrats", "Génération de document", "Archives"];
   const effectiveTab = activeTab === "Factures & reçus" ? "Archives" : activeTab;
   return (
@@ -4219,7 +4266,7 @@ function ContractsPage({ activeTab, onTab, onAction, contractsList = contracts, 
       />
       <Tabs tabs={tabs} active={effectiveTab} onChange={onTab} demo="contract-tabs" />
       {effectiveTab === "Contrats" && <ContractsList onAction={onAction} contractsList={contractsList} />}
-      {effectiveTab === "Génération de document" && <DocumentGeneration onAction={onAction} />}
+      {effectiveTab === "Génération de document" && <DocumentGeneration onAction={onAction} documentDraft={documentDraft} />}
       {effectiveTab === "Archives" && <ArchivesView onAction={onAction} contractsList={contractsList} paymentsList={paymentsList} />}
     </>
   );
@@ -4361,20 +4408,23 @@ function getContractDueLabel(contract) {
   return "En cours";
 }
 
-function DocumentGeneration({ onAction }) {
+function DocumentGeneration({ onAction, documentDraft = null }) {
+  const defaultData = documentDraft?.data ?? {
+    invoice: invoices[0],
+    payment: paymentRecords[0],
+    commission: commissions[0],
+    property: properties[0],
+    owner: owners[0],
+    tenant: tenants[0],
+  };
+
   return (
     <DocumentStudio
-      initialTemplate="facture"
-      title="Atelier de génération documentaire"
+      initialTemplate={documentDraft?.templateKey ?? "facture"}
+      autoOpen={Boolean(documentDraft)}
+      title={documentDraft ? `Générer un document - ${documentTemplates.find((item) => item.key === documentDraft.templateKey)?.label ?? "Document"}` : "Atelier de génération documentaire"}
       onAction={onAction}
-      data={{
-        invoice: invoices[0],
-        payment: paymentRecords[0],
-        commission: commissions[0],
-        property: properties[0],
-        owner: owners[0],
-        tenant: tenants[0],
-      }}
+      data={defaultData}
     />
   );
 }
@@ -4748,14 +4798,14 @@ function ArchivesView({ onAction, contractsList = contracts, paymentsList = paym
   );
 }
 
-function DocumentStudio({ initialTemplate = "facture", lockedTemplate, title, data, onAction }) {
+function DocumentStudio({ initialTemplate = "facture", lockedTemplate, title, data, onAction, autoOpen = false }) {
   const [templateKey, setTemplateKey] = useState(lockedTemplate ?? initialTemplate);
-  const [editingKey, setEditingKey] = useState(lockedTemplate ?? null);
+  const [editingKey, setEditingKey] = useState(lockedTemplate ?? (autoOpen ? initialTemplate : null));
 
   useEffect(() => {
     setTemplateKey(lockedTemplate ?? initialTemplate);
-    setEditingKey(lockedTemplate ?? null);
-  }, [initialTemplate, lockedTemplate]);
+    setEditingKey(lockedTemplate ?? (autoOpen ? initialTemplate : null));
+  }, [autoOpen, initialTemplate, lockedTemplate]);
 
   const activeKey = lockedTemplate ?? editingKey ?? templateKey;
   const template = documentTemplates.find((item) => item.key === activeKey) ?? documentTemplates[0];
@@ -7921,6 +7971,42 @@ function MaintenanceFormModal({ context, onSave, onClose }) {
           <Button onClick={onClose}>Annuler</Button>
           <Button variant="primary" onClick={() => submit(false)}><CalendarDays size={17} /> Planifier entretien</Button>
           <Button onClick={() => submit(true)}><ReceiptText size={17} /> Planifier et créer charge</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function DocumentContextMenu({ property, onSelect, onClose }) {
+  const availableTemplates = documentTemplates.map((template) => ({
+    ...template,
+    description: template.key === "bail"
+      ? `Contrat prérempli avec ${property.tenant}`
+      : template.key === "bordereau"
+        ? `Bordereau lié à ${property.owner}`
+        : template.key === "recu"
+          ? `Reçu d'encaissement pour ${property.name}`
+          : `Facture liée à ${property.name}`,
+  }));
+
+  return (
+    <div className="modal-backdrop document-menu-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="document-context-menu" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <span>Générer document</span>
+        <h2>{property.name}</h2>
+        <p>Choisissez le document à préparer. L'atelier Docs s'ouvrira avec les informations du bien déjà renseignées.</p>
+        <div className="document-menu-list">
+          {availableTemplates.map((template) => (
+            <button key={template.key} onClick={() => onSelect(template.key)}>
+              <span className="template-card-icon"><FileText size={20} /></span>
+              <span>
+                <strong>{template.label}</strong>
+                <small>{template.description}</small>
+              </span>
+              <Badge label={template.format} />
+            </button>
+          ))}
         </div>
       </section>
     </div>
