@@ -1995,6 +1995,8 @@ function App() {
   const [tenantActionContext, setTenantActionContext] = useState(null);
   const [tenantRelances, setTenantRelances] = useState([]);
   const [tenantReceiptArchives, setTenantReceiptArchives] = useState([]);
+  const [createdProspects, setCreatedProspects] = useState([]);
+  const [prospectProposalContext, setProspectProposalContext] = useState(null);
   const [contractTab, setContractTab] = useState("Contrats");
   const [generatedContracts, setGeneratedContracts] = useState([]);
   const [recordedPayments, setRecordedPayments] = useState([]);
@@ -2028,6 +2030,7 @@ function App() {
     () => tenants.map((tenant) => ({ ...tenant, ...(tenantOverrides[tenant.id] ?? {}) })),
     [tenantOverrides]
   );
+  const allProspects = useMemo(() => [...createdProspects, ...prospects], [createdProspects]);
   const allReversals = useMemo(() => [...ownerReversements, ...reversals], [ownerReversements]);
   const propertiesWithArchiveState = useMemo(() => properties.map((property) => {
     const archive = archivedProperties[property.code];
@@ -2052,6 +2055,19 @@ function App() {
     if (normalizedAction === "nouveau proprietaire") {
       setClientTab("Propriétaires");
       setModal("Nouveau propriétaire");
+      return;
+    }
+
+    if (normalizedAction === "nouveau prospect") {
+      setClientTab("Prospects");
+      setActivePage("Clients");
+      setModal("Nouveau prospect");
+      return;
+    }
+
+    if (normalizedAction === "proposer un bien") {
+      setProspectProposalContext(context.prospect ?? prospectProposalContext ?? prospects[0]);
+      setModal("Proposer un bien prospect");
       return;
     }
 
@@ -2286,6 +2302,23 @@ function App() {
     setActivePage("Clients");
     setModal(null);
     setTenantActionContext(null);
+  };
+
+  const handleProspectSave = ({ prospect, proposeProperty = false }) => {
+    setCreatedProspects((current) => [
+      prospect,
+      ...current.filter((item) => item.id !== prospect.id),
+    ]);
+    setClientTab("Prospects");
+    setActivePage("Clients");
+
+    if (proposeProperty) {
+      setProspectProposalContext(prospect);
+      setModal("Proposer un bien prospect");
+      return;
+    }
+
+    setModal(null);
   };
 
   const handleTenantRelanceSave = ({ relance, tenant }) => {
@@ -2646,6 +2679,7 @@ function App() {
             selectedTenant={selectedTenant}
             onTenant={setSelectedTenant}
             tenantsList={allTenants}
+            prospectsList={allProspects}
             tenantRelances={tenantRelances}
             tenantReceiptArchives={tenantReceiptArchives}
             onAction={openAction}
@@ -2693,6 +2727,20 @@ function App() {
           sequence={owners.length + createdOwners.length + 1}
           onSave={handleOwnerSave}
           onClose={() => setModal(null)}
+        />
+      ) : modal === "Nouveau prospect" ? (
+        <ProspectFormModal
+          sequence={prospects.length + createdProspects.length + 1}
+          onSave={handleProspectSave}
+          onClose={() => setModal(null)}
+        />
+      ) : modal === "Proposer un bien prospect" ? (
+        <ProspectProposalModal
+          prospect={prospectProposalContext ?? prospects[0]}
+          onClose={() => {
+            setProspectProposalContext(null);
+            setModal(null);
+          }}
         />
       ) : modal === "Modifier propriétaire" ? (
         <OwnerFormModal
@@ -4167,7 +4215,7 @@ function PropertyHistory({ property, historyItems = [] }) {
   );
 }
 
-function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = owners, selectedTenant, onTenant, tenantsList = tenants, tenantRelances = [], tenantReceiptArchives = [], onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, reversalsList = reversals }) {
+function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = owners, selectedTenant, onTenant, tenantsList = tenants, prospectsList = prospects, tenantRelances = [], tenantReceiptArchives = [], onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, reversalsList = reversals }) {
   const tabs = ["Propriétaires", "Locataires", "Prospects", "Visites"];
   const [detailView, setDetailView] = useState(null);
   const [selectedProspect, setSelectedProspect] = useState(prospects[0]);
@@ -4247,7 +4295,7 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
       </Panel>
       {activeTab === "Propriétaires" && <OwnersView ownersList={ownersList} selected={selectedOwner} onOpenDetail={(owner) => openDetail("owner", owner)} />}
       {activeTab === "Locataires" && <TenantsView tenantsList={tenantsList} onOpenDetail={(tenant) => openDetail("tenant", tenant)} rentRowsList={rentRowsList} />}
-      {activeTab === "Prospects" && <ProspectsView onOpenDetail={(prospect) => openDetail("prospect", prospect)} onAction={onAction} />}
+      {activeTab === "Prospects" && <ProspectsView prospectsList={prospectsList} onOpenDetail={(prospect) => openDetail("prospect", prospect)} onAction={onAction} />}
       {activeTab === "Visites" && <VisitsView onOpenDetail={(visit) => openDetail("visit", visit)} onAction={onAction} />}
         </>
       )}
@@ -4610,13 +4658,13 @@ function TenantProfilePanel({ tenant, onAction, contractsList = contracts, payme
   );
 }
 
-function ProspectsView({ onOpenDetail, onAction }) {
+function ProspectsView({ prospectsList = prospects, onOpenDetail, onAction }) {
   return (
     <section className="client-list-workspace" data-demo="prospect-workspace">
-      <Panel title="Liste des prospects" toolbar={<span className="muted">{prospects.length} prospects</span>}>
+      <Panel title="Liste des prospects" toolbar={<span className="muted">{prospectsList.length} prospects</span>}>
         <DataTable
           columns={["Prospect", "Téléphone", "Besoin", "Quartiers", "Budget", "Agent", "Statut", "Prochaine action", "Action"]}
-          rows={prospects.map((prospect) => [
+          rows={prospectsList.map((prospect) => [
             <button className="table-person" onClick={() => onOpenDetail(prospect)}>
               <Avatar name={prospect.name} />
               <span><strong>{prospect.name}</strong><small>{prospect.status}</small></span>
@@ -4630,7 +4678,7 @@ function ProspectsView({ onOpenDetail, onAction }) {
             prospect.next,
             <div className="table-actions">
               <Button compact onClick={() => onOpenDetail(prospect)}><Eye size={15} /> Fiche</Button>
-              <Button compact onClick={() => onAction(prospect.next)}><Phone size={15} /> Action</Button>
+              <Button compact onClick={() => onAction(prospect.next, { prospect })}><Phone size={15} /> Action</Button>
             </div>,
           ])}
         />
@@ -4658,15 +4706,21 @@ function ProspectProfilePanel({ prospect, onAction }) {
           ["Statut", prospect.status],
           ["Agent", prospect.agent],
           ["Budget", prospect.budget],
-          ["Objectif", prospect.need.includes("Bureau") ? "Location pro" : "Location"],
-          ["Délai", "30 jours"],
+          ["Objectif", prospect.objective ?? (prospect.need.includes("Bureau") ? "Location pro" : "Location")],
+          ["Délai", prospect.delay ?? "30 jours"],
         ]}
       />
       <div className="simple-list">
         <p><span>Téléphone</span><strong>{prospect.phone}</strong></p>
+        {prospect.email && <p><span>Email</span><strong>{prospect.email}</strong></p>}
+        {prospect.type && <p><span>Type de prospect</span><strong>{prospect.type}</strong></p>}
+        {prospect.source && <p><span>Source</span><strong>{prospect.source}</strong></p>}
+        {prospect.objective && <p><span>Objectif</span><strong>{prospect.objective}</strong></p>}
         <p><span>Besoin immobilier</span><strong>{prospect.need}</strong></p>
         <p><span>Budget</span><strong>{prospect.budget}</strong></p>
         <p><span>Quartiers souhaités</span><strong>{prospect.district}</strong></p>
+        {prospect.delay && <p><span>Délai</span><strong>{prospect.delay}</strong></p>}
+        {prospect.requirements && <p><span>Exigences particulières</span><strong>{prospect.requirements}</strong></p>}
         <p><span>Agent responsable</span><strong>{prospect.agent}</strong></p>
         <p><span>Statut commercial</span><Badge label={prospect.status} /></p>
         <p><span>Prochaine action</span><strong>{prospect.next}</strong></p>
@@ -4689,11 +4743,11 @@ function ProspectProfilePanel({ prospect, onAction }) {
       </div>
       <div className="timeline compact-timeline">
         <p><strong>Échange commercial</strong><span>{prospect.next}</span></p>
-        <p><strong>Commentaire</strong><span>Besoin suivi par {prospect.agent}</span></p>
+        <p><strong>Commentaire</strong><span>{prospect.comment ?? `Besoin suivi par ${prospect.agent}`}</span></p>
       </div>
       <div className="stack-actions">
         <Button onClick={() => onAction("Modifier besoin prospect")}><Pencil size={17} /> Modifier besoin</Button>
-        <Button onClick={() => onAction("Proposer un bien")}><Home size={17} /> Proposer bien</Button>
+        <Button onClick={() => onAction("Proposer un bien", { prospect })}><Home size={17} /> Proposer bien</Button>
         <Button variant="primary" onClick={() => onAction(prospect.next)}><Phone size={17} /> Prochaine action</Button>
         <Button onClick={() => onAction("Planifier une visite")}><CalendarDays size={17} /> Planifier visite</Button>
         <Button onClick={() => onAction("Ajouter commentaire prospect")}><FileText size={17} /> Commentaire</Button>
@@ -8616,6 +8670,241 @@ function DocumentActions() {
       <Button compact><Eye size={15} /> Voir</Button>
       <Button compact><Download size={15} /> PDF</Button>
       <Button compact><Send size={15} /> Envoyer</Button>
+    </div>
+  );
+}
+
+function ProspectFormModal({ sequence = prospects.length + 1, onSave, onClose }) {
+  const generatedId = useMemo(() => `PROS-2026-${String(sequence).padStart(3, "0")}`, [sequence]);
+  const [values, setValues] = useState({
+    id: generatedId,
+    name: "Aminata Sissoko",
+    phone: "+223 76 18 45 90",
+    email: "aminata.sissoko@gmail.com",
+    type: "Particulier",
+    source: "WhatsApp",
+    objective: "Location",
+    propertyType: "Appartement T3",
+    districts: "ACI 2000 / Hamdallaye",
+    budget: "750 000 FCFA",
+    delay: "30 jours",
+    requirements: "Séjour lumineux, parking sécurisé, proximité école.",
+    agent: "Mariam Traoré",
+    status: "Nouveau",
+    next: "Appel de qualification",
+    comment: "Prospect à qualifier puis orienter vers les biens disponibles.",
+  });
+
+  const update = (field) => (event) => {
+    setValues((current) => ({ ...current, [field]: event.target.value }));
+  };
+
+  const canSave = values.name.trim() && values.phone.trim() && values.propertyType.trim() && values.budget.trim();
+
+  const buildProspect = () => ({
+    id: values.id,
+    name: values.name.trim(),
+    phone: values.phone.trim(),
+    email: values.email.trim(),
+    type: values.type,
+    source: values.source,
+    objective: values.objective,
+    need: values.propertyType.trim(),
+    propertyType: values.propertyType.trim(),
+    district: values.districts.trim(),
+    budget: values.budget.trim(),
+    delay: values.delay.trim(),
+    requirements: values.requirements.trim(),
+    agent: values.agent,
+    status: values.status,
+    next: values.next.trim(),
+    comment: values.comment.trim(),
+  });
+
+  const submit = (proposeProperty = false) => {
+    if (!canSave) return;
+    onSave({ prospect: buildProspect(), proposeProperty });
+  };
+
+  return (
+    <div className="modal-backdrop">
+      <section className="modal-card wide-modal prospect-form-modal">
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Prospection commerciale</span>
+            <h2>Nouveau prospect</h2>
+            <p>Créer une fiche prospect exploitable pour le suivi, les visites et les propositions de biens.</p>
+          </div>
+          <Badge label={values.id} />
+        </div>
+
+        <div className="form-section">
+          <h3>Identification</h3>
+          <div className="form-grid">
+            <label>Nom
+              <input value={values.name} onChange={update("name")} />
+            </label>
+            <label>Téléphone
+              <input value={values.phone} onChange={update("phone")} />
+            </label>
+            <label>Email
+              <input value={values.email} onChange={update("email")} />
+            </label>
+            <label>Type
+              <select value={values.type} onChange={update("type")}>
+                <option>Particulier</option>
+                <option>Société</option>
+              </select>
+            </label>
+            <label className="full">Source
+              <select value={values.source} onChange={update("source")}>
+                <option>Appel</option>
+                <option>WhatsApp</option>
+                <option>Recommandation</option>
+                <option>Passage agence</option>
+                <option>Autre</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Besoin immobilier</h3>
+          <div className="form-grid">
+            <label>Objectif
+              <select value={values.objective} onChange={update("objective")}>
+                <option>Location</option>
+                <option>Achat</option>
+              </select>
+            </label>
+            <label>Type de bien recherché
+              <input value={values.propertyType} onChange={update("propertyType")} />
+            </label>
+            <label>Quartiers souhaités
+              <input value={values.districts} onChange={update("districts")} />
+            </label>
+            <label>Budget
+              <input value={values.budget} onChange={update("budget")} />
+            </label>
+            <label>Délai
+              <input value={values.delay} onChange={update("delay")} />
+            </label>
+            <label className="full">Exigences particulières
+              <textarea value={values.requirements} onChange={update("requirements")} />
+            </label>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Suivi commercial</h3>
+          <div className="form-grid">
+            <label>Agent responsable
+              <select value={values.agent} onChange={update("agent")}>
+                <option>Mariam Traoré</option>
+                <option>Aïssata Diarra</option>
+                <option>Issa Maïga</option>
+                <option>Cheick Camara</option>
+              </select>
+            </label>
+            <label>Statut initial
+              <select value={values.status} onChange={update("status")}>
+                <option>Nouveau</option>
+                <option>Contacté</option>
+                <option>Visite prévue</option>
+                <option>Intéressé</option>
+              </select>
+            </label>
+            <label>Prochaine action
+              <input value={values.next} onChange={update("next")} />
+            </label>
+            <label className="full">Commentaire
+              <textarea value={values.comment} onChange={update("comment")} />
+            </label>
+          </div>
+        </div>
+
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button onClick={() => submit(false)} disabled={!canSave}>Enregistrer</Button>
+          <Button variant="primary" onClick={() => submit(true)} disabled={!canSave}>
+            <Home size={17} /> Enregistrer et proposer un bien
+          </Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ProspectProposalModal({ prospect, onClose }) {
+  const suggestedProperties = useMemo(() => {
+    const prospectNeed = normalizeSearch(prospect?.propertyType ?? prospect?.need ?? "");
+    const prospectDistrict = normalizeSearch(prospect?.district ?? "");
+    const firstNeedWord = prospectNeed.split(" ")[0] ?? "";
+    const firstDistrictWord = prospectDistrict.split(/[ /]+/)[0] ?? "";
+
+    return Array.from(
+      new Map(
+        properties
+          .filter((property) => {
+            const haystack = normalizeSearch(`${property.type} ${property.name} ${property.district} ${property.address}`);
+            return (
+              (firstNeedWord && haystack.includes(firstNeedWord)) ||
+              (firstDistrictWord && haystack.includes(firstDistrictWord)) ||
+              property.status === "Disponible"
+            );
+          })
+          .concat(properties.filter((property) => property.status === "Disponible"))
+          .slice(0, 5)
+          .map((property) => [property.code, property])
+      ).values()
+    ).slice(0, 3);
+  }, [prospect]);
+
+  return (
+    <div className="modal-backdrop">
+      <section className="modal-card wide-modal prospect-proposal-modal">
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Propositions de biens</span>
+            <h2>Biens compatibles</h2>
+            <p>Sélection rapide de biens à présenter au prospect après création de sa fiche.</p>
+          </div>
+          <Badge label={prospect?.status ?? "Nouveau"} />
+        </div>
+
+        <div className="prospect-proposal-summary">
+          <Avatar name={prospect?.name ?? "Prospect"} />
+          <div>
+            <strong>{prospect?.name}</strong>
+            <span>{prospect?.need} · {prospect?.district} · {prospect?.budget}</span>
+          </div>
+        </div>
+
+        <div className="proposal-grid">
+          {suggestedProperties.map((property) => (
+            <article className="proposal-card" key={property.code}>
+              <img src={property.image} alt={property.name} />
+              <div>
+                <span>{property.code}</span>
+                <strong>{property.name}</strong>
+                <small>{property.district}, Bamako</small>
+                <b>{property.price} {property.period}</b>
+              </div>
+              <Badge label={property.status} />
+            </article>
+          ))}
+        </div>
+
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Fermer</Button>
+          <Button onClick={onClose}>Archiver la proposition</Button>
+          <Button variant="primary" onClick={onClose}>
+            <Send size={17} /> Préparer l'envoi
+          </Button>
+        </div>
+      </section>
     </div>
   );
 }

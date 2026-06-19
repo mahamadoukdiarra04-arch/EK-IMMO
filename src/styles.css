@@ -5836,6 +5836,79 @@ td:last-child {
   width: min(1120px, 100%);
 }
 
+.prospect-form-modal {
+  width: min(1120px, 100%);
+}
+
+.prospect-proposal-modal {
+  width: min(980px, 100%);
+}
+
+.prospect-proposal-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  margin-top: 22px;
+  padding: 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: var(--panel-soft);
+}
+
+.prospect-proposal-summary strong,
+.prospect-proposal-summary span {
+  display: block;
+}
+
+.prospect-proposal-summary span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-weight: 750;
+}
+
+.proposal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.proposal-card {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.proposal-card img {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: 9px;
+}
+
+.proposal-card div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.proposal-card span,
+.proposal-card small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.proposal-card strong,
+.proposal-card b {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
 .payment-modal-head {
   display: flex;
   align-items: flex-start;
@@ -5932,12 +6005,20 @@ td:last-child {
 }
 
 @media (max-width: 1100px) {
+  .proposal-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .owner-document-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 720px) {
+  .proposal-grid {
+    grid-template-columns: 1fr;
+  }
+
   .owner-document-grid {
     grid-template-columns: 1fr;
   }
