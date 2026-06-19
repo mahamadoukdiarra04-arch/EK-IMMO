@@ -1987,6 +1987,9 @@ function App() {
   const [clientTab, setClientTab] = useState("Propriétaires");
   const [selectedOwner, setSelectedOwner] = useState(owners[0]);
   const [createdOwners, setCreatedOwners] = useState([]);
+  const [ownerOverrides, setOwnerOverrides] = useState({});
+  const [ownerActionContext, setOwnerActionContext] = useState(null);
+  const [ownerReversements, setOwnerReversements] = useState([]);
   const [selectedTenant, setSelectedTenant] = useState(tenants[0]);
   const [contractTab, setContractTab] = useState("Contrats");
   const [generatedContracts, setGeneratedContracts] = useState([]);
@@ -2013,7 +2016,11 @@ function App() {
   const allRentRows = useMemo(() => mergeRentRowsWithPayments(rentRows, recordedPayments), [recordedPayments]);
   const allMaintenances = useMemo(() => [...scheduledMaintenances, ...maintenances], [scheduledMaintenances]);
   const allCharges = useMemo(() => [...maintenanceCharges, ...charges], [maintenanceCharges]);
-  const allOwners = useMemo(() => [...createdOwners, ...owners], [createdOwners]);
+  const allOwners = useMemo(() => {
+    const applyOverride = (owner) => ({ ...owner, ...(ownerOverrides[owner.id] ?? {}) });
+    return [...createdOwners.map(applyOverride), ...owners.map(applyOverride)];
+  }, [createdOwners, ownerOverrides]);
+  const allReversals = useMemo(() => [...ownerReversements, ...reversals], [ownerReversements]);
   const propertiesWithArchiveState = useMemo(() => properties.map((property) => {
     const archive = archivedProperties[property.code];
     if (!archive) return property;
@@ -2032,15 +2039,51 @@ function App() {
   );
 
   const openAction = (label, context = {}) => {
-    if (normalizeSearch(label) === "nouveau proprietaire") {
+    const normalizedAction = normalizeSearch(label);
+
+    if (normalizedAction === "nouveau proprietaire") {
       setClientTab("Propriétaires");
       setModal("Nouveau propriétaire");
       return;
     }
 
+    if (normalizedAction === "modifier proprietaire" && context.owner) {
+      setOwnerActionContext({ owner: context.owner, activeOwnerTab: context.activeOwnerTab ?? "Résumé" });
+      setModal("Modifier propriétaire");
+      return;
+    }
+
+    if ((normalizedAction === "ajouter un bien proprietaire" || (normalizedAction === "ajouter un bien" && context.owner)) && context.owner) {
+      setOwnerActionContext({ owner: context.owner, activeOwnerTab: context.activeOwnerTab ?? "Biens" });
+      setPropertyOwnerPrefill(context.owner.name);
+      setModal("Ajouter un bien");
+      return;
+    }
+
+    if ((normalizedAction === "generer situation proprietaire" || normalizedAction === "situation proprietaire") && context.owner) {
+      setOwnerActionContext({ owner: context.owner, activeOwnerTab: context.activeOwnerTab ?? "Situation financière" });
+      setModal("Situation propriétaire");
+      return;
+    }
+
+    if (normalizedAction === "enregistrer reversement" && context.owner) {
+      setOwnerActionContext({ owner: context.owner, activeOwnerTab: context.activeOwnerTab ?? "Reversements" });
+      setModal("Enregistrer reversement propriétaire");
+      return;
+    }
+
+    if ((normalizedAction === "imprimer proprietaire" || normalizedAction === "exporter pdf proprietaire") && context.owner) {
+      setOwnerActionContext({
+        owner: context.owner,
+        activeOwnerTab: context.activeOwnerTab ?? "Résumé",
+        output: normalizedAction === "exporter pdf proprietaire" ? "Export PDF" : "Impression",
+      });
+      setModal(normalizedAction === "exporter pdf proprietaire" ? "Export PDF propriétaire" : "Imprimer propriétaire");
+      return;
+    }
+
     if (shouldOpenPaymentModal(label)) {
-      const normalizedLabel = normalizeSearch(label);
-      const tenantFromLabel = normalizedLabel.startsWith("paiement ")
+      const tenantFromLabel = normalizedAction.startsWith("paiement ")
         ? label.replace(/^paiement\s+/i, "").trim()
         : "";
       const rowFromLabel = tenantFromLabel
@@ -2065,19 +2108,19 @@ function App() {
       return;
     }
 
-    if (normalizeSearch(label) === "generer document") {
+    if (normalizedAction === "generer document") {
       setDocumentContext({ property: context.property ?? selectedProperty });
       setModal("Choisir document");
       return;
     }
 
-    if (normalizeSearch(label) === "fiche bien pdf") {
+    if (normalizedAction === "fiche bien pdf") {
       setPropertyPdfContext(context.property ?? selectedProperty);
       setModal("Fiche PDF");
       return;
     }
 
-    if (normalizeSearch(label) === "archiver le bien") {
+    if (normalizedAction === "archiver le bien") {
       setArchiveContext(context.property ?? selectedProperty);
       setModal("Archiver bien");
       return;
@@ -2125,13 +2168,21 @@ function App() {
   };
 
   const handleOwnerSave = ({ owner, addProperty = false }) => {
+    const isBaseOwner = owners.some((item) => item.id === owner.id);
+
     setCreatedOwners((current) => {
       const existingIndex = current.findIndex((item) => item.id === owner.id);
       if (existingIndex >= 0) {
         return current.map((item, index) => (index === existingIndex ? owner : item));
       }
+      if (isBaseOwner) return current;
       return [owner, ...current];
     });
+
+    if (isBaseOwner) {
+      setOwnerOverrides((current) => ({ ...current, [owner.id]: owner }));
+    }
+
     setSelectedOwner(owner);
     setClientTab("Propriétaires");
     setActivePage("Clients");
@@ -2143,6 +2194,42 @@ function App() {
     }
 
     setModal(null);
+    setOwnerActionContext(null);
+  };
+
+  const handleOwnerReversementSave = ({ reversement, owner, generateStatement = false }) => {
+    setOwnerReversements((current) => [
+      reversement,
+      ...current.filter((item) => item.reference !== reversement.reference),
+    ]);
+
+    setOwnerOverrides((current) => ({
+      ...current,
+      [owner.id]: {
+        ...(current[owner.id] ?? {}),
+        balance: reversement.balance,
+        lastPayment: reversement.date,
+      },
+    }));
+
+    const updatedOwner = {
+      ...owner,
+      balance: reversement.balance,
+      lastPayment: reversement.date,
+    };
+
+    setSelectedOwner((current) => (current.id === owner.id ? { ...current, ...updatedOwner } : current));
+    setClientTab("Propriétaires");
+    setActivePage("Clients");
+
+    if (generateStatement) {
+      setOwnerActionContext({ owner: updatedOwner, activeOwnerTab: "Situation financière" });
+      setModal("Situation propriétaire");
+      return;
+    }
+
+    setModal(null);
+    setOwnerActionContext(null);
   };
 
   const handleTenantAttachment = ({ tenantName, tenantProfile, rent, deposit, entryDate, createContract }) => {
@@ -2453,10 +2540,11 @@ function App() {
             contractsList={allContracts}
             paymentsList={allPayments}
             rentRowsList={allRentRows}
+            reversalsList={allReversals}
           />
         )}
         {activePage === "Contrats" && <ContractsPage activeTab={contractTab} onTab={setContractTab} onAction={openAction} contractsList={allContracts} paymentsList={allPayments} documentDraft={documentDraft} propertyPdfArchives={propertyPdfArchives} />}
-        {activePage === "Finance" && <FinancePage activeTab={financeTab} onTab={setFinanceTab} onAction={openAction} paymentsList={allPayments} rentRowsList={allRentRows} chargesList={allCharges} maintenancesList={allMaintenances} />}
+        {activePage === "Finance" && <FinancePage activeTab={financeTab} onTab={setFinanceTab} onAction={openAction} paymentsList={allPayments} rentRowsList={allRentRows} chargesList={allCharges} maintenancesList={allMaintenances} reversalsList={allReversals} />}
         {activePage === "Rapports" && (
           <ReportsPage selected={reportType} onSelect={setReportType} onAction={openAction} />
         )}
@@ -2493,6 +2581,49 @@ function App() {
           sequence={owners.length + createdOwners.length + 1}
           onSave={handleOwnerSave}
           onClose={() => setModal(null)}
+        />
+      ) : modal === "Modifier propriétaire" ? (
+        <OwnerFormModal
+          mode="edit"
+          owner={ownerActionContext?.owner ?? selectedOwner}
+          onSave={handleOwnerSave}
+          onClose={() => {
+            setOwnerActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Situation propriétaire" ? (
+        <OwnerStatementModal
+          owner={ownerActionContext?.owner ?? selectedOwner}
+          chargesList={allCharges}
+          paymentsList={allPayments}
+          reversalsList={allReversals}
+          onClose={() => {
+            setOwnerActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Enregistrer reversement propriétaire" ? (
+        <OwnerReversementModal
+          owner={ownerActionContext?.owner ?? selectedOwner}
+          onSave={handleOwnerReversementSave}
+          onClose={() => {
+            setOwnerActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : ["Imprimer propriétaire", "Export PDF propriétaire"].includes(modal) ? (
+        <OwnerPrintableModal
+          owner={ownerActionContext?.owner ?? selectedOwner}
+          activeTab={ownerActionContext?.activeOwnerTab ?? "Résumé"}
+          output={modal === "Export PDF propriétaire" ? "Export PDF" : "Impression"}
+          chargesList={allCharges}
+          paymentsList={allPayments}
+          reversalsList={allReversals}
+          onClose={() => {
+            setOwnerActionContext(null);
+            setModal(null);
+          }}
         />
       ) : modal === "Ajouter locataire" ? (
         <AttachTenantModal property={selectedProperty} onClose={() => setModal(null)} onAttach={handleTenantAttachment} />
@@ -3853,7 +3984,7 @@ function PropertyHistory({ property, historyItems = [] }) {
   );
 }
 
-function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = owners, selectedTenant, onTenant, onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows }) {
+function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = owners, selectedTenant, onTenant, onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, reversalsList = reversals }) {
   const tabs = ["Propriétaires", "Locataires", "Prospects", "Visites"];
   const [detailView, setDetailView] = useState(null);
   const [selectedProspect, setSelectedProspect] = useState(prospects[0]);
@@ -3887,7 +4018,7 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
 
   const detailContent = detailView === "owner" ? (
     <DetailPageShell title="Fiche propriétaire" subtitle={selectedOwner.name} onBack={closeDetail}>
-      <OwnerProfilePanel owner={selectedOwner} onAction={onAction} contractsList={contractsList} paymentsList={paymentsList} />
+      <OwnerProfilePanel owner={selectedOwner} onAction={onAction} contractsList={contractsList} paymentsList={paymentsList} reversalsList={reversalsList} />
     </DetailPageShell>
   ) : detailView === "tenant" ? (
     <DetailPageShell title="Fiche locataire" subtitle={selectedTenant.name} onBack={closeDetail}>
@@ -4012,11 +4143,11 @@ function OwnersView({ ownersList = owners, selected, onOpenDetail }) {
   );
 }
 
-function OwnerProfilePanel({ owner, onAction, contractsList = contracts, paymentsList = paymentRecords }) {
+function OwnerProfilePanel({ owner, onAction, contractsList = contracts, paymentsList = paymentRecords, reversalsList = reversals }) {
   const [tab, setTab] = useState("Résumé");
   const ownedProperties = properties.filter((property) => property.owner === owner.name);
   const ownerCharges = charges.filter((charge) => charge.owner === owner.name);
-  const ownerReversals = reversals.filter((reversal) => reversal.owner === owner.name);
+  const ownerReversals = reversalsList.filter((reversal) => reversal.owner === owner.name);
   const ownerContracts = contractsList.filter((contract) => contract.owner === owner.name);
   const ownerPayments = paymentsList.filter((payment) => payment.owner === owner.name);
   const collectedForOwner = ownerPayments.reduce((sum, payment) => sum + parseFCFA(payment.paid), 0);
@@ -4095,7 +4226,7 @@ function OwnerProfilePanel({ owner, onAction, contractsList = contracts, payment
       {tab === "Reversements" && (
         <DataTable
           columns={["Propriétaire", "Loyers", "Commission", "Charges", "Payé", "Solde", "Statut"]}
-          rows={(ownerReversals.length ? ownerReversals : reversals.slice(0, 2)).map((row) => [
+          rows={(ownerReversals.length ? ownerReversals : reversalsList.slice(0, 2)).map((row) => [
             row.owner,
             row.collected,
             row.commission,
@@ -4124,22 +4255,22 @@ function OwnerProfilePanel({ owner, onAction, contractsList = contracts, payment
         </div>
       )}
       <div className="stack-actions">
-        <Button onClick={() => onAction("Modifier propriétaire")}>
+        <Button onClick={() => onAction("Modifier propriétaire", { owner, activeOwnerTab: tab })}>
           <Pencil size={17} /> Modifier
         </Button>
-        <Button onClick={() => onAction("Ajouter un bien")}>
+        <Button onClick={() => onAction("Ajouter un bien propriétaire", { owner, activeOwnerTab: tab })}>
           <Plus size={17} /> Ajouter un bien
         </Button>
-        <Button variant="primary" onClick={() => onAction("Générer situation propriétaire")}>
+        <Button variant="primary" onClick={() => onAction("Générer situation propriétaire", { owner, activeOwnerTab: tab })}>
           <FileText size={17} /> Situation propriétaire
         </Button>
-        <Button onClick={() => onAction("Enregistrer reversement")}>
+        <Button onClick={() => onAction("Enregistrer reversement", { owner, activeOwnerTab: tab })}>
           <HandCoins size={17} /> Enregistrer reversement
         </Button>
-        <Button onClick={() => onAction("Imprimer situation propriétaire")}>
+        <Button onClick={() => onAction("Imprimer propriétaire", { owner, activeOwnerTab: tab })}>
           <Printer size={17} /> Imprimer
         </Button>
-        <Button onClick={() => onAction("Exporter PDF")}>
+        <Button onClick={() => onAction("Exporter PDF propriétaire", { owner, activeOwnerTab: tab })}>
           <Download size={17} /> Export PDF
         </Button>
       </div>
@@ -5266,6 +5397,389 @@ function PropertyPdfDocument({ property, owner, tenant }) {
   );
 }
 
+function OwnerStatementModal({ owner, chargesList = charges, paymentsList = paymentRecords, reversalsList = reversals, onClose }) {
+  const [values, setValues] = useState({
+    start: "2026-05-01",
+    end: "2026-05-31",
+    includeCharges: "Oui",
+    includeReversals: "Oui",
+  });
+  const [preview, setPreview] = useState(false);
+
+  const update = (key, value) => setValues((current) => ({ ...current, [key]: value }));
+  const generatePdf = () => {
+    setPreview(true);
+    window.setTimeout(() => window.print(), 90);
+  };
+
+  return (
+    <div className="modal-backdrop document-print-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card document-print-modal owner-statement-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="document-print-head">
+          <div>
+            <span>Situation propriétaire</span>
+            <h2>{owner.name}</h2>
+            <p>Générer un état propriétaire avec la période, les charges et les reversements à inclure dans la sortie PDF.</p>
+          </div>
+          <div className="document-editor-actions">
+            <Button onClick={() => setPreview(true)}><Eye size={17} /> Prévisualiser</Button>
+            <Button variant="primary" onClick={generatePdf}><Download size={17} /> Générer PDF</Button>
+          </div>
+        </div>
+
+        <div className="owner-statement-layout">
+          <Panel title="Paramètres de l'état">
+            <div className="form-grid compact-form">
+              <label>Période début<input type="date" value={values.start} onChange={(event) => update("start", event.target.value)} /></label>
+              <label>Période fin<input type="date" value={values.end} onChange={(event) => update("end", event.target.value)} /></label>
+              <label>Inclure détails des charges<select value={values.includeCharges} onChange={(event) => update("includeCharges", event.target.value)}><option>Oui</option><option>Non</option></select></label>
+              <label>Inclure détails des reversements<select value={values.includeReversals} onChange={(event) => update("includeReversals", event.target.value)}><option>Oui</option><option>Non</option></select></label>
+            </div>
+            <div className="action-row compact-row">
+              <Button onClick={onClose}>Annuler</Button>
+              <Button onClick={() => setPreview(true)}><Eye size={17} /> Prévisualiser</Button>
+              <Button variant="primary" onClick={generatePdf}><Download size={17} /> Générer PDF</Button>
+            </div>
+          </Panel>
+
+          {preview ? (
+            <OwnerStatementDocument
+              owner={owner}
+              period={values}
+              chargesList={chargesList}
+              paymentsList={paymentsList}
+              reversalsList={reversalsList}
+            />
+          ) : (
+            <Panel className="owner-preview-placeholder">
+              <FileText size={34} />
+              <h3>Aperçu de la situation propriétaire</h3>
+              <p>Cliquez sur Prévisualiser pour contrôler l'état avant génération PDF.</p>
+            </Panel>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function OwnerReversementModal({ owner, onSave, onClose }) {
+  const [values, setValues] = useState({
+    period: "Mai 2026",
+    balance: owner.balance,
+    amount: parseFCFA(owner.balance) > 0 ? owner.balance : "500 000 FCFA",
+    mode: owner.reversementMode ?? "Virement bancaire",
+    reference: `REV-2026-${String(Math.max(100, parseFCFA(owner.id) % 900)).padStart(3, "0")}`,
+    date: "2026-06-19",
+    proof: "",
+    observation: `Reversement au profit de ${owner.name}.`,
+  });
+  const remainingBalance = formatFCFA(Math.max(parseFCFA(values.balance) - parseFCFA(values.amount), 0));
+
+  const update = (key, value) => setValues((current) => ({ ...current, [key]: value }));
+  const submit = (generateStatement = false) => {
+    const reversement = {
+      owner: owner.name,
+      ownerId: owner.id,
+      period: values.period,
+      collected: owner.rent,
+      commission: owner.commission,
+      charges: owner.charges,
+      paid: values.amount,
+      balance: remainingBalance,
+      status: parseFCFA(remainingBalance) > 0 ? "À reverser" : "Soldé",
+      mode: values.mode,
+      reference: values.reference,
+      date: values.date,
+      proof: values.proof || "Justificatif à archiver",
+      note: values.observation,
+    };
+
+    onSave({ reversement, owner, generateStatement });
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal owner-reversal-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Reversement propriétaire</span>
+            <h2>Enregistrer reversement</h2>
+            <p>Le propriétaire est prérempli et le solde restant est calculé automatiquement.</p>
+          </div>
+          <Badge label={owner.id} />
+        </div>
+
+        <div className="form-section">
+          <h3>Détails du reversement</h3>
+          <div className="form-grid compact-form">
+            <label>Propriétaire<input value={owner.name} readOnly /></label>
+            <label>Période concernée<input value={values.period} onChange={(event) => update("period", event.target.value)} /></label>
+            <label>Solde à reverser<input value={values.balance} onChange={(event) => update("balance", event.target.value)} /></label>
+            <label>Montant reversé<input value={values.amount} onChange={(event) => update("amount", event.target.value)} /></label>
+            <label>Mode de paiement<select value={values.mode} onChange={(event) => update("mode", event.target.value)}><option>Virement bancaire</option><option>Orange Money</option><option>Moov Money</option><option>Chèque</option><option>Espèces</option></select></label>
+            <label>Référence<input value={values.reference} onChange={(event) => update("reference", event.target.value)} /></label>
+            <label>Date<input type="date" value={values.date} onChange={(event) => update("date", event.target.value)} /></label>
+            <label>Justificatif<input type="file" onChange={(event) => update("proof", event.target.files?.[0]?.name ?? "")} /></label>
+            <label className="full">Observation<textarea value={values.observation} onChange={(event) => update("observation", event.target.value)} /></label>
+          </div>
+        </div>
+
+        <div className="owner-reversal-summary">
+          <span>Solde restant calculé</span>
+          <strong>{remainingBalance}</strong>
+        </div>
+
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => submit(false)}><CheckCircle2 size={17} /> Enregistrer</Button>
+          <Button onClick={() => submit(true)}><FileText size={17} /> Enregistrer et générer état</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function OwnerPrintableModal({ owner, activeTab = "Résumé", output = "Impression", chargesList = charges, paymentsList = paymentRecords, reversalsList = reversals, onClose }) {
+  const isStatement = ["Situation financière", "Reversements"].includes(activeTab);
+  const period = {
+    start: "2026-05-01",
+    end: "2026-05-31",
+    includeCharges: "Oui",
+    includeReversals: "Oui",
+  };
+
+  return (
+    <div className="modal-backdrop document-print-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card document-print-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="document-print-head">
+          <div>
+            <span>{output}</span>
+            <h2>{isStatement ? "Situation propriétaire" : "Fiche propriétaire complète"}</h2>
+            <p>{isStatement ? "La sortie reprend l'onglet financier actif de la fiche propriétaire." : "La sortie reprend l'identité, les biens, les conditions de gestion, les documents et les éléments financiers."}</p>
+          </div>
+          <div className="document-editor-actions">
+            <Button variant="primary" onClick={() => window.print()}>
+              {output === "Export PDF" ? <Download size={17} /> : <Printer size={17} />}
+              {output === "Export PDF" ? "Télécharger PDF" : "Imprimer"}
+            </Button>
+          </div>
+        </div>
+        {isStatement ? (
+          <OwnerStatementDocument owner={owner} period={period} chargesList={chargesList} paymentsList={paymentsList} reversalsList={reversalsList} />
+        ) : (
+          <OwnerProfileDocument owner={owner} chargesList={chargesList} paymentsList={paymentsList} reversalsList={reversalsList} />
+        )}
+      </section>
+    </div>
+  );
+}
+
+function OwnerProfileDocument({ owner, chargesList = charges, paymentsList = paymentRecords, reversalsList = reversals }) {
+  const ownedProperties = properties.filter((property) => property.owner === owner.name);
+  const ownerPayments = paymentsList.filter((payment) => payment.owner === owner.name);
+  const ownerCharges = chargesList.filter((charge) => charge.owner === owner.name);
+  const ownerReversals = reversalsList.filter((reversal) => reversal.owner === owner.name);
+  const collected = ownerPayments.length ? formatFCFA(ownerPayments.reduce((sum, payment) => sum + parseFCFA(payment.paid), 0)) : owner.rent;
+
+  return (
+    <article className="original-document owner-document">
+      <section className="source-sheet owner-source-sheet">
+        <header className="owner-document-header">
+          <img src={ekimmoAssets.logo} alt="E.K immo" />
+          <div>
+            <span>Fiche propriétaire</span>
+            <h3>{owner.name}</h3>
+            <p>{owner.id}</p>
+          </div>
+          <Badge label={owner.status} />
+        </header>
+
+        <section className="owner-document-facts">
+          <div>
+            <small>Téléphone</small>
+            <strong>{owner.phone}</strong>
+          </div>
+          <div>
+            <small>Email</small>
+            <strong>{owner.email}</strong>
+          </div>
+          <div>
+            <small>Adresse</small>
+            <strong>{owner.address ?? "Adresse à compléter"}</strong>
+          </div>
+          <div>
+            <small>Conditions de gestion</small>
+            <strong>{owner.mandateType ?? "Mandat actif"}</strong>
+          </div>
+          <div>
+            <small>Commission</small>
+            <strong>{owner.commission}</strong>
+          </div>
+          <div>
+            <small>Reversement</small>
+            <strong>{owner.reversementMode ? `${owner.reversementMode} · ${owner.reversementPeriod}` : "Mensuel"}</strong>
+          </div>
+        </section>
+
+        <section className="property-pdf-section">
+          <h4>Situation synthétique</h4>
+          <div className="property-pdf-facts">
+            <p><span>Biens confiés</span><strong>{owner.properties}</strong></p>
+            <p><span>Loyers encaissés</span><strong>{collected}</strong></p>
+            <p><span>Charges déduites</span><strong>{owner.charges}</strong></p>
+            <p><span>Solde à reverser</span><strong>{owner.balance}</strong></p>
+            <p><span>Dernier reversement</span><strong>{owner.lastPayment}</strong></p>
+            <p><span>Documents</span><strong>{(owner.documents ?? ["Pièce d'identité", "Mandat", "RIB"]).join(", ")}</strong></p>
+          </div>
+        </section>
+
+        <OwnerDocumentTable
+          title="Biens rattachés"
+          columns={["Référence", "Bien", "Quartier", "Statut", "Loyer"]}
+          rows={(ownedProperties.length ? ownedProperties : properties.slice(0, 2)).map((property) => [property.code, property.name, property.district, property.status, `${property.price} ${property.period}`])}
+        />
+
+        <OwnerDocumentTable
+          title="Paiements récents"
+          columns={["Référence", "Période", "Locataire", "Bien", "Payé"]}
+          rows={(ownerPayments.length ? ownerPayments : paymentRecords.slice(0, 2)).map((payment) => [payment.reference, payment.period, payment.tenant, payment.property, payment.paid])}
+        />
+
+        <OwnerDocumentTable
+          title="Charges et reversements"
+          columns={["Type", "Référence", "Date", "Montant", "Statut"]}
+          rows={[
+            ...ownerCharges.slice(0, 3).map((charge) => ["Charge", charge.id, charge.date, charge.amount, charge.status]),
+            ...ownerReversals.slice(0, 3).map((reversal) => ["Reversement", reversal.reference ?? "État propriétaire", reversal.date ?? owner.lastPayment, reversal.paid, reversal.status]),
+          ]}
+        />
+
+        <footer className="property-pdf-footer">
+          <img src={ekimmoAssets.logo} alt="E.K immo" />
+          <div>
+            <strong>E.K immo SAS</strong>
+            <span>Niaréla, face mairie - Bamako, Mali</span>
+            <span>Contact : +223 72 77 71 77 / +223 44 44 13 31</span>
+            <span>Document généré le 19/06/2026</span>
+          </div>
+        </footer>
+      </section>
+    </article>
+  );
+}
+
+function OwnerStatementDocument({ owner, period, chargesList = charges, paymentsList = paymentRecords, reversalsList = reversals }) {
+  const ownerPayments = paymentsList.filter((payment) => payment.owner === owner.name);
+  const ownerCharges = chargesList.filter((charge) => charge.owner === owner.name);
+  const ownerReversals = reversalsList.filter((reversal) => reversal.owner === owner.name);
+  const collected = ownerPayments.reduce((sum, payment) => sum + parseFCFA(payment.paid), 0) || parseFCFA(owner.rent);
+  const chargesTotal = ownerCharges.reduce((sum, charge) => sum + parseFCFA(charge.amount), 0) || parseFCFA(owner.charges);
+  const reversalsTotal = ownerReversals.reduce((sum, reversal) => sum + parseFCFA(reversal.paid), 0);
+  const includeCharges = period.includeCharges === "Oui";
+  const includeReversals = period.includeReversals === "Oui";
+
+  return (
+    <article className="original-document owner-document">
+      <section className="source-sheet owner-source-sheet">
+        <header className="owner-document-header">
+          <img src={ekimmoAssets.logo} alt="E.K immo" />
+          <div>
+            <span>État propriétaire</span>
+            <h3>{owner.name}</h3>
+            <p>{period.start} au {period.end}</p>
+          </div>
+          <Badge label={owner.status} />
+        </header>
+
+        <section className="property-pdf-summary owner-statement-summary">
+          <div>
+            <small>Loyers encaissés</small>
+            <strong>{formatFCFA(collected)}</strong>
+          </div>
+          <div>
+            <small>Commission E.K immo</small>
+            <strong>{owner.commission}</strong>
+          </div>
+          <div>
+            <small>Charges déduites</small>
+            <strong>{formatFCFA(chargesTotal)}</strong>
+          </div>
+          <div>
+            <small>Reversements enregistrés</small>
+            <strong>{formatFCFA(reversalsTotal)}</strong>
+          </div>
+          <div>
+            <small>Solde à reverser</small>
+            <strong>{owner.balance}</strong>
+          </div>
+          <div>
+            <small>Dernière opération</small>
+            <strong>{owner.lastPayment}</strong>
+          </div>
+        </section>
+
+        <OwnerDocumentTable
+          title="Paiements pris en compte"
+          columns={["Date", "Période", "Locataire", "Bien", "Montant"]}
+          rows={(ownerPayments.length ? ownerPayments : paymentRecords.slice(0, 2)).map((payment) => [payment.date, payment.period, payment.tenant, payment.property, payment.paid])}
+        />
+
+        {includeCharges && (
+          <OwnerDocumentTable
+            title="Détail des charges"
+            columns={["Date", "Type", "Bien", "Montant", "Statut"]}
+            rows={(ownerCharges.length ? ownerCharges : charges.slice(0, 2)).map((charge) => [charge.date, charge.type, charge.property, charge.amount, charge.status])}
+          />
+        )}
+
+        {includeReversals && (
+          <OwnerDocumentTable
+            title="Détail des reversements"
+            columns={["Période", "Référence", "Payé", "Solde", "Statut"]}
+            rows={(ownerReversals.length ? ownerReversals : reversals.slice(0, 2)).map((reversal) => [reversal.period ?? "Mai 2026", reversal.reference ?? "État propriétaire", reversal.paid, reversal.balance, reversal.status])}
+          />
+        )}
+
+        <footer className="property-pdf-footer">
+          <img src={ekimmoAssets.logo} alt="E.K immo" />
+          <div>
+            <strong>E.K immo SAS</strong>
+            <span>Niaréla, face mairie - Bamako, Mali</span>
+            <span>État propriétaire généré pour contrôle, signature et archivage.</span>
+            <span>Contact : +223 72 77 71 77 / +223 44 44 13 31</span>
+          </div>
+        </footer>
+      </section>
+    </article>
+  );
+}
+
+function OwnerDocumentTable({ title, columns, rows }) {
+  const displayRows = rows.length ? rows : [["-", "Aucune donnée disponible", "-", "-", "-"]];
+
+  return (
+    <section className="property-pdf-section owner-document-table-section">
+      <h4>{title}</h4>
+      <table className="owner-document-table">
+        <thead>
+          <tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr>
+        </thead>
+        <tbody>
+          {displayRows.map((row, rowIndex) => (
+            <tr key={`${title}-${rowIndex}`}>
+              {columns.map((column, columnIndex) => <td key={`${column}-${columnIndex}`}>{row[columnIndex] ?? "-"}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
 function FillableDocument({ template, values, onChange, readOnly = false, preview = false }) {
   if (preview) {
     if (template.key === "facture") return <OriginalInvoiceDocument values={values} />;
@@ -6355,7 +6869,7 @@ function InvoiceActions({ invoice, onAction }) {
   );
 }
 
-function FinancePage({ activeTab, onTab, onAction, paymentsList = paymentRecords, rentRowsList = rentRows, chargesList = charges, maintenancesList = maintenances }) {
+function FinancePage({ activeTab, onTab, onAction, paymentsList = paymentRecords, rentRowsList = rentRows, chargesList = charges, maintenancesList = maintenances, reversalsList = reversals }) {
   const tabs = ["Loyers", "Paiements", "Impayés", "Commissions", "Charges", "Entretiens", "Reversements"];
   const effectiveTab = tabs.includes(activeTab) ? activeTab : "Loyers";
   const agencyRentRows = rentRowsList.filter((row) => isAgencyCollectedProperty(row.property));
@@ -6379,7 +6893,7 @@ function FinancePage({ activeTab, onTab, onAction, paymentsList = paymentRecords
       {effectiveTab === "Commissions" && <CommissionsView onAction={onAction} />}
       {effectiveTab === "Charges" && <ChargesView onAction={onAction} chargesList={chargesList} />}
       {effectiveTab === "Entretiens" && <MaintenancesView onAction={onAction} maintenancesList={maintenancesList} />}
-      {effectiveTab === "Reversements" && <ReversalsView onAction={onAction} />}
+      {effectiveTab === "Reversements" && <ReversalsView onAction={onAction} reversalsList={reversalsList} />}
     </>
   );
 }
@@ -6900,8 +7414,8 @@ function MaintenanceProfilePanel({ maintenance, onAction }) {
   );
 }
 
-function ReversalsView({ onAction }) {
-  const [selected, setSelected] = useState(reversals[0]);
+function ReversalsView({ onAction, reversalsList = reversals }) {
+  const [selected, setSelected] = useState(reversalsList[0] ?? reversals[0]);
   const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
 
   const openReversal = (row) => {
@@ -6922,7 +7436,7 @@ function ReversalsView({ onAction }) {
       <Panel title="Reversements propriétaires">
         <DataTable
           columns={["Propriétaire", "Loyers encaissés", "Commissions", "Charges", "Déjà reversé", "Solde", "Statut", "Action"]}
-          rows={reversals.map((row) => [
+          rows={reversalsList.map((row) => [
             row.owner,
             row.collected,
             row.commission,
@@ -6951,16 +7465,16 @@ function ReversalProfilePanel({ reversal, onAction }) {
         ]}
       />
       <div className="simple-list">
-        <p><span>Période concernée</span><strong>Mai 2026</strong></p>
+        <p><span>Période concernée</span><strong>{reversal.period ?? "Mai 2026"}</strong></p>
         <p><span>Loyers encaissés</span><strong>{reversal.collected}</strong></p>
         <p><span>Commissions</span><strong>{reversal.commission}</strong></p>
         <p><span>Charges</span><strong>{reversal.charges}</strong></p>
         <p><span>Montant net à reverser</span><strong>{reversal.balance}</strong></p>
         <p><span>Montant payé</span><strong>{reversal.paid}</strong></p>
-        <p><span>Mode de paiement</span><strong>Virement</strong></p>
-        <p><span>Référence</span><strong>REV-2026-051</strong></p>
-        <p><span>Justificatif</span><Badge label="À valider" /></p>
-        <p><span>Observation</span><strong>État propriétaire généré</strong></p>
+        <p><span>Mode de paiement</span><strong>{reversal.mode ?? "Virement"}</strong></p>
+        <p><span>Référence</span><strong>{reversal.reference ?? "REV-2026-051"}</strong></p>
+        <p><span>Justificatif</span><Badge label={reversal.proof ? "Archivé" : "À valider"} /></p>
+        <p><span>Observation</span><strong>{reversal.note ?? "État propriétaire généré"}</strong></p>
       </div>
       <div className="stack-actions">
         <Button onClick={() => onAction("Calcul reversement")}><Eye size={17} /> Calcul</Button>
@@ -7886,24 +8400,30 @@ function DocumentActions() {
   );
 }
 
-function OwnerFormModal({ sequence = owners.length + 1, onSave, onClose }) {
+function OwnerFormModal({ sequence = owners.length + 1, owner = null, mode = "create", onSave, onClose }) {
+  const isEditMode = mode === "edit" && owner;
   const generatedId = useMemo(() => `PRO-2026-${String(sequence).padStart(3, "0")}`, [sequence]);
-  const [values, setValues] = useState({
-    type: "Personne physique",
-    name: "Aminata Coulibaly",
-    id: generatedId,
-    phone: "+223 76 45 18 92",
-    email: "a.coulibaly@exemple.ml",
-    address: "ACI 2000, Bamako",
-    focalPoint: "",
-    mandateType: "Mandat de gestion locative",
-    commission: "5% des loyers encaissés",
-    reversementMode: "Virement bancaire",
-    reversementPeriod: "Mensuel",
-    observations: "Propriétaire à rattacher aux biens après validation du mandat.",
-  });
+  const initialValues = useMemo(() => ({
+    type: owner?.type ?? "Personne physique",
+    name: owner?.name ?? "Aminata Coulibaly",
+    id: owner?.id ?? generatedId,
+    phone: owner?.phone ?? "+223 76 45 18 92",
+    email: owner?.email ?? "a.coulibaly@exemple.ml",
+    address: owner?.address ?? "ACI 2000, Bamako",
+    focalPoint: owner?.focalPoint ?? "",
+    mandateType: owner?.mandateType ?? "Mandat de gestion locative",
+    commission: owner?.commission ?? "5% des loyers encaissés",
+    reversementMode: owner?.reversementMode ?? "Virement bancaire",
+    reversementPeriod: owner?.reversementPeriod ?? "Mensuel",
+    observations: owner?.observations ?? "Propriétaire à rattacher aux biens après validation du mandat.",
+  }), [generatedId, owner]);
+  const [values, setValues] = useState(initialValues);
   const isCompany = values.type === "Société";
   const canSave = values.name.trim() && values.phone.trim();
+
+  useEffect(() => {
+    setValues(initialValues);
+  }, [initialValues]);
 
   const update = (key, value) => {
     setValues((current) => ({
@@ -7915,30 +8435,31 @@ function OwnerFormModal({ sequence = owners.length + 1, onSave, onClose }) {
 
   const submit = (addProperty = false) => {
     if (!canSave) return;
-    const owner = {
+    const nextOwner = {
+      ...owner,
       id: values.id,
       name: values.name.trim(),
       phone: values.phone.trim(),
       email: values.email.trim(),
       address: values.address.trim(),
       type: values.type,
-      properties: 0,
-      rent: "0 FCFA",
-      charges: "0 FCFA",
+      properties: owner?.properties ?? 0,
+      rent: owner?.rent ?? "0 FCFA",
+      charges: owner?.charges ?? "0 FCFA",
       commission: values.commission,
-      balance: "0 FCFA",
-      lastPayment: "N/A",
-      status: "Actif",
+      balance: owner?.balance ?? "0 FCFA",
+      lastPayment: owner?.lastPayment ?? "N/A",
+      status: owner?.status ?? "Actif",
       initials: getInitials(values.name),
       focalPoint: isCompany ? values.focalPoint.trim() : "",
       mandateType: values.mandateType,
       reversementMode: values.reversementMode,
       reversementPeriod: values.reversementPeriod,
       observations: values.observations,
-      documents: ["Pièce d'identité", "Mandat", "RIB", "Autre document"],
+      documents: owner?.documents ?? ["Pièce d'identité", "Mandat", "RIB", "Autre document"],
     };
 
-    onSave({ owner, addProperty });
+    onSave({ owner: nextOwner, addProperty });
   };
 
   return (
@@ -7948,8 +8469,8 @@ function OwnerFormModal({ sequence = owners.length + 1, onSave, onClose }) {
         <div className="payment-modal-head">
           <div>
             <span>Fiche client</span>
-            <h2>Nouveau propriétaire</h2>
-            <p>Créer une fiche propriétaire et lier ses biens par la suite.</p>
+            <h2>{isEditMode ? "Modifier propriétaire" : "Nouveau propriétaire"}</h2>
+            <p>{isEditMode ? "Mettre à jour l'identité, les conditions de gestion, la commission et les documents." : "Créer une fiche propriétaire et lier ses biens par la suite."}</p>
           </div>
           <Badge label={values.id} />
         </div>
@@ -7992,8 +8513,14 @@ function OwnerFormModal({ sequence = owners.length + 1, onSave, onClose }) {
 
         <div className="action-row compact-row">
           <Button onClick={onClose}>Annuler</Button>
-          <Button variant="primary" disabled={!canSave} onClick={() => submit(false)}><CheckCircle2 size={17} /> Enregistrer</Button>
-          <Button disabled={!canSave} onClick={() => submit(true)}><Plus size={17} /> Enregistrer et ajouter un bien</Button>
+          {isEditMode ? (
+            <Button variant="primary" disabled={!canSave} onClick={() => submit(false)}><CheckCircle2 size={17} /> Enregistrer les modifications</Button>
+          ) : (
+            <>
+              <Button variant="primary" disabled={!canSave} onClick={() => submit(false)}><CheckCircle2 size={17} /> Enregistrer</Button>
+              <Button disabled={!canSave} onClick={() => submit(true)}><Plus size={17} /> Enregistrer et ajouter un bien</Button>
+            </>
+          )}
         </div>
       </section>
     </div>
