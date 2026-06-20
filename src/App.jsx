@@ -1972,6 +1972,121 @@ function getSearchResults(query) {
     .slice(0, 8);
 }
 
+function getProspectKey(prospect) {
+  return prospect?.id ?? normalizeSearch(prospect?.name ?? "prospect");
+}
+
+function getProspectObjective(prospect) {
+  return prospect?.objective ?? (prospect?.need?.includes("Bureau") ? "Location pro" : "Location");
+}
+
+function getProspectDelay(prospect) {
+  return prospect?.delay ?? "30 jours";
+}
+
+function getCompatibleProperties(prospect, filters = {}) {
+  const prospectNeed = normalizeSearch(prospect?.propertyType ?? prospect?.need ?? "");
+  const prospectDistrict = normalizeSearch(prospect?.district ?? "");
+  const firstNeedWord = prospectNeed.split(" ")[0] ?? "";
+  const firstDistrictWord = prospectDistrict.split(/[ /]+/)[0] ?? "";
+  const filterDistrict = normalizeSearch(filters.district ?? "");
+  const filterType = normalizeSearch(filters.type ?? "");
+  const filterStatus = filters.status ?? "";
+  const budgetLimit = parseFCFA(filters.budget ?? "");
+
+  return Array.from(
+    new Map(
+      properties
+        .filter((property) => {
+          const haystack = normalizeSearch(`${property.type} ${property.name} ${property.district} ${property.address}`);
+          const matchesProspect =
+            (firstNeedWord && haystack.includes(firstNeedWord)) ||
+            (firstDistrictWord && haystack.includes(firstDistrictWord)) ||
+            property.status === "Disponible";
+          const matchesDistrict = !filterDistrict || haystack.includes(filterDistrict);
+          const matchesType = !filterType || haystack.includes(filterType);
+          const matchesStatus = !filterStatus || filterStatus === "Tous" || property.status === filterStatus;
+          const matchesBudget = !budgetLimit || parseFCFA(property.price) <= budgetLimit;
+          return matchesProspect && matchesDistrict && matchesType && matchesStatus && matchesBudget;
+        })
+        .concat(properties.filter((property) => property.status === "Disponible"))
+        .map((property) => [property.code, property])
+    ).values()
+  ).slice(0, 8);
+}
+
+function getDefaultProspectProposals(prospect) {
+  return getCompatibleProperties(prospect)
+    .slice(0, 2)
+    .map((property) => ({
+      code: property.code,
+      name: property.name,
+      status: property.status,
+      return: property.status === "Disponible" ? "À présenter" : "À confirmer",
+      proposedAt: "Historique initial",
+    }));
+}
+
+function getDefaultProspectTimeline(prospect) {
+  return [
+    { title: "Appel de qualification", text: prospect?.next ?? "Besoin qualifié", date: "28/05/2026" },
+    { title: "Commentaire", text: prospect?.comment ?? `Besoin suivi par ${prospect?.agent ?? "l'agence"}`, date: "28/05/2026" },
+    { title: "Proposition envoyée", text: "Première sélection de biens préparée", date: "29/05/2026" },
+    { title: "Changement de statut", text: prospect?.status ?? "Nouveau", date: "29/05/2026" },
+  ];
+}
+
+function nodeToText(node) {
+  if (node === null || node === undefined || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(nodeToText).join(" ");
+  return nodeToText(node.props?.children);
+}
+
+function rowToSearchText(row) {
+  return normalizeSearch(row.map(nodeToText).join(" "));
+}
+
+function parseVisitDate(date) {
+  if (!date) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const [year, month, day] = date.split("-").map(Number);
+    return new Date(year, month - 1, day);
+  }
+  const parts = date.split("/");
+  if (parts.length === 3) {
+    const [day, month, year] = parts.map(Number);
+    return new Date(year, month - 1, day);
+  }
+  return null;
+}
+
+function visitMatchesPeriod(visit, period) {
+  if (period === "Toutes périodes") return true;
+  const date = parseVisitDate(visit.date);
+  if (!date) return false;
+  const reference = new Date(2026, 5, 20);
+  const startOfWeek = new Date(reference);
+  startOfWeek.setDate(reference.getDate() - reference.getDay() + 1);
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+  if (period === "Aujourd'hui") return date.toDateString() === reference.toDateString();
+  if (period === "Cette semaine") return date >= startOfWeek && date <= endOfWeek;
+  if (period === "Ce mois") return date.getMonth() === reference.getMonth() && date.getFullYear() === reference.getFullYear();
+  if (period === "Mois prochain") return date.getMonth() === reference.getMonth() + 1 && date.getFullYear() === reference.getFullYear();
+  return true;
+}
+
+function visitMatchesQuickFilter(visit, quickFilter) {
+  if (quickFilter === "Toutes visites") return true;
+  if (quickFilter === "Visites du jour") return visitMatchesPeriod(visit, "Aujourd'hui");
+  if (quickFilter === "Visites reportées") return normalizeSearch(visit.status).includes("report");
+  if (quickFilter === "Visites annulées") return normalizeSearch(visit.status).includes("annul");
+  if (quickFilter === "Visites conclues") return ["client interesse", "conclu", "realisee"].some((status) => normalizeSearch(visit.status).includes(status));
+  return true;
+}
+
 function App() {
   const [activePage, setActivePage] = useState("Dashboard");
   const [showLogin, setShowLogin] = useState(false);
@@ -1996,6 +2111,12 @@ function App() {
   const [tenantRelances, setTenantRelances] = useState([]);
   const [tenantReceiptArchives, setTenantReceiptArchives] = useState([]);
   const [createdProspects, setCreatedProspects] = useState([]);
+  const [prospectOverrides, setProspectOverrides] = useState({});
+  const [prospectProposals, setProspectProposals] = useState({});
+  const [prospectActivities, setProspectActivities] = useState({});
+  const [scheduledProspectVisits, setScheduledProspectVisits] = useState([]);
+  const [prospectConversions, setProspectConversions] = useState({});
+  const [prospectActionContext, setProspectActionContext] = useState(null);
   const [prospectProposalContext, setProspectProposalContext] = useState(null);
   const [contractTab, setContractTab] = useState("Contrats");
   const [generatedContracts, setGeneratedContracts] = useState([]);
@@ -2030,7 +2151,25 @@ function App() {
     () => tenants.map((tenant) => ({ ...tenant, ...(tenantOverrides[tenant.id] ?? {}) })),
     [tenantOverrides]
   );
-  const allProspects = useMemo(() => [...createdProspects, ...prospects], [createdProspects]);
+  const allProspects = useMemo(() => {
+    const applyOverride = (prospect) => ({ ...prospect, ...(prospectOverrides[getProspectKey(prospect)] ?? {}) });
+    return [...createdProspects.map(applyOverride), ...prospects.map(applyOverride)];
+  }, [createdProspects, prospectOverrides]);
+  const allVisits = useMemo(() => [...scheduledProspectVisits, ...visits], [scheduledProspectVisits]);
+  const topbarNotifications = useMemo(() => {
+    const visitNotifications = scheduledProspectVisits
+      .filter((visit) => visit.notifyReminder && visitMatchesPeriod(visit, "Aujourd'hui"))
+      .map((visit, index) => ({
+        id: `scheduled-visit-${visit.id ?? index}`,
+        title: "Visite du jour",
+        detail: `${visit.client} - ${visit.property} a ${visit.time}`,
+        meta: visit.agent,
+        tone: "info",
+        page: "Clients",
+      }));
+
+    return [...notificationAlerts, ...visitNotifications];
+  }, [scheduledProspectVisits]);
   const allReversals = useMemo(() => [...ownerReversements, ...reversals], [ownerReversements]);
   const propertiesWithArchiveState = useMemo(() => properties.map((property) => {
     const archive = archivedProperties[property.code];
@@ -2068,6 +2207,48 @@ function App() {
     if (normalizedAction === "proposer un bien") {
       setProspectProposalContext(context.prospect ?? prospectProposalContext ?? prospects[0]);
       setModal("Proposer un bien prospect");
+      return;
+    }
+
+    if (normalizedAction === "planifier visite" || normalizedAction === "planifier une visite") {
+      setProspectActionContext({
+        prospect: context.prospect ?? null,
+        proposal: context.proposal ?? null,
+        property: context.property ?? selectedProperty,
+      });
+      setModal("Planifier visite prospect");
+      return;
+    }
+
+    if (normalizedAction === "ouvrir fiche bien prospect" && context.property) {
+      showPropertyDetail(context.property);
+      return;
+    }
+
+    if (normalizedAction === "retirer proposition prospect" && context.prospect && context.proposal) {
+      handleProspectProposalRemoval(context.prospect, context.proposal);
+      return;
+    }
+
+    if (normalizedAction === "marquer proposition interessee" && context.prospect && context.proposal) {
+      handleProspectProposalInterest(context.prospect, context.proposal);
+      return;
+    }
+
+    if ([
+      "modifier besoin prospect",
+      "prochaine action prospect",
+      "planifier visite prospect",
+      "ajouter commentaire prospect",
+      "changer statut prospect",
+      "convertir prospect",
+    ].includes(normalizedAction)) {
+      setProspectActionContext({
+        prospect: context.prospect ?? prospectProposalContext ?? prospects[0],
+        proposal: context.proposal ?? null,
+        property: context.property ?? null,
+      });
+      setModal(label);
       return;
     }
 
@@ -2319,6 +2500,221 @@ function App() {
     }
 
     setModal(null);
+  };
+
+  const addProspectActivity = (prospect, activity) => {
+    const key = getProspectKey(prospect);
+    setProspectActivities((current) => ({
+      ...current,
+      [key]: [
+        { date: "19/06/2026", ...activity },
+        ...(current[key] ?? []),
+      ],
+    }));
+  };
+
+  const updateProspect = (prospect, patch, activity) => {
+    const key = getProspectKey(prospect);
+    setProspectOverrides((current) => ({
+      ...current,
+      [key]: {
+        ...(current[key] ?? {}),
+        ...patch,
+      },
+    }));
+    if (activity) {
+      addProspectActivity({ ...prospect, ...patch }, activity);
+    }
+  };
+
+  const handleProspectNeedSave = ({ prospect, values }) => {
+    const patch = {
+      need: values.propertyType,
+      propertyType: values.propertyType,
+      district: values.districts,
+      budget: values.budget,
+      objective: values.objective,
+      delay: values.delay,
+      requirements: values.requirements,
+      comment: values.comment,
+    };
+    updateProspect(prospect, patch, {
+      title: "Besoin mis à jour",
+      text: `${values.propertyType} · ${values.districts} · ${values.budget}`,
+    });
+    setModal(null);
+    setProspectActionContext(null);
+  };
+
+  const handleProspectProposalSave = ({ prospect, properties: selectedProperties, comment }) => {
+    const key = getProspectKey(prospect);
+    const proposedItems = selectedProperties.map((property) => ({
+      code: property.code,
+      name: property.name,
+      status: property.status,
+      return: comment || "Proposition envoyée",
+      proposedAt: "19/06/2026",
+    }));
+
+    setProspectProposals((current) => {
+      const existing = current[key] ?? getDefaultProspectProposals(prospect);
+      const byCode = new Map(existing.map((item) => [item.code, item]));
+      proposedItems.forEach((item) => byCode.set(item.code, item));
+      return { ...current, [key]: Array.from(byCode.values()) };
+    });
+
+    updateProspect(prospect, {
+      status: prospect.status === "Nouveau" ? "Contacté" : prospect.status,
+      next: "Relance proposition",
+    }, {
+      title: "Proposition envoyée",
+      text: `${proposedItems.length} bien${proposedItems.length > 1 ? "s" : ""} proposé${proposedItems.length > 1 ? "s" : ""} · ${comment || "Sans commentaire"}`,
+    });
+    setModal(null);
+    setProspectProposalContext(null);
+  };
+
+  const handleProspectProposalRemoval = (prospect, proposal) => {
+    const key = getProspectKey(prospect);
+    setProspectProposals((current) => ({
+      ...current,
+      [key]: (current[key] ?? getDefaultProspectProposals(prospect)).filter((item) => item.code !== proposal.code),
+    }));
+    addProspectActivity(prospect, {
+      title: "Proposition retirée",
+      text: proposal.name,
+    });
+  };
+
+  const handleProspectProposalInterest = (prospect, proposal) => {
+    const key = getProspectKey(prospect);
+    setProspectProposals((current) => ({
+      ...current,
+      [key]: (current[key] ?? getDefaultProspectProposals(prospect)).map((item) => (
+        item.code === proposal.code ? { ...item, return: "Intéressé" } : item
+      )),
+    }));
+    updateProspect(prospect, { status: "Intéressé", next: "Planifier visite" }, {
+      title: "Prospect intéressé",
+      text: proposal.name,
+    });
+  };
+
+  const handleProspectNextActionSave = ({ prospect, values }) => {
+    updateProspect(prospect, {
+      next: `${values.type} · ${values.date}`,
+      agent: values.responsible,
+    }, {
+      title: "Prochaine action planifiée",
+      text: `${values.type} le ${values.date} · ${values.comment}`,
+    });
+    setModal(null);
+    setProspectActionContext(null);
+  };
+
+  const handleProspectVisitSave = ({ prospect, visit }) => {
+    const selectedVisitProperty = properties.find((item) => item.name === visit.property) ?? selectedProperty;
+    const existingProspect = allProspects.find((item) => item.name === visit.prospectName);
+    const prospectName = (visit.clientMode === "new" ? visit.newProspectName : visit.prospectName) || prospect?.name || "Nouveau prospect";
+    const targetProspect = existingProspect ?? prospect ?? {
+      id: `PRS-2026-${String(prospects.length + createdProspects.length + 1).padStart(3, "0")}`,
+      name: prospectName,
+      initials: getInitials(prospectName),
+      phone: visit.phone,
+      need: visit.need,
+      district: selectedVisitProperty.district,
+      budget: selectedVisitProperty.price,
+      status: "Visite prévue",
+      agent: visit.agent,
+      next: visit.nextAction,
+    };
+    const nextVisit = {
+      id: `VIS-2026-${String(visits.length + scheduledProspectVisits.length + 1).padStart(3, "0")}`,
+      client: prospectName,
+      phone: visit.phone,
+      need: visit.need,
+      property: selectedVisitProperty.name,
+      propertyCode: selectedVisitProperty.code,
+      address: selectedVisitProperty.address,
+      owner: selectedVisitProperty.owner,
+      district: selectedVisitProperty.district,
+      date: visit.date,
+      time: visit.time,
+      agent: visit.agent,
+      status: "Prévue",
+      feedback: visit.internalComment || "Retour à renseigner après visite",
+      next: visit.nextAction,
+      meetingPlace: visit.meetingPlace,
+      priority: visit.priority,
+      notifyReminder: visit.notifyReminder === "Oui",
+    };
+
+    if (visit.clientMode === "new" && !existingProspect) {
+      setCreatedProspects((current) => [targetProspect, ...current]);
+    }
+
+    setScheduledProspectVisits((current) => [nextVisit, ...current]);
+    setPropertyHistoryOverrides((current) => ({
+      ...current,
+      [selectedVisitProperty.name]: [
+        ["Visite planifiée", `${prospectName} - ${visit.date} ${visit.time} - ${visit.agent}`, "20/06/2026"],
+        ...(current[selectedVisitProperty.name] ?? []),
+      ],
+    }));
+    updateProspect(targetProspect, { status: "Visite prévue", next: visit.nextAction, phone: visit.phone, need: visit.need, agent: visit.agent }, {
+      title: "Visite planifiée",
+      text: `${selectedVisitProperty.name} - ${visit.date} ${visit.time}`,
+    });
+    setClientTab("Visites");
+    setActivePage("Clients");
+    setModal(null);
+    setProspectActionContext(null);
+  };
+
+  const handleProspectCommentSave = ({ prospect, values }) => {
+    addProspectActivity(prospect, {
+      title: values.type,
+      text: values.comment,
+    });
+    setModal(null);
+    setProspectActionContext(null);
+  };
+
+  const handleProspectStatusSave = ({ prospect, status, reason }) => {
+    updateProspect(prospect, {
+      status,
+      next: status === "Perdu" ? reason : prospect.next,
+      lostReason: status === "Perdu" ? reason : "",
+    }, {
+      title: "Changement de statut",
+      text: status === "Perdu" ? `${status} · ${reason}` : status,
+    });
+    setModal(null);
+    setProspectActionContext(null);
+  };
+
+  const handleProspectConversionSave = ({ prospect, values }) => {
+    const conversion = {
+      ...values,
+      date: "19/06/2026",
+    };
+    const key = getProspectKey(prospect);
+    setProspectConversions((current) => ({ ...current, [key]: conversion }));
+    updateProspect(prospect, { status: "Conclu", next: values.createContract === "Oui" ? "Créer contrat" : "Dossier converti" }, {
+      title: "Prospect converti",
+      text: `${values.conversionType} · ${values.property}`,
+    });
+
+    if (values.createContract === "Oui") {
+      const property = properties.find((item) => item.name === values.property) ?? selectedProperty;
+      setSelectedProperty(property);
+      setModal("Créer contrat");
+      setProspectActionContext(null);
+      return;
+    }
+
+    setModal(null);
+    setProspectActionContext(null);
   };
 
   const handleTenantRelanceSave = ({ relance, tenant }) => {
@@ -2642,6 +3038,7 @@ function App() {
         onProfile={() => setShowLogin(true)}
         onStartDemo={startDemo}
         demoActive={demoActive}
+        notifications={topbarNotifications}
       />
 
       <main className={activePage === "Dashboard" ? "page-shell dashboard-shell" : "page-shell"}>
@@ -2667,6 +3064,7 @@ function App() {
             propertyHistoryOverrides={propertyHistoryOverrides}
             propertyPdfArchives={propertyPdfArchives}
             propertiesList={propertiesWithArchiveState}
+            visitsList={allVisits}
           />
         )}
         {activePage === "Clients" && (
@@ -2680,6 +3078,10 @@ function App() {
             onTenant={setSelectedTenant}
             tenantsList={allTenants}
             prospectsList={allProspects}
+            prospectProposals={prospectProposals}
+            prospectActivities={prospectActivities}
+            prospectConversions={prospectConversions}
+            visitsList={allVisits}
             tenantRelances={tenantRelances}
             tenantReceiptArchives={tenantReceiptArchives}
             onAction={openAction}
@@ -2737,8 +3139,66 @@ function App() {
       ) : modal === "Proposer un bien prospect" ? (
         <ProspectProposalModal
           prospect={prospectProposalContext ?? prospects[0]}
+          onSave={handleProspectProposalSave}
           onClose={() => {
             setProspectProposalContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Modifier besoin prospect" ? (
+        <ProspectNeedModal
+          prospect={prospectActionContext?.prospect ?? null}
+          onSave={handleProspectNeedSave}
+          onClose={() => {
+            setProspectActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Prochaine action prospect" ? (
+        <ProspectNextActionModal
+          prospect={prospectActionContext?.prospect ?? null}
+          onSave={handleProspectNextActionSave}
+          onClose={() => {
+            setProspectActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Planifier visite prospect" ? (
+        <ProspectVisitModal
+          prospect={prospectActionContext?.prospect ?? prospects[0]}
+          proposal={prospectActionContext?.proposal}
+          property={prospectActionContext?.property ?? selectedProperty}
+          prospectsList={allProspects}
+          onSave={handleProspectVisitSave}
+          onClose={() => {
+            setProspectActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Ajouter commentaire prospect" ? (
+        <ProspectCommentModal
+          prospect={prospectActionContext?.prospect ?? prospects[0]}
+          onSave={handleProspectCommentSave}
+          onClose={() => {
+            setProspectActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Changer statut prospect" ? (
+        <ProspectStatusModal
+          prospect={prospectActionContext?.prospect ?? prospects[0]}
+          onSave={handleProspectStatusSave}
+          onClose={() => {
+            setProspectActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Convertir prospect" ? (
+        <ProspectConversionModal
+          prospect={prospectActionContext?.prospect ?? prospects[0]}
+          onSave={handleProspectConversionSave}
+          onClose={() => {
+            setProspectActionContext(null);
             setModal(null);
           }}
         />
@@ -2993,14 +3453,14 @@ function DemoTour({ step, index, total, rect, onNext, onPrevious, onStop }) {
   );
 }
 
-function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onProfile, onStartDemo, demoActive }) {
+function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onProfile, onStartDemo, demoActive, notifications = notificationAlerts }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [readNotificationIds, setReadNotificationIds] = useState([]);
   const results = useMemo(() => getSearchResults(globalQuery), [globalQuery]);
   const hasQuery = globalQuery.trim().length > 0;
-  const unreadCount = notificationAlerts.filter((item) => !readNotificationIds.includes(item.id)).length;
+  const unreadCount = notifications.filter((item) => !readNotificationIds.includes(item.id)).length;
 
   const handleResultClick = (page) => {
     onNav(page);
@@ -3113,7 +3573,7 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onPro
                 </button>
               </div>
               <div className="notification-list">
-                {notificationAlerts.map((item) => {
+                {notifications.map((item) => {
                   const isRead = readNotificationIds.includes(item.id);
 
                   return (
@@ -3322,6 +3782,7 @@ function PropertiesPage({
   propertyHistoryOverrides = {},
   propertyPdfArchives = [],
   propertiesList = properties,
+  visitsList = visits,
 }) {
   const [statusFilter, setStatusFilter] = useState("Tous statuts");
   const [typeFilter, setTypeFilter] = useState("Tous types");
@@ -3469,6 +3930,7 @@ function PropertiesPage({
         maintenancesList={maintenancesList}
         historyItems={propertyHistoryOverrides[displayedSelectedProperty.name] ?? []}
         propertyPdfArchives={propertyPdfArchives}
+        visitsList={visitsList}
       />
     );
   }
@@ -3624,7 +4086,7 @@ function PropertyCard({ property, onSelect }) {
   );
 }
 
-function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, chargesList = charges, maintenancesList = maintenances, historyItems = [], propertyPdfArchives = [] }) {
+function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, chargesList = charges, maintenancesList = maintenances, historyItems = [], propertyPdfArchives = [], visitsList = visits }) {
   const hasHierarchy = isBuildingProperty(property) || Boolean(property.parentCode);
   const tabs = ["Résumé", ...(hasHierarchy ? ["Lots & blocs"] : []), "Propriétaire", "Locataire", "Contrats", "Paiements", "Charges & entretiens", "Documents", "Historique"];
   const effectiveTab = tabs.includes(activeTab) ? activeTab : "Résumé";
@@ -3719,7 +4181,7 @@ function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, on
       />
 
       <Tabs tabs={tabs} active={effectiveTab} onChange={onTab} demo="property-detail-tabs" />
-      {effectiveTab === "Résumé" && <PropertySummary property={property} onOpenProperty={onOpenProperty} />}
+      {effectiveTab === "Résumé" && <PropertySummary property={property} onOpenProperty={onOpenProperty} visitsList={visitsList} />}
       {effectiveTab === "Lots & blocs" && <PropertyHierarchy property={property} onOpenProperty={onOpenProperty} />}
       {effectiveTab === "Propriétaire" && <PropertyOwner property={property} />}
       {effectiveTab === "Locataire" && <PropertyTenant property={property} />}
@@ -3732,9 +4194,10 @@ function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, on
   );
 }
 
-function PropertySummary({ property, onOpenProperty }) {
+function PropertySummary({ property, onOpenProperty, visitsList = visits }) {
   const children = getPropertyChildren(property);
   const parent = getPropertyParent(property);
+  const propertyVisits = visitsList.filter((visit) => visit.property === property.name || visit.propertyCode === property.code);
 
   return (
     <section className="detail-grid">
@@ -3804,6 +4267,27 @@ function PropertySummary({ property, onOpenProperty }) {
           <div className="map-card">
             <span />
           </div>
+        </Panel>
+        <Panel title="Visites liées">
+          <DataTable
+            columns={["Date", "Prospect", "Agent", "Statut", "Prochaine action"]}
+            rows={(propertyVisits.length ? propertyVisits : [
+              {
+                date: "Aucune visite",
+                time: "",
+                client: "Aucune visite planifiée",
+                agent: "E.K immo",
+                status: "À planifier",
+                next: "Planifier visite",
+              },
+            ]).map((visit) => [
+              `${visit.date}${visit.time ? ` · ${visit.time}` : ""}`,
+              visit.client,
+              visit.agent,
+              <Badge label={visit.status} />,
+              visit.next,
+            ])}
+          />
         </Panel>
       </div>
       <aside className="detail-side">
@@ -4215,12 +4699,29 @@ function PropertyHistory({ property, historyItems = [] }) {
   );
 }
 
-function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = owners, selectedTenant, onTenant, tenantsList = tenants, prospectsList = prospects, tenantRelances = [], tenantReceiptArchives = [], onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, reversalsList = reversals }) {
+function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = owners, selectedTenant, onTenant, tenantsList = tenants, prospectsList = prospects, prospectProposals = {}, prospectActivities = {}, prospectConversions = {}, visitsList = visits, tenantRelances = [], tenantReceiptArchives = [], onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, reversalsList = reversals }) {
   const tabs = ["Propriétaires", "Locataires", "Prospects", "Visites"];
   const [detailView, setDetailView] = useState(null);
   const [selectedProspect, setSelectedProspect] = useState(prospects[0]);
   const [selectedVisit, setSelectedVisit] = useState(visits[0]);
   const [savedScroll, setSavedScroll] = useState(0);
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientFilterOpen, setClientFilterOpen] = useState(false);
+  const [clientExportOpen, setClientExportOpen] = useState(false);
+  const [clientFilters, setClientFilters] = useState({
+    ownerStatus: "Tous statuts",
+    ownerType: "Tous types",
+    tenantStatus: "Tous statuts",
+    tenantProperty: "Tous biens",
+    prospectStatus: "Tous statuts",
+    prospectAgent: "Tous agents",
+    visitPeriod: "Toutes périodes",
+    visitStatus: "Tous statuts",
+    visitAgent: "Tous agents",
+    visitProperty: "Tous biens",
+    visitProspect: "Tous prospects",
+    visitQuick: "Toutes visites",
+  });
   const actionByTab = {
     Propriétaires: ["Nouveau propriétaire", "Nouveau propriétaire"],
     Locataires: ["Nouveau locataire", "Nouveau locataire"],
@@ -4231,7 +4732,78 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
 
   useEffect(() => {
     setDetailView(null);
+    setClientSearch("");
+    setClientFilterOpen(false);
+    setClientExportOpen(false);
   }, [activeTab]);
+
+  const updateClientFilter = (key, value) => {
+    setClientFilters((current) => ({ ...current, [key]: value }));
+  };
+
+  const resetClientFilters = () => {
+    setClientFilters({
+      ownerStatus: "Tous statuts",
+      ownerType: "Tous types",
+      tenantStatus: "Tous statuts",
+      tenantProperty: "Tous biens",
+      prospectStatus: "Tous statuts",
+      prospectAgent: "Tous agents",
+      visitPeriod: "Toutes périodes",
+      visitStatus: "Tous statuts",
+      visitAgent: "Tous agents",
+      visitProperty: "Tous biens",
+      visitProspect: "Tous prospects",
+      visitQuick: "Toutes visites",
+    });
+    setClientSearch("");
+  };
+
+  const filteredOwners = useMemo(() => {
+    const search = normalizeSearch(clientSearch);
+    return ownersList.filter((owner) => {
+      const haystack = normalizeSearch(`${owner.name} ${owner.phone} ${owner.email} ${owner.status} ${owner.type ?? ""}`);
+      const statusMatch = clientFilters.ownerStatus === "Tous statuts" || owner.status === clientFilters.ownerStatus;
+      const typeMatch = clientFilters.ownerType === "Tous types" || (owner.type ?? "Personne physique") === clientFilters.ownerType;
+      return (!search || haystack.includes(search)) && statusMatch && typeMatch;
+    });
+  }, [clientFilters.ownerStatus, clientFilters.ownerType, clientSearch, ownersList]);
+
+  const filteredTenants = useMemo(() => {
+    const search = normalizeSearch(clientSearch);
+    return tenantsList.filter((tenant) => {
+      const haystack = normalizeSearch(`${tenant.name} ${tenant.phone} ${tenant.email} ${tenant.property} ${tenant.contract} ${tenant.paymentStatus}`);
+      const statusMatch = clientFilters.tenantStatus === "Tous statuts" || tenant.paymentStatus === clientFilters.tenantStatus;
+      const propertyMatch = clientFilters.tenantProperty === "Tous biens" || tenant.property === clientFilters.tenantProperty;
+      return (!search || haystack.includes(search)) && statusMatch && propertyMatch;
+    });
+  }, [clientFilters.tenantProperty, clientFilters.tenantStatus, clientSearch, tenantsList]);
+
+  const filteredProspects = useMemo(() => {
+    const search = normalizeSearch(clientSearch);
+    return prospectsList.filter((prospect) => {
+      const haystack = normalizeSearch(`${prospect.name} ${prospect.phone} ${prospect.need} ${prospect.district} ${prospect.agent} ${prospect.status} ${prospect.next}`);
+      const statusMatch = clientFilters.prospectStatus === "Tous statuts" || prospect.status === clientFilters.prospectStatus;
+      const agentMatch = clientFilters.prospectAgent === "Tous agents" || prospect.agent === clientFilters.prospectAgent;
+      return (!search || haystack.includes(search)) && statusMatch && agentMatch;
+    });
+  }, [clientFilters.prospectAgent, clientFilters.prospectStatus, clientSearch, prospectsList]);
+
+  const filteredVisits = useMemo(() => {
+    const search = normalizeSearch(clientSearch);
+    return visitsList.filter((visit) => {
+      const property = properties.find((item) => item.name === visit.property);
+      const haystack = normalizeSearch(`${visit.client} ${visit.property} ${property?.district ?? ""} ${visit.agent} ${visit.status} ${visit.feedback} ${visit.next}`);
+      const searchMatch = !search || haystack.includes(search);
+      const periodMatch = visitMatchesPeriod(visit, clientFilters.visitPeriod);
+      const statusMatch = clientFilters.visitStatus === "Tous statuts" || visit.status === clientFilters.visitStatus;
+      const agentMatch = clientFilters.visitAgent === "Tous agents" || visit.agent === clientFilters.visitAgent;
+      const propertyMatch = clientFilters.visitProperty === "Tous biens" || visit.property === clientFilters.visitProperty;
+      const prospectMatch = clientFilters.visitProspect === "Tous prospects" || visit.client === clientFilters.visitProspect;
+      const quickMatch = visitMatchesQuickFilter(visit, clientFilters.visitQuick);
+      return searchMatch && periodMatch && statusMatch && agentMatch && propertyMatch && prospectMatch && quickMatch;
+    });
+  }, [clientFilters, clientSearch, visitsList]);
 
   const openDetail = (type, item) => {
     setSavedScroll(window.scrollY);
@@ -4257,7 +4829,14 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
     </DetailPageShell>
   ) : detailView === "prospect" ? (
     <DetailPageShell title="Fiche prospect" subtitle={selectedProspect.name} onBack={closeDetail}>
-      <ProspectProfilePanel prospect={selectedProspect} onAction={onAction} />
+      <ProspectProfilePanel
+        prospect={prospectsList.find((item) => getProspectKey(item) === getProspectKey(selectedProspect)) ?? selectedProspect}
+        proposals={prospectProposals[getProspectKey(selectedProspect)]}
+        activities={prospectActivities[getProspectKey(selectedProspect)]}
+        conversion={prospectConversions[getProspectKey(selectedProspect)]}
+        visitsList={visitsList}
+        onAction={onAction}
+      />
     </DetailPageShell>
   ) : detailView === "visit" ? (
     <DetailPageShell title="Fiche visite" subtitle={`${selectedVisit.client} · ${selectedVisit.property}`} onBack={closeDetail}>
@@ -4282,21 +4861,42 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
         <div className="filters-row">
           <label className="field search-field mid">
             <Search size={19} />
-            <input placeholder={`Rechercher dans ${activeTab.toLowerCase()}...`} />
+            <input
+              placeholder={`Rechercher dans ${activeTab.toLowerCase()}...`}
+              value={clientSearch}
+              onChange={(event) => setClientSearch(event.target.value)}
+            />
           </label>
           <span className="spacer" />
-          <Button>
-            <Filter size={17} /> Filtres
-          </Button>
-          <Button>
-            <Download size={17} /> Exporter
-          </Button>
+          <div className="inline-menu-wrap">
+            <Button onClick={() => setClientFilterOpen((value) => !value)}>
+              <Filter size={17} /> Filtres
+            </Button>
+          </div>
+          <div className="inline-menu-wrap">
+            <Button onClick={() => setClientExportOpen((value) => !value)}>
+              <Download size={17} /> Exporter
+            </Button>
+            {clientExportOpen && <ClientExportMenu activeTab={activeTab} onAction={onAction} onClose={() => setClientExportOpen(false)} />}
+          </div>
         </div>
+        {clientFilterOpen && (
+          <ClientFilterControls
+            activeTab={activeTab}
+            filters={clientFilters}
+            onChange={updateClientFilter}
+            onReset={resetClientFilters}
+            ownersList={ownersList}
+            tenantsList={tenantsList}
+            prospectsList={prospectsList}
+            visitsList={visitsList}
+          />
+        )}
       </Panel>
-      {activeTab === "Propriétaires" && <OwnersView ownersList={ownersList} selected={selectedOwner} onOpenDetail={(owner) => openDetail("owner", owner)} />}
-      {activeTab === "Locataires" && <TenantsView tenantsList={tenantsList} onOpenDetail={(tenant) => openDetail("tenant", tenant)} rentRowsList={rentRowsList} />}
-      {activeTab === "Prospects" && <ProspectsView prospectsList={prospectsList} onOpenDetail={(prospect) => openDetail("prospect", prospect)} onAction={onAction} />}
-      {activeTab === "Visites" && <VisitsView onOpenDetail={(visit) => openDetail("visit", visit)} onAction={onAction} />}
+      {activeTab === "Propriétaires" && <OwnersView ownersList={filteredOwners} selected={selectedOwner} onOpenDetail={(owner) => openDetail("owner", owner)} />}
+      {activeTab === "Locataires" && <TenantsView tenantsList={filteredTenants} onOpenDetail={(tenant) => openDetail("tenant", tenant)} rentRowsList={rentRowsList} />}
+      {activeTab === "Prospects" && <ProspectsView prospectsList={filteredProspects} onOpenDetail={(prospect) => openDetail("prospect", prospect)} onAction={onAction} />}
+      {activeTab === "Visites" && <VisitsView visitsList={filteredVisits} onOpenDetail={(visit) => openDetail("visit", visit)} onAction={onAction} />}
         </>
       )}
     </>
@@ -4315,6 +4915,121 @@ function DetailPageShell({ title, subtitle, onBack, children }) {
       </div>
       {children}
     </section>
+  );
+}
+
+function ClientFilterControls({ activeTab, filters, onChange, onReset, ownersList, tenantsList, prospectsList, visitsList }) {
+  const ownerStatuses = uniqueValues(ownersList.map((owner) => owner.status));
+  const tenantStatuses = uniqueValues(tenantsList.map((tenant) => tenant.paymentStatus));
+  const tenantProperties = uniqueValues(tenantsList.map((tenant) => tenant.property));
+  const prospectStatuses = uniqueValues(prospectsList.map((prospect) => prospect.status));
+  const prospectAgents = uniqueValues(prospectsList.map((prospect) => prospect.agent));
+  const visitStatuses = uniqueValues(visitsList.map((visit) => visit.status));
+  const visitAgents = uniqueValues(visitsList.map((visit) => visit.agent));
+  const visitProperties = uniqueValues(visitsList.map((visit) => visit.property));
+  const visitProspects = uniqueValues(visitsList.map((visit) => visit.client));
+
+  return (
+    <div className="advanced-filters client-advanced-filters">
+      {activeTab === "Propriétaires" && (
+        <>
+          <label>Statut<select value={filters.ownerStatus} onChange={(event) => onChange("ownerStatus", event.target.value)}>
+            <option>Tous statuts</option>
+            {ownerStatuses.map((option) => <option key={option}>{option}</option>)}
+          </select></label>
+          <label>Type<select value={filters.ownerType} onChange={(event) => onChange("ownerType", event.target.value)}>
+            <option>Tous types</option>
+            <option>Personne physique</option>
+            <option>Société</option>
+          </select></label>
+        </>
+      )}
+      {activeTab === "Locataires" && (
+        <>
+          <label>Statut<select value={filters.tenantStatus} onChange={(event) => onChange("tenantStatus", event.target.value)}>
+            <option>Tous statuts</option>
+            {tenantStatuses.map((option) => <option key={option}>{option}</option>)}
+          </select></label>
+          <label>Bien<select value={filters.tenantProperty} onChange={(event) => onChange("tenantProperty", event.target.value)}>
+            <option>Tous biens</option>
+            {tenantProperties.map((option) => <option key={option}>{option}</option>)}
+          </select></label>
+        </>
+      )}
+      {activeTab === "Prospects" && (
+        <>
+          <label>Statut<select value={filters.prospectStatus} onChange={(event) => onChange("prospectStatus", event.target.value)}>
+            <option>Tous statuts</option>
+            {prospectStatuses.map((option) => <option key={option}>{option}</option>)}
+          </select></label>
+          <label>Agent<select value={filters.prospectAgent} onChange={(event) => onChange("prospectAgent", event.target.value)}>
+            <option>Tous agents</option>
+            {prospectAgents.map((option) => <option key={option}>{option}</option>)}
+          </select></label>
+        </>
+      )}
+      {activeTab === "Visites" && (
+        <>
+          <label>Période<select value={filters.visitPeriod} onChange={(event) => onChange("visitPeriod", event.target.value)}>
+            <option>Toutes périodes</option>
+            <option>Aujourd'hui</option>
+            <option>Cette semaine</option>
+            <option>Ce mois</option>
+            <option>Mois prochain</option>
+          </select></label>
+          <label>Statut<select value={filters.visitStatus} onChange={(event) => onChange("visitStatus", event.target.value)}>
+            <option>Tous statuts</option>
+            {visitStatuses.map((option) => <option key={option}>{option}</option>)}
+          </select></label>
+          <label>Agent<select value={filters.visitAgent} onChange={(event) => onChange("visitAgent", event.target.value)}>
+            <option>Tous agents</option>
+            {visitAgents.map((option) => <option key={option}>{option}</option>)}
+          </select></label>
+          <label>Bien<select value={filters.visitProperty} onChange={(event) => onChange("visitProperty", event.target.value)}>
+            <option>Tous biens</option>
+            {visitProperties.map((option) => <option key={option}>{option}</option>)}
+          </select></label>
+          <label>Prospect<select value={filters.visitProspect} onChange={(event) => onChange("visitProspect", event.target.value)}>
+            <option>Tous prospects</option>
+            {visitProspects.map((option) => <option key={option}>{option}</option>)}
+          </select></label>
+          <div className="quick-filter-row visit-quick-filters" role="group" aria-label="Filtres rapides visites">
+            {["Toutes visites", "Visites du jour", "Visites reportées", "Visites annulées", "Visites conclues"].map((option) => (
+              <button
+                className={filters.visitQuick === option ? "active" : ""}
+                key={option}
+                onClick={() => onChange("visitQuick", option)}
+                type="button"
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      <Button compact onClick={onReset}>Réinitialiser</Button>
+    </div>
+  );
+}
+
+function ClientExportMenu({ activeTab, onAction, onClose }) {
+  const isVisits = activeTab === "Visites";
+  const options = isVisits
+    ? ["Export Excel visites", "Export PDF visites", "Imprimer planning des visites"]
+    : [`Export Excel ${activeTab}`, `Export PDF ${activeTab}`, `Imprimer liste ${activeTab}`];
+
+  return (
+    <div className="inline-action-menu">
+      {options.map((option) => (
+        <button key={option} onClick={() => {
+          onAction(option);
+          onClose();
+        }}>
+          {option.includes("PDF") ? <FileText size={16} /> : option.includes("Imprimer") ? <Printer size={16} /> : <Download size={16} />}
+          <span>{option.replace(/^Export /, "Export ")}</span>
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -4678,7 +5393,7 @@ function ProspectsView({ prospectsList = prospects, onOpenDetail, onAction }) {
             prospect.next,
             <div className="table-actions">
               <Button compact onClick={() => onOpenDetail(prospect)}><Eye size={15} /> Fiche</Button>
-              <Button compact onClick={() => onAction(prospect.next, { prospect })}><Phone size={15} /> Action</Button>
+              <Button compact onClick={() => onAction("Prochaine action prospect", { prospect })}><Phone size={15} /> Action</Button>
             </div>,
           ])}
         />
@@ -4687,93 +5402,130 @@ function ProspectsView({ prospectsList = prospects, onOpenDetail, onAction }) {
   );
 }
 
-function ProspectProfilePanel({ prospect, onAction }) {
-  const suggestedProperties = Array.from(
-    new Map(
-      properties
-        .filter((property) => normalizeSearch(`${property.type} ${property.district}`).includes(normalizeSearch(prospect.need.split(" ")[0])) || normalizeSearch(property.district).includes(normalizeSearch(prospect.district.split(" ")[0])))
-        .concat(properties.slice(0, 2))
-        .map((property) => [property.code, property])
-    ).values()
-  ).slice(0, 3);
-  const prospectVisits = visits.filter((visit) => visit.client === prospect.name);
+function ProspectProfilePanel({ prospect, proposals, activities, conversion, visitsList = visits, onAction }) {
+  const proposedProperties = proposals ?? getDefaultProspectProposals(prospect);
+  const prospectVisits = visitsList.filter((visit) => visit.client === prospect.name);
+  const timelineItems = activities?.length ? activities : getDefaultProspectTimeline(prospect);
+  const objective = getProspectObjective(prospect);
+  const delay = getProspectDelay(prospect);
 
   return (
     <Panel title="Fiche prospect" className="profile-panel prospect-profile">
       <ProfileHeader person={{ name: prospect.name, phone: prospect.phone, id: prospect.status }} />
-      <DetailMetrics
+      <ProspectSummaryCards
+        prospect={prospect}
         items={[
-          ["Statut", prospect.status],
-          ["Agent", prospect.agent],
-          ["Budget", prospect.budget],
-          ["Objectif", prospect.objective ?? (prospect.need.includes("Bureau") ? "Location pro" : "Location")],
-          ["Délai", prospect.delay ?? "30 jours"],
+          ["Statut", prospect.status, "Changer statut prospect"],
+          ["Agent", prospect.agent, "Prochaine action prospect"],
+          ["Budget", prospect.budget, "Modifier besoin prospect"],
+          ["Objectif", objective, "Modifier besoin prospect"],
+          ["Délai", delay, "Modifier besoin prospect"],
         ]}
+        onAction={onAction}
       />
-      <div className="simple-list">
-        <p><span>Téléphone</span><strong>{prospect.phone}</strong></p>
-        {prospect.email && <p><span>Email</span><strong>{prospect.email}</strong></p>}
-        {prospect.type && <p><span>Type de prospect</span><strong>{prospect.type}</strong></p>}
-        {prospect.source && <p><span>Source</span><strong>{prospect.source}</strong></p>}
-        {prospect.objective && <p><span>Objectif</span><strong>{prospect.objective}</strong></p>}
-        <p><span>Besoin immobilier</span><strong>{prospect.need}</strong></p>
-        <p><span>Budget</span><strong>{prospect.budget}</strong></p>
-        <p><span>Quartiers souhaités</span><strong>{prospect.district}</strong></p>
-        {prospect.delay && <p><span>Délai</span><strong>{prospect.delay}</strong></p>}
-        {prospect.requirements && <p><span>Exigences particulières</span><strong>{prospect.requirements}</strong></p>}
-        <p><span>Agent responsable</span><strong>{prospect.agent}</strong></p>
-        <p><span>Statut commercial</span><Badge label={prospect.status} /></p>
-        <p><span>Prochaine action</span><strong>{prospect.next}</strong></p>
+      <div className="profile-section">
+        <h3>Informations principales</h3>
+        <div className="simple-list">
+          <p><span>Téléphone</span><strong>{prospect.phone}</strong></p>
+          <p><span>Besoin immobilier</span><strong>{prospect.need}</strong></p>
+          <p><span>Budget</span><strong>{prospect.budget}</strong></p>
+          <p><span>Quartiers souhaités</span><strong>{prospect.district}</strong></p>
+          <p><span>Agent responsable</span><strong>{prospect.agent}</strong></p>
+          <p><span>Statut commercial</span><Badge label={prospect.status} /></p>
+          <p><span>Prochaine action</span><strong>{prospect.next}</strong></p>
+          {prospect.requirements && <p><span>Exigences particulières</span><strong>{prospect.requirements}</strong></p>}
+          {conversion && <p><span>Conversion</span><strong>{conversion.conversionType} · {conversion.property}</strong></p>}
+        </div>
       </div>
       <div className="profile-section">
-        <h3>Biens proposés</h3>
-        <div className="mini-list">
-          {suggestedProperties.map((property) => (
-            <p key={property.code}><span>{property.name}</span><Badge label={property.status} /></p>
-          ))}
+        <div className="profile-section-head">
+          <h3>Biens proposés</h3>
+          <Button compact onClick={() => onAction("Proposer un bien", { prospect })}><Plus size={15} /> Proposer</Button>
+        </div>
+        <div className="prospect-proposal-list">
+          {proposedProperties.map((proposal) => {
+            const property = properties.find((item) => item.code === proposal.code) ?? properties[0];
+            return (
+              <article className="prospect-proposal-row" key={proposal.code}>
+                <div>
+                  <strong>{proposal.name}</strong>
+                  <span>{proposal.return}</span>
+                </div>
+                <Badge label={proposal.status} />
+                <div className="proposal-row-actions">
+                  <Button compact onClick={() => onAction("Ouvrir fiche bien prospect", { prospect, property })}><Eye size={15} /> Fiche</Button>
+                  <Button compact onClick={() => onAction("Retirer proposition prospect", { prospect, proposal })}>Retirer</Button>
+                  <Button compact onClick={() => onAction("Marquer proposition intéressée", { prospect, proposal })}>Intéressé</Button>
+                  <Button compact onClick={() => onAction("Planifier visite prospect", { prospect, proposal })}><CalendarDays size={15} /> Visite</Button>
+                </div>
+              </article>
+            );
+          })}
         </div>
       </div>
       <div className="profile-section">
         <h3>Visites effectuées</h3>
-        <div className="mini-list">
+        <div className="prospect-visit-list">
           {(prospectVisits.length ? prospectVisits : visits.slice(0, 1)).map((visit) => (
-            <p key={`${visit.client}-${visit.date}`}><span>{visit.date} · {visit.property}</span><Badge label={visit.status} /></p>
+            <article key={`${visit.client}-${visit.date}-${visit.property}`}>
+              <strong>{visit.date} · {visit.property}</strong>
+              <span>{visit.feedback}</span>
+              <Badge label={visit.status} />
+            </article>
           ))}
         </div>
       </div>
       <div className="timeline compact-timeline">
-        <p><strong>Échange commercial</strong><span>{prospect.next}</span></p>
-        <p><strong>Commentaire</strong><span>{prospect.comment ?? `Besoin suivi par ${prospect.agent}`}</span></p>
+        {timelineItems.map((item, index) => (
+          <p key={`${item.title}-${index}`}><strong>{item.title}</strong><span>{item.text} · {item.date}</span></p>
+        ))}
       </div>
       <div className="stack-actions">
-        <Button onClick={() => onAction("Modifier besoin prospect")}><Pencil size={17} /> Modifier besoin</Button>
+        <Button onClick={() => onAction("Modifier besoin prospect", { prospect })}><Pencil size={17} /> Modifier besoin</Button>
         <Button onClick={() => onAction("Proposer un bien", { prospect })}><Home size={17} /> Proposer bien</Button>
-        <Button variant="primary" onClick={() => onAction(prospect.next)}><Phone size={17} /> Prochaine action</Button>
-        <Button onClick={() => onAction("Planifier une visite")}><CalendarDays size={17} /> Planifier visite</Button>
-        <Button onClick={() => onAction("Ajouter commentaire prospect")}><FileText size={17} /> Commentaire</Button>
-        <Button onClick={() => onAction("Changer statut prospect")}><RefreshCw size={17} /> Changer statut</Button>
-        <Button onClick={() => onAction("Convertir prospect")}><CheckCircle2 size={17} /> Convertir</Button>
+        <Button variant="primary" onClick={() => onAction("Prochaine action prospect", { prospect })}><Phone size={17} /> Prochaine action</Button>
+        <Button onClick={() => onAction("Planifier visite prospect", { prospect })}><CalendarDays size={17} /> Planifier visite</Button>
+        <Button onClick={() => onAction("Ajouter commentaire prospect", { prospect })}><FileText size={17} /> Commentaire</Button>
+        <Button onClick={() => onAction("Changer statut prospect", { prospect })}><RefreshCw size={17} /> Changer statut</Button>
+        <Button onClick={() => onAction("Convertir prospect", { prospect })}><CheckCircle2 size={17} /> Convertir</Button>
       </div>
     </Panel>
   );
 }
 
-function VisitsView({ onOpenDetail, onAction }) {
+function ProspectSummaryCards({ prospect, items, onAction }) {
+  return (
+    <div className="detail-metrics prospect-metrics">
+      {items.map(([label, value, action]) => (
+        <button key={label} onClick={() => onAction(action, { prospect })}>
+          <span>{label}</span>
+          <strong>{value}</strong>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function VisitsView({ visitsList = visits, onOpenDetail, onAction }) {
   return (
     <section className="client-list-workspace" data-demo="visits-workspace">
-      <Panel title="Visites programmées et réalisées" toolbar={<Button compact onClick={() => onAction("Planifier une visite")}><Plus size={16} /> Planifier</Button>}>
+      <Panel title="Visites programmées et réalisées" toolbar={<span className="muted">{visitsList.length} visites</span>}>
         <DataTable
-          columns={["Date & heure", "Prospect / client", "Bien", "Agent", "Statut", "Retour client", "Prochaine action", "Action"]}
-          rows={visits.map((visit) => [
-            `${visit.date} · ${visit.time}`,
-            visit.client,
-            visit.property,
-            visit.agent,
-            <Badge label={visit.status} />,
-            visit.feedback,
-            visit.next,
-            <Button compact onClick={() => onOpenDetail(visit)}><Eye size={15} /> Fiche</Button>,
-          ])}
+          columns={["Date & heure", "Prospect / client", "Bien", "Quartier", "Agent", "Statut", "Retour client", "Prochaine action", "Action"]}
+          rows={visitsList.map((visit) => {
+            const property = properties.find((item) => item.name === visit.property);
+            return [
+              `${visit.date} · ${visit.time}`,
+              visit.client,
+              visit.property,
+              property?.district ?? "-",
+              visit.agent,
+              <Badge label={visit.status} />,
+              visit.feedback,
+              visit.next,
+              <Button compact onClick={() => onOpenDetail(visit)}><Eye size={15} /> Fiche</Button>,
+            ];
+          })}
         />
       </Panel>
     </section>
@@ -4841,6 +5593,17 @@ function ContractsPage({ activeTab, onTab, onAction, contractsList = contracts, 
 
 function ContractsList({ onAction, contractsList = contracts }) {
   const [selected, setSelected] = useState(contractsList[0] ?? contracts[0]);
+  const [query, setQuery] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filters, setFilters] = useState({
+    type: "Tous types",
+    status: "Tous statuts",
+    property: "Tous biens",
+    owner: "Tous propriétaires",
+    tenant: "Tous locataires",
+    due: "Toutes échéances",
+    signature: "Tous documents",
+  });
   const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
 
   const openContract = (contract) => {
@@ -4848,22 +5611,64 @@ function ContractsList({ onAction, contractsList = contracts }) {
     openDetail();
   };
 
+  const updateFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
+  const resetFilters = () => {
+    setQuery("");
+    setFilters({
+      type: "Tous types",
+      status: "Tous statuts",
+      property: "Tous biens",
+      owner: "Tous propriétaires",
+      tenant: "Tous locataires",
+      due: "Toutes échéances",
+      signature: "Tous documents",
+    });
+  };
+
+  const filteredContracts = useMemo(() => {
+    const search = normalizeSearch(query);
+    return contractsList.filter((contract) => {
+      const dueLabel = getContractDueLabel(contract);
+      const haystack = normalizeSearch(`${contract.number} ${contract.type} ${contract.property} ${contract.owner} ${contract.client} ${contract.status} ${dueLabel}`);
+      const typeMatch = filters.type === "Tous types" || contract.type === filters.type;
+      const statusMatch = filters.status === "Tous statuts" || contract.status === filters.status;
+      const propertyMatch = filters.property === "Tous biens" || contract.property === filters.property;
+      const ownerMatch = filters.owner === "Tous propriétaires" || contract.owner === filters.owner;
+      const tenantMatch = filters.tenant === "Tous locataires" || contract.client === filters.tenant;
+      const dueMatch = filters.due === "Toutes échéances" || dueLabel.includes(filters.due.replace("Échéance ", ""));
+      const signatureMatch = filters.signature === "Tous documents" || filters.signature === "Archivé";
+      return (!search || haystack.includes(search)) && typeMatch && statusMatch && propertyMatch && ownerMatch && tenantMatch && dueMatch && signatureMatch;
+    });
+  }, [contractsList, filters, query]);
+
   return (
     <>
       <Panel className="filter-panel">
         <div className="filters-row">
           <label className="field search-field">
             <Search size={19} />
-            <input placeholder="Rechercher un contrat, bien, propriétaire..." />
+            <input placeholder="Rechercher un contrat, bien, propriétaire..." value={query} onChange={(event) => setQuery(event.target.value)} />
           </label>
-          <select><option>Type</option><option>Contrat de location</option><option>Mandat de gestion</option></select>
-          <select><option>Statut</option><option>Actif</option><option>Expiré</option><option>Archivé</option></select>
-          <select><option>Bien</option>{properties.map((property) => <option key={property.code}>{property.name}</option>)}</select>
-          <select><option>Propriétaire</option>{owners.map((owner) => <option key={owner.id}>{owner.name}</option>)}</select>
-          <select><option>Locataire</option>{tenants.map((tenant) => <option key={tenant.id}>{tenant.name}</option>)}</select>
-          <select><option>Échéance</option><option>Cette semaine</option><option>Ce mois</option><option>Cette année</option></select>
-          <Button><Filter size={17} /> Filtres</Button>
+          <select value={filters.type} onChange={(event) => updateFilter("type", event.target.value)}><option>Tous types</option><option>Contrat de location</option><option>Mandat de gestion</option></select>
+          <select value={filters.status} onChange={(event) => updateFilter("status", event.target.value)}><option>Tous statuts</option><option>Actif</option><option>Expiré</option><option>Archivé</option></select>
+          <select value={filters.property} onChange={(event) => updateFilter("property", event.target.value)}><option>Tous biens</option>{properties.map((property) => <option key={property.code}>{property.name}</option>)}</select>
+          <select value={filters.owner} onChange={(event) => updateFilter("owner", event.target.value)}><option>Tous propriétaires</option>{owners.map((owner) => <option key={owner.id}>{owner.name}</option>)}</select>
+          <select value={filters.tenant} onChange={(event) => updateFilter("tenant", event.target.value)}><option>Tous locataires</option>{tenants.map((tenant) => <option key={tenant.id}>{tenant.name}</option>)}</select>
+          <select value={filters.due} onChange={(event) => updateFilter("due", event.target.value)}><option>Toutes échéances</option><option>Cette semaine</option><option>Ce mois</option><option>Cette année</option></select>
+          <Button onClick={() => setFiltersOpen((value) => !value)}><Filter size={17} /> Filtres</Button>
         </div>
+        {filtersOpen && (
+          <div className="advanced-filters client-advanced-filters">
+            <label>Document<select value={filters.signature} onChange={(event) => updateFilter("signature", event.target.value)}>
+              <option>Tous documents</option>
+              <option>Signé</option>
+              <option>À signer</option>
+              <option>Archivé</option>
+            </select></label>
+            <Button compact onClick={resetFilters}>Réinitialiser</Button>
+            <span className="muted">{filteredContracts.length} contrat(s) affiché(s)</span>
+          </div>
+        )}
       </Panel>
       {detailOpen ? (
         <DetailPageShell title="Fiche contrat" subtitle={selected.number} onBack={closeDetail}>
@@ -4874,7 +5679,7 @@ function ContractsList({ onAction, contractsList = contracts }) {
         <Panel title="Liste des contrats">
           <DataTable
             columns={["Numéro contrat", "Type", "Bien", "Propriétaire", "Locataire / client", "Date début", "Date fin", "Statut", "Échéance", "Action"]}
-            rows={contractsList.map((contract) => [
+            rows={filteredContracts.map((contract) => [
               contract.number,
               contract.type,
               contract.property,
@@ -7147,7 +7952,7 @@ function FinancePage({ activeTab, onTab, onAction, paymentsList = paymentRecords
         actions={financeActions[effectiveTab] ?? null}
       />
       <Tabs tabs={tabs} active={effectiveTab} onChange={onTab} demo="finance-tabs" />
-      {effectiveTab === "Loyers" && <FinanceTable title="Loyers attendus par E.K immo" rows={agencyRentRows.map((row) => [row.period, row.tenant, row.property, row.owner, row.expected, row.paid, row.balance, <Badge label={row.status} />, <RentActions row={row} onAction={onAction} />])} columns={["Période", "Locataire", "Bien", "Propriétaire", "Attendu", "Payé", "Solde", "Statut", "Actions"]} />}
+      {effectiveTab === "Loyers" && <FinanceTable title="Loyers attendus par E.K immo" onAction={onAction} rows={agencyRentRows.map((row) => [row.period, row.tenant, row.property, row.owner, row.expected, row.paid, row.balance, <Badge label={row.status} />, <RentActions row={row} onAction={onAction} />])} columns={["Période", "Locataire", "Bien", "Propriétaire", "Attendu", "Payé", "Solde", "Statut", "Actions"]} />}
       {effectiveTab === "Paiements" && <PaymentForm onAction={onAction} paymentsList={paymentsList} rentRowsList={rentRowsList} />}
       {effectiveTab === "Impayés" && <ArrearsView onAction={onAction} rentRowsList={rentRowsList} />}
       {effectiveTab === "Commissions" && <CommissionsView onAction={onAction} />}
@@ -7182,22 +7987,77 @@ function MaintenanceActions({ row, onAction }) {
   );
 }
 
-function FinanceTable({ title, columns, rows }) {
+function FinanceTable({ title, columns, rows, onAction }) {
+  const [query, setQuery] = useState("");
+  const [period, setPeriod] = useState("Toutes périodes");
+  const [status, setStatus] = useState("Tous statuts");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [extraFilters, setExtraFilters] = useState({
+    property: "Tous biens",
+    owner: "Tous propriétaires",
+    tenant: "Tous locataires",
+    balance: "Tous soldes",
+  });
+  const tableData = useMemo(() => rows.map((row) => ({ row, text: rowToSearchText(row) })), [rows]);
+  const propertyOptions = useMemo(() => uniqueValues(rows.map((row) => nodeToText(row[2]))), [rows]);
+  const ownerOptions = useMemo(() => uniqueValues(rows.map((row) => nodeToText(row[3]))), [rows]);
+  const tenantOptions = useMemo(() => uniqueValues(rows.map((row) => nodeToText(row[1]))), [rows]);
+  const filteredRows = useMemo(() => {
+    const search = normalizeSearch(query);
+    return tableData.filter(({ row, text }) => {
+      const statusText = nodeToText(row[7]);
+      const balance = parseFCFA(nodeToText(row[6]));
+      const searchMatch = !search || text.includes(search);
+      const periodMatch = period === "Toutes périodes" || nodeToText(row[0]).includes(period.replace("Période : ", ""));
+      const statusMatch = status === "Tous statuts" || statusText === status;
+      const propertyMatch = extraFilters.property === "Tous biens" || nodeToText(row[2]) === extraFilters.property;
+      const ownerMatch = extraFilters.owner === "Tous propriétaires" || nodeToText(row[3]) === extraFilters.owner;
+      const tenantMatch = extraFilters.tenant === "Tous locataires" || nodeToText(row[1]) === extraFilters.tenant;
+      const balanceMatch = extraFilters.balance === "Tous soldes" || (extraFilters.balance === "Avec impayé" ? balance > 0 : balance === 0);
+      return searchMatch && periodMatch && statusMatch && propertyMatch && ownerMatch && tenantMatch && balanceMatch;
+    }).map(({ row }) => row);
+  }, [extraFilters, period, query, status, tableData]);
+
   return (
     <>
       <Panel className="filter-panel">
         <div className="filters-row">
           <label className="field search-field">
             <Search size={19} />
-            <input placeholder="Rechercher..." />
+            <input placeholder="Rechercher..." value={query} onChange={(event) => setQuery(event.target.value)} />
           </label>
-          <select><option>Période : Mai 2026</option><option>Juin 2026</option><option>Trimestre</option></select>
-          <Button><Filter size={17} /> Filtres</Button>
-          <Button><Download size={17} /> Exporter</Button>
+          <select value={period} onChange={(event) => setPeriod(event.target.value)}><option>Toutes périodes</option><option>Mai 2026</option><option>Juin 2026</option><option>Trimestre</option></select>
+          <select value={status} onChange={(event) => setStatus(event.target.value)}><option>Tous statuts</option><option>À jour</option><option>Partiel</option><option>En retard</option><option>Payé</option></select>
+          <Button onClick={() => setFiltersOpen((value) => !value)}><Filter size={17} /> Filtres</Button>
+          <div className="inline-menu-wrap">
+            <Button onClick={() => setExportOpen((value) => !value)}><Download size={17} /> Exporter</Button>
+            {exportOpen && (
+              <div className="inline-action-menu">
+                {["Export Excel finance", "Export PDF finance", "Imprimer état financier"].map((option) => (
+                  <button key={option} onClick={() => {
+                    onAction(option);
+                    setExportOpen(false);
+                  }}>
+                    {option.includes("PDF") ? <FileText size={16} /> : option.includes("Imprimer") ? <Printer size={16} /> : <Download size={16} />}
+                    <span>{option}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
+        {filtersOpen && (
+          <div className="advanced-filters client-advanced-filters">
+            <label>Bien<select value={extraFilters.property} onChange={(event) => setExtraFilters((current) => ({ ...current, property: event.target.value }))}><option>Tous biens</option>{propertyOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+            <label>Propriétaire<select value={extraFilters.owner} onChange={(event) => setExtraFilters((current) => ({ ...current, owner: event.target.value }))}><option>Tous propriétaires</option>{ownerOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+            <label>Locataire<select value={extraFilters.tenant} onChange={(event) => setExtraFilters((current) => ({ ...current, tenant: event.target.value }))}><option>Tous locataires</option>{tenantOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+            <label>Solde<select value={extraFilters.balance} onChange={(event) => setExtraFilters((current) => ({ ...current, balance: event.target.value }))}><option>Tous soldes</option><option>Avec impayé</option><option>Soldé</option></select></label>
+          </div>
+        )}
       </Panel>
       <Panel title={title}>
-        <DataTable columns={columns} rows={rows} />
+        <DataTable columns={columns} rows={filteredRows} />
       </Panel>
     </>
   );
@@ -8836,30 +9696,41 @@ function ProspectFormModal({ sequence = prospects.length + 1, onSave, onClose })
   );
 }
 
-function ProspectProposalModal({ prospect, onClose }) {
-  const suggestedProperties = useMemo(() => {
-    const prospectNeed = normalizeSearch(prospect?.propertyType ?? prospect?.need ?? "");
-    const prospectDistrict = normalizeSearch(prospect?.district ?? "");
-    const firstNeedWord = prospectNeed.split(" ")[0] ?? "";
-    const firstDistrictWord = prospectDistrict.split(/[ /]+/)[0] ?? "";
+function ProspectProposalModal({ prospect, onSave, onClose }) {
+  const [query, setQuery] = useState("");
+  const [filters, setFilters] = useState({
+    district: "",
+    type: "",
+    budget: prospect?.budget ?? "",
+    status: "Tous",
+  });
+  const [selectedCodes, setSelectedCodes] = useState([]);
+  const [comment, setComment] = useState("Proposition adaptée au besoin exprimé.");
+  const compatibleProperties = useMemo(() => {
+    const normalizedQuery = normalizeSearch(query);
+    return getCompatibleProperties(prospect, filters).filter((property) => {
+      if (!normalizedQuery) return true;
+      return normalizeSearch(`${property.code} ${property.name} ${property.type} ${property.district}`).includes(normalizedQuery);
+    });
+  }, [prospect, filters, query]);
 
-    return Array.from(
-      new Map(
-        properties
-          .filter((property) => {
-            const haystack = normalizeSearch(`${property.type} ${property.name} ${property.district} ${property.address}`);
-            return (
-              (firstNeedWord && haystack.includes(firstNeedWord)) ||
-              (firstDistrictWord && haystack.includes(firstDistrictWord)) ||
-              property.status === "Disponible"
-            );
-          })
-          .concat(properties.filter((property) => property.status === "Disponible"))
-          .slice(0, 5)
-          .map((property) => [property.code, property])
-      ).values()
-    ).slice(0, 3);
-  }, [prospect]);
+  useEffect(() => {
+    setSelectedCodes((current) => current.filter((code) => compatibleProperties.some((property) => property.code === code)));
+  }, [compatibleProperties]);
+
+  const toggleProperty = (code) => {
+    setSelectedCodes((current) => (
+      current.includes(code) ? current.filter((item) => item !== code) : [...current, code]
+    ));
+  };
+
+  const selectedProperties = compatibleProperties.filter((property) => selectedCodes.includes(property.code));
+  const canSave = selectedProperties.length > 0;
+
+  const submit = () => {
+    if (!canSave) return;
+    onSave({ prospect, properties: selectedProperties, comment });
+  };
 
   return (
     <div className="modal-backdrop">
@@ -8869,7 +9740,7 @@ function ProspectProposalModal({ prospect, onClose }) {
           <div>
             <span>Propositions de biens</span>
             <h2>Biens compatibles</h2>
-            <p>Sélection rapide de biens à présenter au prospect après création de sa fiche.</p>
+            <p>Rechercher, filtrer puis sélectionner un ou plusieurs biens à proposer au prospect.</p>
           </div>
           <Badge label={prospect?.status ?? "Nouveau"} />
         </div>
@@ -8882,27 +9753,379 @@ function ProspectProposalModal({ prospect, onClose }) {
           </div>
         </div>
 
-        <div className="proposal-grid">
-          {suggestedProperties.map((property) => (
-            <article className="proposal-card" key={property.code}>
+        <div className="proposal-filters form-grid compact-form">
+          <label className="full">Recherche d'un bien
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nom, référence, quartier..." />
+          </label>
+          <label>Quartier
+            <select value={filters.district} onChange={(event) => setFilters((current) => ({ ...current, district: event.target.value }))}>
+              <option value="">Tous</option>
+              <option>ACI 2000</option>
+              <option>Badalabougou</option>
+              <option>Hamdallaye</option>
+              <option>Korofina</option>
+              <option>Sotuba</option>
+            </select>
+          </label>
+          <label>Type
+            <select value={filters.type} onChange={(event) => setFilters((current) => ({ ...current, type: event.target.value }))}>
+              <option value="">Tous</option>
+              <option>Appartement</option>
+              <option>Villa</option>
+              <option>Bureau</option>
+              <option>Maison</option>
+              <option>Terrain</option>
+            </select>
+          </label>
+          <label>Budget maximum
+            <input value={filters.budget} onChange={(event) => setFilters((current) => ({ ...current, budget: event.target.value }))} />
+          </label>
+          <label>Disponibilité
+            <select value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}>
+              <option>Tous</option>
+              <option>Disponible</option>
+              <option>Loué</option>
+              <option>Réservé</option>
+              <option>Entretien seul</option>
+            </select>
+          </label>
+        </div>
+
+        <div className="proposal-select-list">
+          {compatibleProperties.map((property) => (
+            <label className={selectedCodes.includes(property.code) ? "proposal-select-card active" : "proposal-select-card"} key={property.code}>
+              <input type="checkbox" checked={selectedCodes.includes(property.code)} onChange={() => toggleProperty(property.code)} />
               <img src={property.image} alt={property.name} />
-              <div>
-                <span>{property.code}</span>
+              <span>
                 <strong>{property.name}</strong>
-                <small>{property.district}, Bamako</small>
+                <small>{property.code} · {property.type} · {property.district}</small>
                 <b>{property.price} {property.period}</b>
-              </div>
+              </span>
               <Badge label={property.status} />
-            </article>
+            </label>
           ))}
+          {!compatibleProperties.length && <p className="empty-state-inline">Aucun bien compatible avec ces filtres.</p>}
+        </div>
+
+        <div className="form-section">
+          <h3>Commentaire associé</h3>
+          <div className="form-grid compact-form">
+            <label>Commentaire
+              <textarea value={comment} onChange={(event) => setComment(event.target.value)} />
+            </label>
+          </div>
         </div>
 
         <div className="action-row compact-row">
-          <Button onClick={onClose}>Fermer</Button>
-          <Button onClick={onClose}>Archiver la proposition</Button>
-          <Button variant="primary" onClick={onClose}>
-            <Send size={17} /> Préparer l'envoi
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={submit} disabled={!canSave}>
+            <Send size={17} /> Proposer
           </Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ProspectNeedModal({ prospect, onSave, onClose }) {
+  const [values, setValues] = useState({
+    propertyType: prospect.propertyType ?? prospect.need ?? "Appartement T3",
+    districts: prospect.district ?? "ACI 2000",
+    budget: prospect.budget ?? "750 000 FCFA",
+    objective: getProspectObjective(prospect),
+    delay: getProspectDelay(prospect),
+    requirements: prospect.requirements ?? "À préciser avec le client.",
+    comment: prospect.comment ?? "Besoin mis à jour depuis la fiche prospect.",
+  });
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+
+  return (
+    <div className="modal-backdrop">
+      <section className="modal-card wide-modal prospect-form-modal">
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Fiche prospect</span>
+            <h2>Modifier besoin</h2>
+            <p>Mettre à jour les critères qui servent aux propositions de biens.</p>
+          </div>
+          <Badge label={prospect.status} />
+        </div>
+        <div className="form-section">
+          <h3>Besoin immobilier</h3>
+          <div className="form-grid">
+            <label>Type de bien<input value={values.propertyType} onChange={update("propertyType")} /></label>
+            <label>Quartiers<input value={values.districts} onChange={update("districts")} /></label>
+            <label>Budget<input value={values.budget} onChange={update("budget")} /></label>
+            <label>Objectif<select value={values.objective} onChange={update("objective")}><option>Location</option><option>Achat</option><option>Location pro</option></select></label>
+            <label>Délai<input value={values.delay} onChange={update("delay")} /></label>
+            <label className="full">Exigences<textarea value={values.requirements} onChange={update("requirements")} /></label>
+            <label className="full">Commentaire<textarea value={values.comment} onChange={update("comment")} /></label>
+          </div>
+        </div>
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => onSave({ prospect, values })}>Enregistrer</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ProspectNextActionModal({ prospect, onSave, onClose }) {
+  const [values, setValues] = useState({
+    type: "Appel",
+    date: "22/06/2026",
+    responsible: prospect.agent ?? "Mariam Traoré",
+    comment: prospect.next ?? "Relancer le prospect sur les biens proposés.",
+  });
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+
+  return (
+    <div className="modal-backdrop">
+      <section className="modal-card wide-modal prospect-form-modal">
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Suivi commercial</span>
+            <h2>Prochaine action</h2>
+            <p>Planifier l'étape suivante du suivi prospect.</p>
+          </div>
+          <Badge label={prospect.name} />
+        </div>
+        <div className="form-section">
+          <h3>Action à planifier</h3>
+          <div className="form-grid">
+            <label>Type d'action<select value={values.type} onChange={update("type")}><option>Appel</option><option>WhatsApp</option><option>Visite</option><option>Envoi proposition</option><option>Relance</option></select></label>
+            <label>Date prévue<input type="date" value={values.date} onChange={update("date")} /></label>
+            <label>Responsable<select value={values.responsible} onChange={update("responsible")}><option>Mariam Traoré</option><option>Aïssata Diarra</option><option>Issa Maïga</option><option>Cheick Camara</option></select></label>
+            <label className="full">Commentaire<textarea value={values.comment} onChange={update("comment")} /></label>
+          </div>
+        </div>
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => onSave({ prospect, values })}>Enregistrer</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ProspectVisitModal({ prospect, proposal, property, prospectsList = prospects, onSave, onClose }) {
+  const prospectOptions = prospectsList.length ? prospectsList : prospects;
+  const initialProspect = prospect ?? prospectOptions[0] ?? null;
+  const proposedProperty =
+    property ??
+    properties.find((item) => item.code === proposal?.code) ??
+    getCompatibleProperties(initialProspect)[0] ??
+    properties[0];
+  const [visit, setVisit] = useState({
+    clientMode: "existing",
+    prospectName: initialProspect?.name ?? "",
+    newProspectName: "",
+    phone: initialProspect?.phone ?? "",
+    need: initialProspect?.need ?? "Appartement ou villa à visiter",
+    property: proposedProperty.name,
+    date: "2026-06-20",
+    time: "10:00",
+    agent: initialProspect?.agent ?? "Mariam Traoré",
+    meetingPlace: "Agence E.K immo - Niamakoro",
+    priority: "Normale",
+    internalComment: "Confirmer la disponibilité du client avant déplacement.",
+    nextAction: "Confirmer la présence",
+    notifyReminder: "Oui",
+  });
+  const selectedProperty = properties.find((item) => item.name === visit.property) ?? proposedProperty;
+  const update = (field) => (event) => setVisit((current) => ({ ...current, [field]: event.target.value }));
+  const setClientMode = (clientMode) => {
+    setVisit((current) => ({
+      ...current,
+      clientMode,
+      prospectName: clientMode === "existing" ? (initialProspect?.name ?? prospectOptions[0]?.name ?? "") : current.prospectName,
+      newProspectName: clientMode === "new" ? current.newProspectName : "",
+      phone: clientMode === "existing" ? (initialProspect?.phone ?? prospectOptions[0]?.phone ?? current.phone) : "",
+      need: clientMode === "existing" ? (initialProspect?.need ?? prospectOptions[0]?.need ?? current.need) : "",
+    }));
+  };
+  const updateExistingProspect = (event) => {
+    const selectedProspect = prospectOptions.find((item) => item.name === event.target.value);
+    setVisit((current) => ({
+      ...current,
+      prospectName: event.target.value,
+      phone: selectedProspect?.phone ?? current.phone,
+      need: selectedProspect?.need ?? current.need,
+      agent: selectedProspect?.agent ?? current.agent,
+    }));
+  };
+
+  return (
+    <div className="modal-backdrop">
+      <section className="modal-card wide-modal prospect-form-modal">
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Visite prospect</span>
+            <h2>Planifier visite</h2>
+            <p>Créer une visite reliée au prospect, au bien, à la fiche bien et aux notifications du jour.</p>
+          </div>
+          <Badge label={visit.clientMode === "new" ? "Nouveau prospect" : (visit.prospectName || "Prospect")} />
+        </div>
+
+        <div className="form-section">
+          <h3>Client</h3>
+          <div className="segmented visit-mode-switch" role="group" aria-label="Type de prospect">
+            <button className={visit.clientMode === "existing" ? "active" : ""} type="button" onClick={() => setClientMode("existing")}>Prospect existant</button>
+            <button className={visit.clientMode === "new" ? "active" : ""} type="button" onClick={() => setClientMode("new")}>Nouveau prospect</button>
+          </div>
+          <div className="form-grid">
+            {visit.clientMode === "existing" ? (
+              <label>Prospect existant<select value={visit.prospectName} onChange={updateExistingProspect}>{prospectOptions.map((item) => <option key={getProspectKey(item)}>{item.name}</option>)}</select></label>
+            ) : (
+              <label>Nouveau prospect<input value={visit.newProspectName} onChange={update("newProspectName")} placeholder="Nom complet" /></label>
+            )}
+            <label>Téléphone<input value={visit.phone} onChange={update("phone")} placeholder="+223 ..." /></label>
+            <label className="full">Besoin<textarea value={visit.need} onChange={update("need")} /></label>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Bien</h3>
+          <div className="form-grid">
+            <label>Bien à visiter<select value={visit.property} onChange={update("property")}>{properties.map((item) => <option key={item.code}>{item.name}</option>)}</select></label>
+            <label>Disponibilité du bien<input value={selectedProperty.status} readOnly /></label>
+            <label className="full">Adresse<input value={selectedProperty.address} readOnly /></label>
+            <label>Propriétaire<input value={selectedProperty.owner} readOnly /></label>
+            <label>Quartier<input value={selectedProperty.district} readOnly /></label>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Planification</h3>
+          <div className="form-grid">
+            <label>Date<input type="date" value={visit.date} onChange={update("date")} /></label>
+            <label>Heure<input type="time" value={visit.time} onChange={update("time")} /></label>
+            <label>Agent responsable<select value={visit.agent} onChange={update("agent")}><option>Mariam Traoré</option><option>Aïssata Diarra</option><option>Issa Maïga</option><option>Cheick Camara</option></select></label>
+            <label>Lieu de rendez-vous<input value={visit.meetingPlace} onChange={update("meetingPlace")} /></label>
+            <label>Priorité<select value={visit.priority} onChange={update("priority")}><option>Normale</option><option>Urgente</option><option>Critique</option></select></label>
+            <label className="full">Commentaire interne<textarea value={visit.internalComment} onChange={update("internalComment")} /></label>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Suivi</h3>
+          <div className="form-grid compact-form">
+            <label>Prochaine action initiale<select value={visit.nextAction} onChange={update("nextAction")}><option>Confirmer la présence</option><option>Envoyer rappel WhatsApp</option><option>Préparer fiche bien</option><option>Relancer après visite</option><option>Créer dossier locataire</option></select></label>
+            <label>Rappel notification<select value={visit.notifyReminder} onChange={update("notifyReminder")}><option>Oui</option><option>Non</option></select></label>
+          </div>
+        </div>
+
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => onSave({ prospect, visit })}>Planifier visite</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ProspectCommentModal({ prospect, onSave, onClose }) {
+  const [values, setValues] = useState({
+    type: "Note interne",
+    comment: "Ajouter une précision au suivi commercial.",
+  });
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+
+  return (
+    <div className="modal-backdrop">
+      <section className="modal-card prospect-form-modal">
+        <button className="modal-close" onClick={onClose}>×</button>
+        <h2>Commentaire</h2>
+        <p>Ajouter une note ou un échange client à la timeline du prospect.</p>
+        <div className="form-section">
+          <div className="form-grid compact-form">
+            <label>Type<select value={values.type} onChange={update("type")}><option>Note interne</option><option>Échange client</option></select></label>
+            <label>Commentaire<textarea value={values.comment} onChange={update("comment")} /></label>
+          </div>
+        </div>
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => onSave({ prospect, values })}>Enregistrer</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ProspectStatusModal({ prospect, onSave, onClose }) {
+  const [status, setStatus] = useState(prospect.status ?? "Nouveau");
+  const [reason, setReason] = useState("Budget insuffisant");
+  const isLost = status === "Perdu";
+
+  return (
+    <div className="modal-backdrop">
+      <section className="modal-card prospect-form-modal">
+        <button className="modal-close" onClick={onClose}>×</button>
+        <h2>Changer statut</h2>
+        <p>Mettre à jour le statut commercial du prospect.</p>
+        <div className="form-section">
+          <div className="form-grid compact-form">
+            <label>Statut<select value={status} onChange={(event) => setStatus(event.target.value)}><option>Nouveau</option><option>Contacté</option><option>Visite prévue</option><option>Intéressé</option><option>Conclu</option><option>Perdu</option></select></label>
+            {isLost && (
+              <label>Motif<select value={reason} onChange={(event) => setReason(event.target.value)}><option>Budget insuffisant</option><option>Autre agence</option><option>Plus intéressé</option><option>Bien non disponible</option><option>Autre</option></select></label>
+            )}
+          </div>
+        </div>
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => onSave({ prospect, status, reason: isLost ? reason : "" })}>Enregistrer</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ProspectConversionModal({ prospect, onSave, onClose }) {
+  const [values, setValues] = useState({
+    conversionType: "Convertir en locataire",
+    property: getCompatibleProperties(prospect)[0]?.name ?? properties[0].name,
+    entryDate: "01/07/2026",
+    rent: prospect.budget ?? "750 000 FCFA",
+    deposit: "1 500 000 FCFA",
+    createContract: "Oui",
+  });
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+  const isTenantConversion = values.conversionType === "Convertir en locataire";
+
+  return (
+    <div className="modal-backdrop">
+      <section className="modal-card wide-modal prospect-form-modal">
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Conversion prospect</span>
+            <h2>Convertir</h2>
+            <p>Transformer le prospect en dossier conclu et rattacher les informations nécessaires.</p>
+          </div>
+          <Badge label={prospect.name} />
+        </div>
+        <div className="form-section">
+          <h3>Options de conversion</h3>
+          <div className="form-grid">
+            <label>Option<select value={values.conversionType} onChange={update("conversionType")}><option>Convertir en locataire</option><option>Convertir en client acheteur</option><option>Créer contrat</option><option>Rattacher à un bien</option></select></label>
+            <label>Bien<select value={values.property} onChange={update("property")}>{properties.map((property) => <option key={property.code}>{property.name}</option>)}</select></label>
+            {isTenantConversion && (
+              <>
+                <label>Date d'entrée<input type="date" value={values.entryDate} onChange={update("entryDate")} /></label>
+                <label>Loyer<input value={values.rent} onChange={update("rent")} /></label>
+                <label>Caution<input value={values.deposit} onChange={update("deposit")} /></label>
+                <label>Créer contrat<select value={values.createContract} onChange={update("createContract")}><option>Oui</option><option>Non</option></select></label>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => onSave({ prospect, values })}>Convertir</Button>
         </div>
       </section>
     </div>

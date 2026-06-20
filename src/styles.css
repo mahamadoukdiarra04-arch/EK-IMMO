@@ -1766,6 +1766,47 @@ a {
   flex: 0 0 auto;
 }
 
+.inline-menu-wrap {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.inline-action-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  gap: 6px;
+  width: max-content;
+  min-width: 238px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: var(--shadow-md);
+}
+
+.inline-action-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  min-height: 42px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--ink);
+  background: transparent;
+  text-align: left;
+}
+
+.inline-action-menu button:hover {
+  background: var(--surface-soft);
+}
+
 .advanced-filters {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1786,6 +1827,14 @@ a {
 .advanced-filters input,
 .advanced-filters select {
   min-width: 0;
+}
+
+.client-advanced-filters {
+  align-items: end;
+}
+
+.visit-quick-filters {
+  grid-column: 1 / -1;
 }
 
 .advanced-filter-footer {
@@ -2211,6 +2260,43 @@ a {
 
 .profile-panel .detail-metrics {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.prospect-metrics button {
+  display: grid;
+  align-content: center;
+  min-height: 94px;
+  min-width: 0;
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  color: var(--ink);
+  text-align: left;
+}
+
+.prospect-metrics button:hover {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(5, 47, 95, 0.08);
+}
+
+.prospect-metrics button span,
+.prospect-metrics button strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.prospect-metrics button span {
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.25;
+}
+
+.prospect-metrics button strong {
+  font-size: 0.98rem;
+  line-height: 1.18;
 }
 
 .finance-summary {
@@ -2665,6 +2751,69 @@ a {
 .profile-section h3 {
   margin: 0 0 10px;
   font-size: 1rem;
+}
+
+.profile-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+.profile-section-head h3 {
+  margin: 0;
+}
+
+.prospect-proposal-list,
+.prospect-visit-list {
+  display: grid;
+  gap: 12px;
+}
+
+.prospect-proposal-row,
+.prospect-visit-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) auto minmax(260px, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.prospect-proposal-row > div:first-child,
+.prospect-visit-list article {
+  min-width: 0;
+}
+
+.prospect-proposal-row strong,
+.prospect-proposal-row span,
+.prospect-visit-list strong,
+.prospect-visit-list span {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.prospect-proposal-row span,
+.prospect-visit-list span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.proposal-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.prospect-visit-list article {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
 }
 
 .profile-header {
@@ -5773,6 +5922,11 @@ td:last-child {
   margin: 18px 0 4px;
 }
 
+.visit-mode-switch {
+  width: fit-content;
+  margin: 0 0 16px;
+}
+
 .tenant-link-preview {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -5909,6 +6063,76 @@ td:last-child {
   overflow-wrap: anywhere;
 }
 
+.proposal-filters {
+  margin-top: 18px;
+}
+
+.proposal-select-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.proposal-select-card {
+  display: grid;
+  grid-template-columns: auto 120px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+}
+
+.proposal-select-card.active {
+  border-color: var(--primary);
+  background: var(--panel-soft);
+  box-shadow: 0 0 0 3px rgba(5, 47, 95, 0.08);
+}
+
+.proposal-select-card input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--primary);
+}
+
+.proposal-select-card img {
+  width: 120px;
+  height: 76px;
+  object-fit: cover;
+  border-radius: 9px;
+}
+
+.proposal-select-card span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.proposal-select-card strong,
+.proposal-select-card small,
+.proposal-select-card b {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.proposal-select-card small {
+  color: var(--muted);
+  font-weight: 750;
+}
+
+.empty-state-inline {
+  margin: 0;
+  padding: 18px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  color: var(--muted);
+  background: var(--surface-soft);
+  font-weight: 750;
+}
+
 .payment-modal-head {
   display: flex;
   align-items: flex-start;
@@ -6009,6 +6233,15 @@ td:last-child {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .prospect-proposal-row,
+  .prospect-visit-list article {
+    grid-template-columns: 1fr;
+  }
+
+  .proposal-row-actions {
+    justify-content: flex-start;
+  }
+
   .owner-document-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -6017,6 +6250,17 @@ td:last-child {
 @media (max-width: 720px) {
   .proposal-grid {
     grid-template-columns: 1fr;
+  }
+
+  .proposal-select-card {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .proposal-select-card img {
+    grid-column: 1 / -1;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
   }
 
   .owner-document-grid {
