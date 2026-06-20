@@ -2607,6 +2607,84 @@ a {
   border-bottom: 0;
 }
 
+.info-link-row {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.15fr);
+  align-items: center;
+  gap: 18px;
+  min-height: 56px;
+  width: 100%;
+  margin: 0;
+  padding: 14px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border-soft);
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.info-link-row:hover strong {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.info-link-row span,
+.info-link-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.info-link-row span {
+  color: var(--muted);
+  text-align: left;
+}
+
+.info-link-row strong {
+  justify-self: end;
+  text-align: right;
+  line-height: 1.28;
+}
+
+.section-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.deadline-list {
+  display: grid;
+  gap: 10px;
+}
+
+.deadline-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--soft);
+}
+
+.deadline-row strong,
+.deadline-row small {
+  display: block;
+}
+
+.deadline-row small {
+  margin-top: 4px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.compact-document-menu {
+  margin-top: 18px;
+}
+
 .maintenance-detail-stack {
   display: grid;
   gap: 24px;
@@ -3117,6 +3195,21 @@ td:last-child {
   display: grid;
   gap: 10px;
   margin-top: 18px;
+}
+
+.visit-action-menu-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+.visit-action-menu-wrap > button {
+  width: 100%;
+}
+
+.visit-action-menu {
+  left: 0;
+  right: auto;
+  width: min(330px, calc(100vw - 48px));
 }
 
 .prospect-workspace {
