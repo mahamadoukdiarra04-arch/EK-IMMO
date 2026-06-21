@@ -2252,6 +2252,8 @@ function App() {
   const [maintenanceContext, setMaintenanceContext] = useState(null);
   const [propertyHistoryOverrides, setPropertyHistoryOverrides] = useState({});
   const [documentContext, setDocumentContext] = useState(null);
+  const [missingDocumentContext, setMissingDocumentContext] = useState(null);
+  const [missingDocumentRequests, setMissingDocumentRequests] = useState([]);
   const [documentDraft, setDocumentDraft] = useState(null);
   const [propertyOwnerPrefill, setPropertyOwnerPrefill] = useState("");
   const [propertyPdfContext, setPropertyPdfContext] = useState(null);
@@ -2370,6 +2372,25 @@ function App() {
         },
       });
       setModal("Intervention urgente");
+      return;
+    }
+
+    if (normalizedAction === "documents manquants") {
+      const tenant = allTenants.find((item) => item.id === "LOC-2026-018") ?? allTenants.find((item) => item.name === "Oumar Sidibé") ?? allTenants[0];
+      const property = propertiesWithArchiveState.find((item) => item.name === tenant?.property) ?? properties.find((item) => item.name === tenant?.property) ?? selectedProperty;
+      setMissingDocumentContext({
+        id: "DOCREQ-LOC-2026-018-ASSURANCE",
+        dossier: tenant?.id ?? "LOC-2026-018",
+        document: "Assurance habitation",
+        personType: "Locataire",
+        personId: tenant?.id,
+        personName: tenant?.name ?? "Oumar Sidibé",
+        phone: tenant?.phone ?? "+223 70 60 88 21",
+        email: tenant?.email ?? "o.sidibe@email.ml",
+        propertyName: property?.name ?? tenant?.property ?? "Résidence ACI Baobab",
+        propertyCode: property?.code ?? "EKM-RES-018",
+      });
+      setModal("Document manquant");
       return;
     }
 
@@ -3296,6 +3317,69 @@ function App() {
     setModal(null);
   };
 
+  const handleMissingDocumentRequest = ({ request, values, importNow = false }) => {
+    const status = importNow ? "Importé" : "Demandé";
+    const documentRequest = {
+      ...request,
+      channel: values.channel,
+      comment: values.comment,
+      dueDate: values.dueDate,
+      responsible: values.responsible,
+      requestedAt: "21/06/2026",
+      status,
+      fileName: importNow ? `${request.document} - ${request.dossier}.pdf` : "",
+      importedAt: importNow ? "21/06/2026" : "",
+    };
+
+    setMissingDocumentRequests((current) => [
+      documentRequest,
+      ...current.filter((item) => item.id !== documentRequest.id),
+    ]);
+
+    if (request.personType === "Locataire" && request.personId) {
+      setTenantOverrides((current) => {
+        const previous = current[request.personId] ?? {};
+        return {
+          ...current,
+          [request.personId]: {
+            ...previous,
+            missingDocuments: [
+              documentRequest,
+              ...(previous.missingDocuments ?? []).filter((item) => item.id !== documentRequest.id),
+            ],
+            lastDocumentRequest: `${request.document} ${status.toLowerCase()}`,
+          },
+        };
+      });
+
+      setSelectedTenant((current) => (current.id === request.personId ? {
+        ...current,
+        missingDocuments: [
+          documentRequest,
+          ...(current.missingDocuments ?? []).filter((item) => item.id !== documentRequest.id),
+        ],
+        lastDocumentRequest: `${request.document} ${status.toLowerCase()}`,
+      } : current));
+    }
+
+    setPropertyHistoryOverrides((current) => ({
+      ...current,
+      [request.propertyName]: [
+        [
+          importNow ? "Document importé" : "Document demandé",
+          `${request.document} - ${request.personType.toLowerCase()} ${request.personName}. Canal : ${values.channel}. Échéance : ${values.dueDate}.`,
+          "21/06/2026",
+        ],
+        ...(current[request.propertyName] ?? []),
+      ],
+    }));
+
+    setClientTab(request.personType === "Locataire" ? "Locataires" : request.personType === "Propriétaire" ? "Propriétaires" : "Prospects");
+    setPropertyTab("Historique");
+    setModal(null);
+    setMissingDocumentContext(null);
+  };
+
   const handleTenantReceiptArchive = ({ tenant, receipt }) => {
     setTenantReceiptArchives((current) => [
       { ...receipt, tenantId: tenant.id, tenant: tenant.name, archivedAt: "19/06/2026" },
@@ -4053,6 +4137,7 @@ function App() {
             maintenancesList={allMaintenances}
             propertyHistoryOverrides={propertyHistoryOverrides}
             propertyPdfArchives={propertyPdfArchives}
+            missingDocumentRequests={missingDocumentRequests}
             propertiesList={propertiesWithArchiveState}
             visitsList={allVisits}
           />
@@ -4078,6 +4163,7 @@ function App() {
             onFilterRequestConsumed={() => setClientFilterRequest(null)}
             tenantRelances={tenantRelances}
             tenantReceiptArchives={tenantReceiptArchives}
+            missingDocumentRequests={missingDocumentRequests}
             onAction={openAction}
             contractsList={allContracts}
             paymentsList={allPayments}
@@ -4405,6 +4491,15 @@ function App() {
         <MaintenanceFormModal context={maintenanceContext} onSave={handleMaintenanceSchedule} onClose={() => setModal(null)} />
       ) : modal === "Intervention urgente" ? (
         <UrgentMaintenanceModal context={maintenanceContext} onSave={handleMaintenanceSchedule} onClose={() => setModal(null)} />
+      ) : modal === "Document manquant" ? (
+        <MissingDocumentModal
+          request={missingDocumentContext}
+          onSave={handleMissingDocumentRequest}
+          onClose={() => {
+            setMissingDocumentContext(null);
+            setModal(null);
+          }}
+        />
       ) : modal === "Choisir document" ? (
         <DocumentContextMenu property={documentContext?.property ?? selectedProperty} onSelect={handleDocumentTemplateSelection} onClose={() => setModal(null)} />
       ) : modal === "Fiche PDF" ? (
@@ -4862,6 +4957,7 @@ function PropertiesPage({
   maintenancesList = maintenances,
   propertyHistoryOverrides = {},
   propertyPdfArchives = [],
+  missingDocumentRequests = [],
   propertiesList = properties,
   visitsList = visits,
 }) {
@@ -5011,6 +5107,7 @@ function PropertiesPage({
         maintenancesList={maintenancesList}
         historyItems={propertyHistoryOverrides[displayedSelectedProperty.name] ?? []}
         propertyPdfArchives={propertyPdfArchives}
+        missingDocumentRequests={missingDocumentRequests}
         visitsList={visitsList}
       />
     );
@@ -5167,7 +5264,7 @@ function PropertyCard({ property, onSelect }) {
   );
 }
 
-function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, chargesList = charges, maintenancesList = maintenances, historyItems = [], propertyPdfArchives = [], visitsList = visits }) {
+function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, chargesList = charges, maintenancesList = maintenances, historyItems = [], propertyPdfArchives = [], missingDocumentRequests = [], visitsList = visits }) {
   const hasHierarchy = isBuildingProperty(property) || Boolean(property.parentCode);
   const tabs = ["Résumé", ...(hasHierarchy ? ["Lots & blocs"] : []), "Propriétaire", "Locataire", "Contrats", "Paiements", "Charges & entretiens", "Documents", "Historique"];
   const effectiveTab = tabs.includes(activeTab) ? activeTab : "Résumé";
@@ -5269,7 +5366,7 @@ function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, on
       {effectiveTab === "Contrats" && <PropertyContracts property={property} contractsList={contractsList} onAction={onAction} />}
       {effectiveTab === "Paiements" && <PropertyPayments property={property} rentRowsList={rentRowsList} />}
       {effectiveTab === "Charges & entretiens" && <PropertyMaintenance property={property} chargesList={chargesList} maintenancesList={maintenancesList} />}
-      {effectiveTab === "Documents" && <PropertyDocuments property={property} onAction={onAction} propertyPdfArchives={propertyPdfArchives} contractsList={contractsList} />}
+      {effectiveTab === "Documents" && <PropertyDocuments property={property} onAction={onAction} propertyPdfArchives={propertyPdfArchives} missingDocumentRequests={missingDocumentRequests} contractsList={contractsList} />}
       {effectiveTab === "Historique" && <PropertyHistory property={property} historyItems={historyItems} />}
     </>
   );
@@ -5739,7 +5836,7 @@ function PropertyMaintenance({ property, chargesList = charges, maintenancesList
   );
 }
 
-function PropertyDocuments({ property, onAction, propertyPdfArchives = [], contractsList = contracts }) {
+function PropertyDocuments({ property, onAction, propertyPdfArchives = [], missingDocumentRequests = [], contractsList = contracts }) {
   const pdfRows = propertyPdfArchives
     .filter((archive) => archive.property === property.name)
     .map((archive) => [archive.title, "Fiche PDF", archive.date, <Badge label={archive.status} />, <DocumentActions />]);
@@ -5752,6 +5849,15 @@ function PropertyDocuments({ property, onAction, propertyPdfArchives = [], contr
       <Badge label={contract.amendmentArchived ? "Archivé" : "Généré"} />,
       <DocumentActions />,
     ]);
+  const missingRows = missingDocumentRequests
+    .filter((request) => request.propertyName === property.name || request.propertyCode === property.code)
+    .map((request) => [
+      request.document,
+      `Dossier ${request.dossier}`,
+      request.importedAt || request.requestedAt,
+      <Badge label={request.status} />,
+      <DocumentActions />,
+    ]);
 
   return (
     <Panel title={`Documents - ${property.code}`} toolbar={<Button compact onClick={() => onAction("Importer document")}><Upload size={16} /> Importer</Button>}>
@@ -5760,6 +5866,7 @@ function PropertyDocuments({ property, onAction, propertyPdfArchives = [], contr
         rows={[
           ...pdfRows,
           ...amendmentRows,
+          ...missingRows,
           ["Contrat de location signé", "Contrat", "01/01/2026", <Badge label="Archivé" />, <DocumentActions />],
           ["Titre foncier scanné", "Titre", "14/03/2026", <Badge label="Archivé" />, <DocumentActions />],
           ["Facture entretien jardin", "Facture", "05/05/2026", <Badge label="Généré" />, <DocumentActions />],
@@ -5793,7 +5900,7 @@ function PropertyHistory({ property, historyItems = [] }) {
   );
 }
 
-function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = owners, selectedTenant, onTenant, tenantsList = tenants, prospectsList = prospects, prospectProposals = {}, prospectActivities = {}, prospectConversions = {}, visitsList = visits, visitHistories = {}, detailRequest = null, filterRequest = null, onFilterRequestConsumed, tenantRelances = [], tenantReceiptArchives = [], onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, reversalsList = reversals }) {
+function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = owners, selectedTenant, onTenant, tenantsList = tenants, prospectsList = prospects, prospectProposals = {}, prospectActivities = {}, prospectConversions = {}, visitsList = visits, visitHistories = {}, detailRequest = null, filterRequest = null, onFilterRequestConsumed, tenantRelances = [], tenantReceiptArchives = [], missingDocumentRequests = [], onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, reversalsList = reversals }) {
   const tabs = ["Propriétaires", "Locataires", "Prospects", "Visites"];
   const [detailView, setDetailView] = useState(null);
   const [selectedProspect, setSelectedProspect] = useState(prospects[0]);
@@ -5945,7 +6052,7 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
     </DetailPageShell>
   ) : detailView === "tenant" ? (
     <DetailPageShell title="Fiche locataire" subtitle={selectedTenant.name} onBack={closeDetail}>
-      <TenantProfilePanel tenant={selectedTenant} onAction={onAction} contractsList={contractsList} paymentsList={paymentsList} rentRowsList={rentRowsList} relancesList={tenantRelances} archivedReceipts={tenantReceiptArchives} />
+      <TenantProfilePanel tenant={selectedTenant} onAction={onAction} contractsList={contractsList} paymentsList={paymentsList} rentRowsList={rentRowsList} relancesList={tenantRelances} archivedReceipts={tenantReceiptArchives} missingDocumentRequests={missingDocumentRequests} />
     </DetailPageShell>
   ) : detailView === "prospect" ? (
     <DetailPageShell title="Fiche prospect" subtitle={selectedProspect.name} onBack={closeDetail}>
@@ -6370,7 +6477,7 @@ function TenantsView({ tenantsList = tenants, onOpenDetail, rentRowsList = rentR
   );
 }
 
-function TenantProfilePanel({ tenant, onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, relancesList = [], archivedReceipts = [] }) {
+function TenantProfilePanel({ tenant, onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, relancesList = [], archivedReceipts = [], missingDocumentRequests = [] }) {
   const [tab, setTab] = useState("Résumé");
   const property = properties.find((item) => item.name === tenant.property) ?? properties[0];
   const tenantContracts = contractsList.filter((item) => item.client === tenant.name);
@@ -6378,6 +6485,10 @@ function TenantProfilePanel({ tenant, onAction, contractsList = contracts, payme
   const paymentRows = rentRowsList.filter((row) => row.tenant === tenant.name);
   const tenantPayments = paymentsList.filter((payment) => payment.tenant === tenant.name);
   const tenantRelances = relancesList.filter((relance) => relance.tenantId === tenant.id || relance.tenant === tenant.name);
+  const tenantMissingDocuments = [
+    ...(tenant.missingDocuments ?? []),
+    ...missingDocumentRequests.filter((request) => request.personId === tenant.id || request.personName === tenant.name),
+  ].filter((request, index, list) => list.findIndex((item) => item.id === request.id) === index);
   const tenantReceipts = [
     ...tenantPayments.filter((payment) => payment.receipt && payment.receipt !== "Non généré").map((payment) => ({
       reference: payment.receipt,
@@ -6463,6 +6574,9 @@ function TenantProfilePanel({ tenant, onAction, contractsList = contracts, payme
           ))}
           {tenantReceipts.map((item) => (
             <p key={`${item.reference}-${item.period}`}><span>{item.reference} · {item.period} · {item.amount}</span><Badge label={item.status} /></p>
+          ))}
+          {tenantMissingDocuments.map((item) => (
+            <p key={item.id}><span>{item.document} · {item.dossier} · limite {item.dueDate}</span><Badge label={item.status} /></p>
           ))}
           {["Pièce d'identité", "Contrat", "Reçus", "Quittances", "Documents divers"].map((item) => (
             <p key={item}><span>{item}</span><Badge label="Archivé" /></p>
@@ -11034,9 +11148,9 @@ function Badge({ label }) {
 }
 
 function statusTone(label) {
-  if (["Disponible", "Actif", "À jour", "Payé", "Payée", "Validée", "Déduite", "Conclu", "Archivé", "Imprimé", "Généré", "Réalisée", "Présent", "Justificatif joint"].includes(label)) return "success";
+  if (["Disponible", "Actif", "À jour", "Payé", "Payée", "Validée", "Déduite", "Conclu", "Archivé", "Imprimé", "Généré", "Réalisée", "Présent", "Justificatif joint", "Importé"].includes(label)) return "success";
   if (["Loué", "Visite prévue", "Prévue", "Contacté", "Réservé", "Planifié", "À payer", "À reverser", "Refacturable", "Ouverte", "Entretien seul"].includes(label)) return "purple";
-  if (["En travaux", "Partiel", "À valider", "À échéance", "Échéance proche", "À déduire", "En attente", "En cours", "Reportée", "Relancé", "Client intéressé", "Brouillon", "Encaissement propriétaire", "Gestion multi-lots", "Suivi"].includes(label)) return "warning";
+  if (["En travaux", "Partiel", "À valider", "À échéance", "Échéance proche", "À déduire", "En attente", "En cours", "Reportée", "Relancé", "Client intéressé", "Brouillon", "Encaissement propriétaire", "Gestion multi-lots", "Suivi", "Demandé"].includes(label)) return "warning";
   if (["Expiré", "Document signé manquant", "Impayé", "En retard", "Litige", "Perdu", "Suspendu", "Annulée", "Justificatif manquant"].includes(label)) return "danger";
   if (["Inactif", "Indisponible", "Vendu", "Manquant"].includes(label)) return "muted";
   return "default";
@@ -12288,6 +12402,82 @@ function TenantReceiptModal({ tenant, property, payment, paymentsList = paymentR
               <p>Cliquez sur Prévisualiser pour contrôler le document avant impression.</p>
             </Panel>
           )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function MissingDocumentModal({ request, onSave, onClose }) {
+  const fallbackRequest = request ?? {
+    id: "DOCREQ-DEMO",
+    dossier: "LOC-2026-018",
+    document: "Assurance habitation",
+    personType: "Locataire",
+    personName: "Oumar Sidibé",
+    phone: "+223 70 60 88 21",
+    email: "o.sidibe@email.ml",
+    propertyName: "Résidence ACI Baobab",
+  };
+  const [values, setValues] = useState({
+    channel: "WhatsApp",
+    comment: `Demander ${fallbackRequest.document.toLowerCase()} pour compléter le dossier ${fallbackRequest.dossier}.`,
+    dueDate: "2026-06-28",
+    responsible: "Aïssata Diarra",
+  });
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+  const submit = (importNow = false) => onSave({ request: fallbackRequest, values, importNow });
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal missing-document-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Documents manquants</span>
+            <h2>Demander un document manquant</h2>
+            <p>{fallbackRequest.dossier} · {fallbackRequest.propertyName}</p>
+          </div>
+          <Badge label="Demandé" />
+        </div>
+
+        <div className="missing-document-summary">
+          <div>
+            <small>Dossier concerné</small>
+            <strong>{fallbackRequest.dossier}</strong>
+          </div>
+          <div>
+            <small>Document manquant</small>
+            <strong>{fallbackRequest.document}</strong>
+          </div>
+          <div>
+            <small>Personne concernée</small>
+            <strong>{fallbackRequest.personType} · {fallbackRequest.personName}</strong>
+          </div>
+          <div>
+            <small>Téléphone / email</small>
+            <strong>{fallbackRequest.phone} · {fallbackRequest.email}</strong>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Demande</h3>
+          <div className="form-grid compact-form">
+            <label>Canal de demande<select value={values.channel} onChange={update("channel")}><option>Appel</option><option>WhatsApp</option><option>Email</option><option>Physique</option></select></label>
+            <label>Date limite<input type="date" value={values.dueDate} onChange={update("dueDate")} /></label>
+            <label>Responsable de suivi<select value={values.responsible} onChange={update("responsible")}><option>Aïssata Diarra</option><option>Mariam Traoré</option><option>Issa Maïga</option><option>Cheick Camara</option></select></label>
+            <label className="full">Commentaire<textarea value={values.comment} onChange={update("comment")} /></label>
+          </div>
+        </div>
+
+        <div className="notice">
+          Le document restera au statut Demandé jusqu'à son import. L'import immédiat classe le fichier dans les documents du dossier.
+        </div>
+
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => submit(false)}><Send size={17} /> Marquer comme demandé</Button>
+          <Button onClick={() => submit(true)}><Upload size={17} /> Importer maintenant</Button>
         </div>
       </section>
     </div>
