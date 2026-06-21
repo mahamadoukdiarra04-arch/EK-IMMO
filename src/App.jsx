@@ -2363,6 +2363,7 @@ function App() {
       "renouveler contrat",
       "resilier contrat",
       "pdf contrat",
+      "imprimer contrat",
     ].includes(normalizedAction)) {
       setContractActionContext({ contract: context.contract ?? allContracts[0] ?? contracts[0] });
       setModal(label);
@@ -2371,11 +2372,6 @@ function App() {
 
     if (normalizedAction === "telecharger contrat" && context.contract) {
       handleContractDocumentAction(context.contract, "Document telecharge", "PDF du contrat ouvert pour telechargement.");
-      return;
-    }
-
-    if (normalizedAction === "imprimer contrat" && context.contract) {
-      handleContractDocumentAction(context.contract, "Document imprime", "Impression du contrat lancee.");
       return;
     }
 
@@ -3448,6 +3444,24 @@ function App() {
     return nextContract;
   };
 
+  const handleContractPrint = ({ contract, values }) => {
+    const targetLabels = {
+      contract: "contrat",
+      sheet: "fiche contrat",
+      history: "historique",
+    };
+    const targetLabel = targetLabels[values.target] ?? "contrat";
+    const deadlineLabel = values.includeDeadlines === "Oui" ? "avec échéances" : "sans échéances";
+
+    addContractTimeline(contract, {
+      action: "Document imprimé",
+      comment: `${targetLabel} imprimé ${deadlineLabel}.`,
+    });
+    setContractActionContext(null);
+    setModal(null);
+    window.setTimeout(() => window.print(), 0);
+  };
+
   const handlePaymentRegistration = (payment) => {
     const paymentKey = getPaymentKey(payment);
 
@@ -4020,6 +4034,8 @@ function App() {
         <ContractDocumentModal contract={contractActionContext?.contract ?? allContracts[0]} action={contractActionContext?.documentAction} onAction={openAction} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "PDF contrat" ? (
         <ContractPdfModal contract={contractActionContext?.contract ?? allContracts[0]} onPdfAction={handleContractPdfAction} onClose={() => { setContractActionContext(null); setModal(null); }} />
+      ) : modal === "Imprimer contrat" ? (
+        <ContractPrintModal contract={contractActionContext?.contract ?? allContracts[0]} onPrint={handleContractPrint} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "Modifier contrat" ? (
         <ContractEditModal contract={contractActionContext?.contract ?? allContracts[0]} onSave={handleContractEditSave} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "Renouveler contrat" ? (
@@ -12418,6 +12434,49 @@ function ContractPdfModal({ contract, onPdfAction, onClose }) {
             )}
           </>
         )}
+      </section>
+    </div>
+  );
+}
+
+function ContractPrintModal({ contract, onPrint, onClose }) {
+  const [values, setValues] = useState({
+    target: "contract",
+    includeDeadlines: "Oui",
+  });
+
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card prospect-form-modal compact-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <h2>Imprimer</h2>
+        <p>{contract.number} - {contract.property}</p>
+
+        <div className="form-section">
+          <h3>Options</h3>
+          <div className="form-grid compact-form">
+            <label>Document à imprimer
+              <select value={values.target} onChange={update("target")}>
+                <option value="contract">Imprimer le contrat</option>
+                <option value="sheet">Imprimer la fiche contrat</option>
+                <option value="history">Imprimer l’historique</option>
+              </select>
+            </label>
+            <label>Inclure les échéances
+              <select value={values.includeDeadlines} onChange={update("includeDeadlines")}>
+                <option>Oui</option>
+                <option>Non</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => onPrint({ contract, values })}><Printer size={17} /> Imprimer</Button>
+        </div>
       </section>
     </div>
   );
