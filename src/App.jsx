@@ -2366,7 +2366,7 @@ function App() {
     }
 
     if (normalizedAction === "resilier contrat" && context.contract) {
-      handleContractStatusAction(context.contract, "Resilie", "Resiliation enregistree depuis la fiche contrat.");
+      handleContractStatusAction(context.contract, "Résilié", "Résiliation enregistrée depuis la fiche contrat.");
       return;
     }
 
@@ -3143,7 +3143,7 @@ function App() {
     setPropertyHistoryOverrides((current) => ({
       ...current,
       [nextContract.property]: [
-        [entry?.action ?? "Contrat mis a jour", entry?.comment ?? `${nextContract.number} mis a jour.`, "20/06/2026"],
+        [entry?.action ?? "Contrat mis à jour", entry?.comment ?? `${nextContract.number} mis à jour.`, "20/06/2026"],
         ...(current[nextContract.property] ?? []),
       ],
     }));
@@ -3154,14 +3154,14 @@ function App() {
     const deadline = {
       id: `ECH-${Date.now()}`,
       ...values,
-      status: "Planifiee",
+      status: "Planifiée",
     };
     setContractDeadlines((current) => ({
       ...current,
       [key]: [deadline, ...(current[key] ?? [])],
     }));
     addContractTimeline(contract, {
-      action: "Echeance ajoutee",
+      action: "Échéance ajoutée",
       comment: `${values.type} le ${values.date} - rappel ${values.reminder}.`,
     });
     setModal(null);
@@ -3198,7 +3198,7 @@ function App() {
 
   const handleContractRenewalSave = ({ contract, values }) => {
     updateContract(contract, {
-      status: "Renouvele",
+      status: "Renouvelé",
       start: values.newStart,
       end: values.newEnd,
       amount: values.newAmount || contract.amount,
@@ -3211,8 +3211,8 @@ function App() {
     }, {
       action: "Renouvellement",
       comment: values.generateAmendment === "Oui"
-        ? `Avenant genere pour la periode ${values.newStart} - ${values.newEnd}.`
-        : `Nouvelle periode ${values.newStart} - ${values.newEnd}.`,
+        ? `Avenant généré pour la période ${values.newStart} - ${values.newEnd}.`
+        : `Nouvelle période ${values.newStart} - ${values.newEnd}.`,
     });
 
     const tenant = allTenants.find((item) => item.name === contract.client);
@@ -6457,31 +6457,31 @@ function ContractProfilePanel({ contract, onAction, timelineEntries = [], custom
         </div>
       </div>
       <div className="simple-list">
-        <p><span>Parties concernees</span><strong>{contract.owner} / {contract.client}</strong></p>
+        <p><span>Parties concernées</span><strong>{contract.owner} / {contract.client}</strong></p>
         <button className="info-link-row" onClick={() => onAction("Ouvrir bien contrat", { contract })}><span>Bien</span><strong>{contract.property}</strong></button>
-        <button className="info-link-row" onClick={() => onAction("Ouvrir proprietaire contrat", { contract })}><span>Proprietaire</span><strong>{contract.owner}</strong></button>
+        <button className="info-link-row" onClick={() => onAction("Ouvrir proprietaire contrat", { contract })}><span>Propriétaire</span><strong>{contract.owner}</strong></button>
         <button className="info-link-row" onClick={() => onAction("Ouvrir locataire contrat", { contract })}><span>Locataire</span><strong>{contract.client}</strong></button>
         <p><span>Dates</span><strong>{contract.start} - {contract.end}</strong></p>
         <p><span>Montant</span><strong>{financials.amount}</strong></p>
-        <p><span>Mode financier</span><strong>{contract.financialMode ?? property?.financialMode ?? "A definir"}</strong></p>
+        <p><span>Mode financier</span><strong>{contract.financialMode ?? property?.financialMode ?? "À définir"}</strong></p>
         <p><span>Caution</span><strong>{financials.deposit}</strong></p>
         <p><span>Commission</span><strong>{financials.commission}</strong></p>
         <p><span>Statut</span><Badge label={contract.status} /></p>
-        <button className="info-link-row" onClick={() => onAction("Document signe contrat", { contract })}><span>Document signe</span><strong>{contract.signedDocument ?? "Archive"}</strong></button>
-        <button className="info-link-row" onClick={() => onAction("Actions echeance contrat", { contract })}><span>Echeance</span><strong>{getContractDueLabel(contract)}</strong></button>
+        <button className="info-link-row" onClick={() => onAction("Document signe contrat", { contract })}><span>Document signé</span><strong>{contract.signedDocument ?? "Archivé"}</strong></button>
+        <button className="info-link-row" onClick={() => onAction("Actions echeance contrat", { contract })}><span>Échéance</span><strong>{getContractDueLabel(contract)}</strong></button>
         <p><span>Prochain loyer</span><strong>{nextRent}</strong></p>
         <p><span>Fin du contrat</span><strong>{contract.end}</strong></p>
-        <p><span>Alerte</span><Badge label={contract.number === "CON-2025-088" ? "A valider" : "Planifiee"} /></p>
+        <p><span>Alerte</span><Badge label={contract.number === "CON-2025-088" ? "À valider" : "Planifiée"} /></p>
       </div>
       {directOwnerCollection && (
         <div className="notice">
-          Encaissement direct proprietaire : le contrat reste suivi par E.K immo, mais les loyers ne sont pas ajoutes aux paiements agence a collecter.
+          Encaissement direct propriétaire : le contrat reste suivi par E.K immo, mais les loyers ne sont pas ajoutés aux paiements agence à collecter.
         </div>
       )}
       <div className="profile-section">
         <div className="section-heading-row">
-          <h3>Echeances</h3>
-          <Button compact onClick={() => onAction("Gerer echeances contrat", { contract })}><CalendarDays size={16} /> Gerer les echeances</Button>
+          <h3>Échéances</h3>
+          <Button compact onClick={() => onAction("Gerer echeances contrat", { contract })}><CalendarDays size={16} /> Gérer les échéances</Button>
         </div>
         <div className="deadline-list">
           {deadlines.map((deadline) => (
@@ -6506,13 +6506,13 @@ function ContractProfilePanel({ contract, onAction, timelineEntries = [], custom
       <div className="stack-actions">
         <Button variant="primary" onClick={() => onAction("Modifier contrat", { contract })}><Pencil size={17} /> Modifier</Button>
         <Button onClick={() => onAction("Renouveler contrat", { contract })}><RefreshCw size={17} /> Renouveler</Button>
-        <Button onClick={() => onAction("Resilier contrat", { contract })}><XCircle size={17} /> Resilier</Button>
+        <Button onClick={() => onAction("Resilier contrat", { contract })}><XCircle size={17} /> Résilier</Button>
         <Button onClick={() => onAction("Telecharger contrat", { contract })}><Download size={17} /> PDF</Button>
         <Button onClick={() => onAction("Imprimer contrat", { contract })}><Printer size={17} /> Imprimer</Button>
-        <Button onClick={() => onAction("Joindre contrat signe", { contract })}><Upload size={17} /> Contrat signe</Button>
+        <Button onClick={() => onAction("Joindre contrat signe", { contract })}><Upload size={17} /> Contrat signé</Button>
         <Button onClick={() => onAction("Archiver contrat", { contract })}><Archive size={17} /> Archiver</Button>
         <Button onClick={() => onAction("Ouvrir bien contrat", { contract })}><Home size={17} /> Voir fiche bien</Button>
-        <Button onClick={() => onAction("Ouvrir proprietaire contrat", { contract })}><UserRound size={17} /> Voir proprietaire</Button>
+        <Button onClick={() => onAction("Ouvrir proprietaire contrat", { contract })}><UserRound size={17} /> Voir propriétaire</Button>
         <Button onClick={() => onAction("Ouvrir locataire contrat", { contract })}><UsersRound size={17} /> Voir locataire</Button>
       </div>
     </Panel>
@@ -6522,31 +6522,31 @@ function ContractProfilePanel({ contract, onAction, timelineEntries = [], custom
 function getContractDeadlines(contract, financials, customDeadlines = []) {
   const base = [
     { type: "Prochain loyer", date: contract.nextDueDate ?? "05/07/2026", comment: financials.amount },
-    { type: "Prochaine revision", date: contract.revisionDate ?? "01/01/2027", comment: "Indexation annuelle a confirmer" },
-    { type: "Fin du contrat", date: contract.end, comment: "Controler renouvellement ou sortie" },
-    { type: "Alerte planifiee", date: contract.number === "CON-2025-088" ? "Dans 32 jours" : "30 jours avant", comment: "Notification agent et manager" },
-    { type: "Renouvellement prevu", date: contract.renewalDate ?? "A confirmer", comment: contract.status === "Renouvele" || contract.status === "Renouvelé" ? "Renouvellement enregistre" : "Option a valider" },
+    { type: "Prochaine révision", date: contract.revisionDate ?? "01/01/2027", comment: "Indexation annuelle à confirmer" },
+    { type: "Fin du contrat", date: contract.end, comment: "Contrôler renouvellement ou sortie" },
+    { type: "Alerte planifiée", date: contract.number === "CON-2025-088" ? "Dans 32 jours" : "30 jours avant", comment: "Notification agent et manager" },
+    { type: "Renouvellement prévu", date: contract.renewalDate ?? "À confirmer", comment: contract.status === "Renouvelé" ? "Renouvellement enregistré" : "Option à valider" },
   ];
 
-  if (contract.status === "Resilie" || contract.status === "Résilié" || contract.terminationDate) {
-    base.push({ type: "Resiliation prevue", date: contract.terminationDate ?? contract.end, comment: "Sortie a suivre" });
+  if (contract.status === "Résilié" || contract.terminationDate) {
+    base.push({ type: "Résiliation prévue", date: contract.terminationDate ?? contract.end, comment: "Sortie à suivre" });
   }
 
   return [...customDeadlines.map((item) => ({
     type: item.type,
     date: item.date,
-    comment: `${item.reminder} - ${item.notify} - ${item.comment}`,
+    comment: `${item.reminder} · ${item.notify} · ${item.comment}`,
   })), ...base];
 }
 
 function getContractTimeline(contract, property, timelineEntries = []) {
   return [
     ...timelineEntries,
-    { date: contract.start, user: contract.owner, action: "Contrat cree", comment: `${contract.number} lie a ${contract.property}` },
-    { date: contract.start, user: "Aissata Diarra", action: "Generation PDF", comment: "Modele E.K immo alimente et pret a archiver" },
-    { date: contract.signedAt ?? "18/06/2026", user: "Aissata Diarra", action: "Signature ajoutee", comment: "Document signe archive" },
-    { date: contract.end, user: "Systeme", action: "Alerte envoyee", comment: getContractDueLabel(contract) },
-    { date: "20/06/2026", user: "Aissata Diarra", action: "Derniere verification", comment: `${property?.status ?? "Actif"} - fiche bien liee` },
+    { date: contract.start, user: contract.owner, action: "Contrat créé", comment: `${contract.number} lié à ${contract.property}` },
+    { date: contract.start, user: "Aïssata Diarra", action: "Génération PDF", comment: "Modèle E.K immo alimenté et prêt à archiver" },
+    { date: contract.signedAt ?? "18/06/2026", user: "Aïssata Diarra", action: "Signature ajoutée", comment: "Document signé archivé" },
+    { date: contract.end, user: "Système", action: "Alerte envoyée", comment: getContractDueLabel(contract) },
+    { date: "20/06/2026", user: "Aïssata Diarra", action: "Dernière vérification", comment: `${property?.status ?? "Actif"} · fiche bien liée` },
   ];
 }
 function getContractFinancials(contract) {
@@ -12049,7 +12049,7 @@ function ContractDeadlineModal({ contract, onSave, onClose }) {
     date: "2026-07-05",
     reminder: "15 jours",
     notify: "Agent",
-    comment: "Verifier paiement, notification et document associe.",
+    comment: "Vérifier paiement, notification et document associé.",
   });
   const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
 
@@ -12057,20 +12057,20 @@ function ContractDeadlineModal({ contract, onSave, onClose }) {
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section className="modal-card prospect-form-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
         <button className="modal-close" onClick={onClose}>×</button>
-        <h2>Gerer les echeances</h2>
+        <h2>Gérer les échéances</h2>
         <p>{contract.number} - {contract.property}</p>
         <div className="form-section">
           <div className="form-grid compact-form">
-            <label>Type d'echeance<select value={values.type} onChange={update("type")}><option>Prochain loyer</option><option>Fin de contrat</option><option>Revision</option><option>Renouvellement</option><option>Relance</option><option>Autre</option></select></label>
-            <label>Date de l'echeance<input type="date" value={values.date} onChange={update("date")} /></label>
-            <label>Rappel avant echeance<select value={values.reminder} onChange={update("reminder")}><option>7 jours</option><option>15 jours</option><option>30 jours</option><option>Personnalise</option></select></label>
-            <label>Personne a notifier<select value={values.notify} onChange={update("notify")}><option>Agent</option><option>Manager</option><option>Proprietaire</option><option>Locataire</option></select></label>
+            <label>Type d'échéance<select value={values.type} onChange={update("type")}><option>Prochain loyer</option><option>Fin de contrat</option><option>Révision</option><option>Renouvellement</option><option>Relance</option><option>Autre</option></select></label>
+            <label>Date de l'échéance<input type="date" value={values.date} onChange={update("date")} /></label>
+            <label>Rappel avant échéance<select value={values.reminder} onChange={update("reminder")}><option>7 jours</option><option>15 jours</option><option>30 jours</option><option>Personnalisé</option></select></label>
+            <label>Personne à notifier<select value={values.notify} onChange={update("notify")}><option>Agent</option><option>Manager</option><option>Propriétaire</option><option>Locataire</option></select></label>
             <label className="full">Commentaire<textarea value={values.comment} onChange={update("comment")} /></label>
           </div>
         </div>
         <div className="action-row compact-row">
           <Button onClick={onClose}>Annuler</Button>
-          <Button variant="primary" onClick={() => onSave({ contract, values })}><CalendarDays size={17} /> Enregistrer echeance</Button>
+          <Button variant="primary" onClick={() => onSave({ contract, values })}><CalendarDays size={17} /> Enregistrer échéance</Button>
         </div>
       </section>
     </div>
@@ -12082,12 +12082,12 @@ function ContractDueActionsModal({ contract, onAction, onClose }) {
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section className="modal-card prospect-form-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
         <button className="modal-close" onClick={onClose}>×</button>
-        <h2>Actions echeance contrat</h2>
+        <h2>Actions échéance contrat</h2>
         <p>{contract.number} - {contract.property} - {getContractDueLabel(contract)}</p>
         <div className="document-menu-list compact-document-menu">
-          <button onClick={() => onAction("Gerer echeances contrat", { contract })}><CalendarDays size={20} /><span><strong>Gerer les echeances</strong><small>Ajouter un rappel, une revision ou une relance.</small></span></button>
-          <button onClick={() => onAction("Renouveler contrat", { contract })}><RefreshCw size={20} /><span><strong>Renouveler</strong><small>Preparer une nouvelle periode et un avenant.</small></span></button>
-          <button onClick={() => onAction("Resilier contrat", { contract })}><XCircle size={20} /><span><strong>Resilier</strong><small>Mettre le contrat en sortie suivie.</small></span></button>
+          <button onClick={() => onAction("Gerer echeances contrat", { contract })}><CalendarDays size={20} /><span><strong>Gérer les échéances</strong><small>Ajouter un rappel, une révision ou une relance.</small></span></button>
+          <button onClick={() => onAction("Renouveler contrat", { contract })}><RefreshCw size={20} /><span><strong>Renouveler</strong><small>Préparer une nouvelle période et un avenant.</small></span></button>
+          <button onClick={() => onAction("Resilier contrat", { contract })}><XCircle size={20} /><span><strong>Résilier</strong><small>Mettre le contrat en sortie suivie.</small></span></button>
         </div>
       </section>
     </div>
@@ -12100,7 +12100,7 @@ function ContractDocumentModal({ contract, action, onAction, onClose }) {
       <section className="modal-card prospect-form-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
         <button className="modal-close" onClick={onClose}>×</button>
         <h2>Document signe</h2>
-        <p>{contract.number} - {contract.signedDocument ?? "Contrat signe archive"}</p>
+        <p>{contract.number} - {contract.signedDocument ?? "Contrat signé archivé"}</p>
         {action && <div className="notice">{action} ajoute a la timeline du contrat.</div>}
         <div className="action-row compact-row">
           <Button onClick={() => onAction("Telecharger contrat", { contract })}><Download size={17} /> Telecharger</Button>
@@ -12132,7 +12132,7 @@ function ContractEditModal({ contract, onSave, onClose }) {
     financialMode: contract.financialMode ?? property.financialMode ?? "Encaissement par l'agence",
     specialTerms: contract.specialTerms ?? "Conditions standard E.K immo.",
     model: contract.model ?? "Contrat de bail E.K immo",
-    signedDocument: contract.signedDocument ?? "Contrat signe archive",
+    signedDocument: contract.signedDocument ?? "Contrat signé archivé",
     observations: contract.observations ?? "Suivi contractuel a jour.",
   });
   const [confirmSensitive, setConfirmSensitive] = useState(false);
@@ -12168,7 +12168,7 @@ function ContractEditModal({ contract, onSave, onClose }) {
           <div className="form-grid compact-form">
             <label>Numero contrat<input value={values.number} onChange={update("number")} /></label>
             <label>Type<select value={values.type} onChange={update("type")}><option>Contrat de bail</option><option>Contrat de location</option><option>Mandat de gestion</option><option>Contrat de vente</option></select></label>
-            <label>Statut<select value={values.status} onChange={update("status")}><option>Actif</option><option>Renouvele</option><option>Resilie</option><option>Archive</option><option>Expire</option></select></label>
+            <label>Statut<select value={values.status} onChange={update("status")}><option>Actif</option><option>Renouvelé</option><option>Résilié</option><option>Archivé</option><option>Expiré</option></select></label>
             <label>Bien<select value={values.property} onChange={update("property")}>{properties.map((item) => <option key={item.code}>{item.name}</option>)}</select></label>
             <label>Proprietaire<select value={values.owner} onChange={update("owner")}>{owners.map((item) => <option key={item.id}>{item.name}</option>)}</select></label>
             <label>Locataire / client<select value={values.client} onChange={update("client")}>{[...tenants.map((item) => item.name), ...prospects.map((item) => item.name)].map((name) => <option key={name}>{name}</option>)}</select></label>
@@ -12180,7 +12180,7 @@ function ContractEditModal({ contract, onSave, onClose }) {
             <label>Date de debut<input value={values.start} onChange={update("start")} /></label>
             <label>Date de fin<input value={values.end} onChange={update("end")} /></label>
             <label>Periodicite<select value={values.periodicity} onChange={update("periodicity")}><option>Mensuelle</option><option>Trimestrielle</option><option>Annuelle</option></select></label>
-            <label>Prochaine echeance<input value={values.nextDueDate} onChange={update("nextDueDate")} /></label>
+            <label>Prochaine échéance<input value={values.nextDueDate} onChange={update("nextDueDate")} /></label>
           </div>
         </div>
         <div className="form-section">
@@ -12189,7 +12189,7 @@ function ContractEditModal({ contract, onSave, onClose }) {
             <label>Montant<input value={values.amount} onChange={update("amount")} /></label>
             <label>Caution<input value={values.deposit} onChange={update("deposit")} /></label>
             <label>Commission<input value={values.commission} onChange={update("commission")} /></label>
-            <label>Mode financier<select value={values.financialMode} onChange={update("financialMode")}><option>Encaissement par l'agence</option><option>Encaissement direct proprietaire</option><option>Entretien seul</option></select></label>
+            <label>Mode financier<select value={values.financialMode} onChange={update("financialMode")}><option>Encaissement par l'agence</option><option>Encaissement direct propriétaire</option><option>Entretien seul</option></select></label>
             <label className="full">Conditions particulieres<textarea value={values.specialTerms} onChange={update("specialTerms")} /></label>
           </div>
         </div>
@@ -12206,8 +12206,8 @@ function ContractEditModal({ contract, onSave, onClose }) {
             <div>
               <AlertTriangle size={20} />
               <span>
-                <strong>Cette modification peut impacter les paiements, echeances ou situations proprietaires. Confirmer la modification ?</strong>
-                <small>Champs sensibles modifies : bien, proprietaire, locataire, montant, caution, commission, mode financier, date de fin ou statut.</small>
+                <strong>Cette modification peut impacter les paiements, échéances ou situations propriétaires. Confirmer la modification ?</strong>
+                <small>Champs sensibles modifiés : bien, propriétaire, locataire, montant, caution, commission, mode financier, date de fin ou statut.</small>
               </span>
             </div>
           </div>
@@ -12231,7 +12231,7 @@ function ContractRenewalModal({ contract, onSave, onClose }) {
     newAmount: contract.amount ?? financials.amount,
     newDeposit: contract.deposit ?? financials.deposit,
     newCommission: contract.commission ?? financials.commission,
-    terms: "Renouvellement aux conditions actuelles, avec revision possible a la date anniversaire.",
+    terms: "Renouvellement aux conditions actuelles, avec révision possible à la date anniversaire.",
     model: "Avenant de renouvellement E.K immo",
     generateAmendment: "Oui",
   });
