@@ -2184,6 +2184,7 @@ function App() {
   const [contractTimelines, setContractTimelines] = useState({});
   const [contractDeadlines, setContractDeadlines] = useState({});
   const [contractActionContext, setContractActionContext] = useState(null);
+  const [contractDetailRequest, setContractDetailRequest] = useState(null);
   const [clientDetailRequest, setClientDetailRequest] = useState(null);
   const [recordedPayments, setRecordedPayments] = useState([]);
   const [paymentContext, setPaymentContext] = useState(null);
@@ -2411,8 +2412,30 @@ function App() {
       "imprimer contrat",
       "archiver contrat",
     ].includes(normalizedAction)) {
-      setContractActionContext({ contract: context.contract ?? allContracts[0] ?? contracts[0] });
+      setContractActionContext({
+        contract: context.contract ?? allContracts[0] ?? contracts[0],
+        sourceProperty: context.property ?? null,
+        returnTo: context.returnTo ?? null,
+      });
       setModal(["joindre contrat signe", "contrat signe", "importer contrat signe"].includes(normalizedAction) ? "Document signe contrat" : label);
+      return;
+    }
+
+    if (normalizedAction === "voir contrat bien" && context.contract) {
+      setContractDetailRequest({
+        contractKey: getContractKey(context.contract),
+        contractNumber: context.contract.number,
+        propertyCode: context.property?.code ?? selectedProperty?.code ?? "",
+        returnTo: {
+          page: "Biens",
+          propertyCode: context.property?.code ?? selectedProperty?.code ?? "",
+          propertyName: context.property?.name ?? context.contract.property,
+          tab: "Contrats",
+        },
+        nonce: Date.now(),
+      });
+      setContractTab("Contrats");
+      setActivePage("Contrats");
       return;
     }
 
@@ -2518,6 +2541,11 @@ function App() {
       return;
     }
 
+    if (normalizedAction === "ajouter charge") {
+      setModal("Ajouter une charge");
+      return;
+    }
+
     if (normalizedAction === "generer document") {
       setDocumentContext({ property: context.property ?? selectedProperty });
       setModal("Choisir document");
@@ -2573,6 +2601,20 @@ function App() {
 
   const showPropertyDetail = (property) => {
     setSelectedProperty(propertiesWithArchiveState.find((item) => item.code === property.code) ?? property);
+    setPropertyView("detail");
+    setActivePage("Biens");
+  };
+
+  const handleContractDetailReturn = (request) => {
+    const returnTo = request?.returnTo;
+    if (returnTo?.page !== "Biens") return;
+    const property =
+      propertiesWithArchiveState.find((item) => item.code === returnTo.propertyCode) ??
+      propertiesWithArchiveState.find((item) => item.name === returnTo.propertyName) ??
+      selectedProperty;
+
+    setSelectedProperty(property);
+    setPropertyTab(returnTo.tab ?? "Contrats");
     setPropertyView("detail");
     setActivePage("Biens");
   };
@@ -3242,6 +3284,8 @@ function App() {
       renewalTerms: values.terms,
       amendmentGenerated: values.generateAmendment,
       amendmentReference,
+      amendmentArchived: values.generateAmendment === "Oui",
+      amendmentArchivedAt: values.generateAmendment === "Oui" ? "21/06/2026" : "",
       nextDueDate: values.newStart,
       renewalDate: values.newStart,
     }, {
@@ -3870,7 +3914,22 @@ function App() {
             reversalsList={allReversals}
           />
         )}
-        {activePage === "Contrats" && <ContractsPage activeTab={contractTab} onTab={setContractTab} onAction={openAction} contractsList={allContracts} paymentsList={allPayments} documentDraft={documentDraft} propertyPdfArchives={propertyPdfArchives} contractTimelines={contractTimelines} contractDeadlines={contractDeadlines} />}
+        {activePage === "Contrats" && (
+          <ContractsPage
+            activeTab={contractTab}
+            onTab={setContractTab}
+            onAction={openAction}
+            contractsList={allContracts}
+            paymentsList={allPayments}
+            documentDraft={documentDraft}
+            propertyPdfArchives={propertyPdfArchives}
+            contractTimelines={contractTimelines}
+            contractDeadlines={contractDeadlines}
+            detailRequest={contractDetailRequest}
+            onDetailRequestConsumed={() => setContractDetailRequest(null)}
+            onDetailReturn={handleContractDetailReturn}
+          />
+        )}
         {activePage === "Finance" && <FinancePage activeTab={financeTab} onTab={setFinanceTab} onAction={openAction} paymentsList={allPayments} rentRowsList={allRentRows} chargesList={allCharges} maintenancesList={allMaintenances} reversalsList={allReversals} />}
         {activePage === "Rapports" && (
           <ReportsPage selected={reportType} onSelect={setReportType} onAction={openAction} />
@@ -5025,10 +5084,10 @@ function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, on
       {effectiveTab === "Lots & blocs" && <PropertyHierarchy property={property} onOpenProperty={onOpenProperty} />}
       {effectiveTab === "Propriétaire" && <PropertyOwner property={property} />}
       {effectiveTab === "Locataire" && <PropertyTenant property={property} />}
-      {effectiveTab === "Contrats" && <PropertyContracts property={property} contractsList={contractsList} />}
+      {effectiveTab === "Contrats" && <PropertyContracts property={property} contractsList={contractsList} onAction={onAction} />}
       {effectiveTab === "Paiements" && <PropertyPayments property={property} rentRowsList={rentRowsList} />}
       {effectiveTab === "Charges & entretiens" && <PropertyMaintenance property={property} chargesList={chargesList} maintenancesList={maintenancesList} />}
-      {effectiveTab === "Documents" && <PropertyDocuments property={property} onAction={onAction} propertyPdfArchives={propertyPdfArchives} />}
+      {effectiveTab === "Documents" && <PropertyDocuments property={property} onAction={onAction} propertyPdfArchives={propertyPdfArchives} contractsList={contractsList} />}
       {effectiveTab === "Historique" && <PropertyHistory property={property} historyItems={historyItems} />}
     </>
   );
@@ -5391,14 +5450,17 @@ function PropertyTenant({ property }) {
   );
 }
 
-function PropertyContracts({ property, contractsList = contracts }) {
-  const relatedContracts = contractsList.filter((contract) => contract.property === property.name || contract.owner === property.owner);
+function PropertyContracts({ property, contractsList = contracts, onAction }) {
+  const baseContracts = contractsList.length ? contractsList : contracts;
+  const relatedContracts = baseContracts
+    .filter((contract) => contract.status !== "Archivé")
+    .filter((contract) => contract.property === property.name || contract.owner === property.owner);
 
   return (
     <Panel title="Contrats liés au bien">
       <DataTable
         columns={["Numéro", "Type", "Début", "Fin", "Statut", "Document joint", "Actions"]}
-        rows={(relatedContracts.length ? relatedContracts : contracts.filter((contract) => contract.property === property.name || contract.owner === property.owner))
+        rows={relatedContracts
           .map((contract) => [
             contract.number,
             contract.type,
@@ -5407,9 +5469,9 @@ function PropertyContracts({ property, contractsList = contracts }) {
             <Badge label={contract.status} />,
             contract.generated ? "Contrat généré" : "PDF signé",
             <div className="table-actions">
-              <Button compact><Eye size={16} /> Voir</Button>
-              <Button compact><RefreshCw size={15} /> Renouveler</Button>
-              <Button compact><Archive size={15} /> Archiver</Button>
+              <Button compact onClick={() => onAction("Voir contrat bien", { contract, property })}><Eye size={16} /> Voir</Button>
+              <Button compact onClick={() => onAction("Renouveler contrat", { contract, property })}><RefreshCw size={15} /> Renouveler</Button>
+              <Button compact onClick={() => onAction("Archiver contrat", { contract, property })}><Archive size={15} /> Archiver</Button>
             </div>,
           ])}
       />
@@ -5495,10 +5557,19 @@ function PropertyMaintenance({ property, chargesList = charges, maintenancesList
   );
 }
 
-function PropertyDocuments({ property, onAction, propertyPdfArchives = [] }) {
+function PropertyDocuments({ property, onAction, propertyPdfArchives = [], contractsList = contracts }) {
   const pdfRows = propertyPdfArchives
     .filter((archive) => archive.property === property.name)
     .map((archive) => [archive.title, "Fiche PDF", archive.date, <Badge label={archive.status} />, <DocumentActions />]);
+  const amendmentRows = contractsList
+    .filter((contract) => contract.property === property.name && contract.amendmentReference)
+    .map((contract) => [
+      `Avenant de renouvellement ${contract.number}`,
+      "Avenant",
+      contract.amendmentArchivedAt || "21/06/2026",
+      <Badge label={contract.amendmentArchived ? "Archivé" : "Généré"} />,
+      <DocumentActions />,
+    ]);
 
   return (
     <Panel title={`Documents - ${property.code}`} toolbar={<Button compact onClick={() => onAction("Importer document")}><Upload size={16} /> Importer</Button>}>
@@ -5506,6 +5577,7 @@ function PropertyDocuments({ property, onAction, propertyPdfArchives = [] }) {
         columns={["Document", "Type", "Date", "Statut", "Actions"]}
         rows={[
           ...pdfRows,
+          ...amendmentRows,
           ["Contrat de location signé", "Contrat", "01/01/2026", <Badge label="Archivé" />, <DocumentActions />],
           ["Titre foncier scanné", "Titre", "14/03/2026", <Badge label="Archivé" />, <DocumentActions />],
           ["Facture entretien jardin", "Facture", "05/05/2026", <Badge label="Généré" />, <DocumentActions />],
@@ -6648,7 +6720,20 @@ function VisitReminderModal({ visit, onSave, onClose }) {
   );
 }
 
-function ContractsPage({ activeTab, onTab, onAction, contractsList = contracts, paymentsList = paymentRecords, documentDraft = null, propertyPdfArchives = [], contractTimelines = {}, contractDeadlines = {} }) {
+function ContractsPage({
+  activeTab,
+  onTab,
+  onAction,
+  contractsList = contracts,
+  paymentsList = paymentRecords,
+  documentDraft = null,
+  propertyPdfArchives = [],
+  contractTimelines = {},
+  contractDeadlines = {},
+  detailRequest = null,
+  onDetailRequestConsumed,
+  onDetailReturn,
+}) {
   const tabs = ["Contrats", "Génération de document", "Archives"];
   const effectiveTab = activeTab === "Factures & reçus" ? "Archives" : activeTab;
   const activeContracts = contractsList.filter((contract) => contract.status !== "Archivé");
@@ -6658,17 +6743,36 @@ function ContractsPage({ activeTab, onTab, onAction, contractsList = contracts, 
         title="Contrats & documents"
       />
       <Tabs tabs={tabs} active={effectiveTab} onChange={onTab} demo="contract-tabs" />
-      {effectiveTab === "Contrats" && <ContractsList onAction={onAction} contractsList={activeContracts} contractTimelines={contractTimelines} contractDeadlines={contractDeadlines} />}
+      {effectiveTab === "Contrats" && (
+        <ContractsList
+          onAction={onAction}
+          contractsList={activeContracts}
+          contractTimelines={contractTimelines}
+          contractDeadlines={contractDeadlines}
+          detailRequest={detailRequest}
+          onDetailRequestConsumed={onDetailRequestConsumed}
+          onDetailReturn={onDetailReturn}
+        />
+      )}
       {effectiveTab === "Génération de document" && <DocumentGeneration onAction={onAction} documentDraft={documentDraft} />}
       {effectiveTab === "Archives" && <ArchivesView onAction={onAction} contractsList={contractsList} paymentsList={paymentsList} propertyPdfArchives={propertyPdfArchives} />}
     </>
   );
 }
 
-function ContractsList({ onAction, contractsList = contracts, contractTimelines = {}, contractDeadlines = {} }) {
+function ContractsList({
+  onAction,
+  contractsList = contracts,
+  contractTimelines = {},
+  contractDeadlines = {},
+  detailRequest = null,
+  onDetailRequestConsumed,
+  onDetailReturn,
+}) {
   const [selected, setSelected] = useState(contractsList[0] ?? contracts[0]);
   const [query, setQuery] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [returnRequest, setReturnRequest] = useState(null);
   const [filters, setFilters] = useState({
     type: "Tous types",
     status: "Tous statuts",
@@ -6683,7 +6787,31 @@ function ContractsList({ onAction, contractsList = contracts, contractTimelines 
 
   const openContract = (contract) => {
     setSelected(contract);
+    setReturnRequest(null);
     openDetail();
+  };
+
+  useEffect(() => {
+    if (!detailRequest?.contractKey) return;
+    const requestedContract =
+      contractsList.find((contract) => getContractKey(contract) === detailRequest.contractKey) ??
+      contracts.find((contract) => getContractKey(contract) === detailRequest.contractKey) ??
+      contractsList[0] ??
+      contracts[0];
+
+    setSelected(requestedContract);
+    setReturnRequest(detailRequest);
+    openDetail();
+    onDetailRequestConsumed?.();
+  }, [detailRequest?.nonce]);
+
+  const closeContractDetail = () => {
+    if (returnRequest?.returnTo) {
+      onDetailReturn?.(returnRequest);
+      setReturnRequest(null);
+      return;
+    }
+    closeDetail();
   };
 
   const updateFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
@@ -6756,7 +6884,7 @@ function ContractsList({ onAction, contractsList = contracts, contractTimelines 
         )}
       </Panel>
       {detailOpen ? (
-        <DetailPageShell title="Fiche contrat" subtitle={currentSelectedContract.number} onBack={closeDetail}>
+        <DetailPageShell title="Fiche contrat" subtitle={currentSelectedContract.number} onBack={closeContractDetail}>
           <ContractProfilePanel
             contract={currentSelectedContract}
             onAction={onAction}
@@ -6838,6 +6966,7 @@ function ContractProfilePanel({ contract, onAction, timelineEntries = [], custom
         <p><span>Commission</span><strong>{financials.commission}</strong></p>
         <p><span>Statut</span><span className="contract-badge-stack"><Badge label={displayState.label} /></span></p>
         <button className="info-link-row" onClick={() => onAction("Document signe contrat", { contract })}><span>Document signé</span><strong>{hasSignedContractDocument(contract) ? getSignedContractFileName(contract) : "À importer"}</strong></button>
+        {contract.amendmentReference && <p><span>Avenant</span><strong>{contract.amendmentReference}</strong></p>}
         <button className="info-link-row" onClick={() => onAction("Actions echeance contrat", { contract })}><span>Échéance</span><strong>{getContractDueLabel(contract)}</strong></button>
         <p><span>Prochain loyer</span><strong>{nextRent}</strong></p>
         <p><span>Fin du contrat</span><strong>{contract.end}</strong></p>
@@ -7099,6 +7228,19 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
       module: "Docs",
       owner: contract.owner,
     }));
+  const amendmentArchives = contractsList
+    .filter((contract) => contract.amendmentReference)
+    .map((contract) => ({
+      id: `amendment-${contract.amendmentReference}`,
+      category: "Contrats et mandats",
+      reference: contract.amendmentReference,
+      title: `Avenant de renouvellement - ${contract.number}`,
+      linked: `${contract.property} · ${contract.client}`,
+      date: contract.amendmentArchivedAt || contract.renewalDate || "21/06/2026",
+      status: contract.amendmentArchived ? "Archivé" : "Généré",
+      module: "Docs",
+      owner: contract.owner,
+    }));
 
   const invoiceArchives = invoices.map((invoice) => ({
     id: `invoice-${invoice.number}`,
@@ -7264,6 +7406,7 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
 
   return [
     ...contractArchives,
+    ...amendmentArchives,
     ...invoiceArchives,
     ...receiptArchives,
     ...chargeArchives,
@@ -10290,25 +10433,100 @@ function HistoryAdmin() {
 }
 
 function LoginScreen({ onLogin }) {
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
+
   return (
-    <main className="login-screen">
-      <section className="login-card">
-        <div className="login-brand">
-          <img src={ekimmoAssets.logo} alt="E.K immo" />
-          <div>
-            <strong>E.K immo</strong>
-            <span>Gestion immobilière de prestige</span>
+    <>
+      <main className="login-screen">
+        <section className="login-card">
+          <div className="login-brand">
+            <img src={ekimmoAssets.logo} alt="E.K immo" />
+            <div>
+              <strong>E.K immo</strong>
+              <span>Gestion immobilière de prestige</span>
+            </div>
           </div>
+          <h1>Connexion</h1>
+          <p>Accédez à votre espace de gestion immobilière.</p>
+          <label>Email ou identifiant<input defaultValue="admin@ekimmo.ml" /></label>
+          <label>Mot de passe<input type="password" defaultValue="demo2026" /></label>
+          <button className="primary-wide" onClick={onLogin}>Se connecter</button>
+          <button className="link-button" type="button" onClick={() => setForgotPasswordOpen(true)}>Mot de passe oublié ?</button>
+          <div className="error-demo">Identifiants incorrects.</div>
+        </section>
+      </main>
+      {forgotPasswordOpen && <ForgotPasswordModal onClose={() => setForgotPasswordOpen(false)} />}
+    </>
+  );
+}
+
+function ForgotPasswordModal({ onClose }) {
+  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState(null);
+  const [message, setMessage] = useState("");
+  const [detail, setDetail] = useState("");
+  const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
+  const sendResetLink = () => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      setStatus("error");
+      setMessage("Veuillez renseigner votre adresse email.");
+      setDetail("");
+      return;
+    }
+    if (!isValidEmail(normalizedEmail)) {
+      setStatus("error");
+      setMessage("Veuillez renseigner une adresse email valide.");
+      setDetail("");
+      return;
+    }
+    if (normalizedEmail.includes("erreur") || normalizedEmail.includes("server")) {
+      setStatus("error");
+      setMessage("Impossible d’envoyer le lien pour le moment. Veuillez réessayer.");
+      setDetail("");
+      return;
+    }
+
+    setStatus("success");
+    setMessage("Lien de réinitialisation envoyé.");
+    setDetail("Si cette adresse est associée à un compte, un lien de réinitialisation a été envoyé.");
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card compact-modal forgot-password-modal" role="dialog" aria-modal="true" aria-labelledby="forgot-password-title" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="round-icon">
+          <LockKeyhole size={22} />
         </div>
-        <h1>Connexion</h1>
-        <p>Accédez à votre espace de gestion immobilière.</p>
-        <label>Email ou identifiant<input defaultValue="admin@ekimmo.ml" /></label>
-        <label>Mot de passe<input type="password" defaultValue="demo2026" /></label>
-        <button className="primary-wide" onClick={onLogin}>Se connecter</button>
-        <button className="link-button">Mot de passe oublié ?</button>
-        <div className="error-demo">Identifiants incorrects.</div>
+        <h2 id="forgot-password-title">Mot de passe oublié</h2>
+        <p>Entrez l’adresse email associée à votre compte. Un lien de réinitialisation vous sera envoyé.</p>
+        <label>Email utilisateur
+          <input
+            type="email"
+            value={email}
+            onChange={(event) => {
+              setEmail(event.target.value);
+              setStatus(null);
+              setMessage("");
+              setDetail("");
+            }}
+            placeholder="exemple@ekimmo.ml"
+          />
+        </label>
+        {status && (
+          <div className={`modal-status ${status}`} role="status">
+            <strong>{message}</strong>
+            {detail && <span>{detail}</span>}
+          </div>
+        )}
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={sendResetLink}><Mail size={17} /> Envoyer le lien</Button>
+        </div>
       </section>
-    </main>
+    </div>
   );
 }
 
@@ -12716,7 +12934,7 @@ function ContractArchiveModal({ contract, onArchive, onClose }) {
         </div>
         <h2>Archiver ce contrat ?</h2>
         <p>
-          Le contrat ne sera plus visible dans la liste active, mais restera disponible dans les archives avec ses documents et son historique.
+          Ce contrat ne sera plus visible dans la liste active des contrats du bien, mais il restera disponible dans les archives avec son historique et ses documents.
         </p>
 
         <div className="form-section">
@@ -12964,6 +13182,7 @@ function ContractEditModal({ contract, onSave, onClose }) {
 function ContractRenewalModal({ contract, onSave, onClose }) {
   const financials = getContractFinancials(contract);
   const [preview, setPreview] = useState(false);
+  const [confirmRenewal, setConfirmRenewal] = useState(false);
   const [values, setValues] = useState({
     oldEnd: contract.end,
     newStart: "01/07/2026",
@@ -12976,6 +13195,13 @@ function ContractRenewalModal({ contract, onSave, onClose }) {
     generateAmendment: "Oui",
   });
   const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+  const submit = () => {
+    if (!confirmRenewal) {
+      setConfirmRenewal(true);
+      return;
+    }
+    onSave({ contract, values });
+  };
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
@@ -12984,27 +13210,62 @@ function ContractRenewalModal({ contract, onSave, onClose }) {
         <h2>Renouveler le contrat</h2>
         <p>{contract.number} — {contract.property}</p>
         <div className="form-section">
+          <h3>Contrat actuel</h3>
+          <div className="info-grid compact-info-grid">
+            <Info label="Numéro du contrat" value={contract.number} />
+            <Info label="Bien concerné" value={contract.property} />
+            <Info label="Propriétaire" value={contract.owner} />
+            <Info label="Locataire" value={contract.client} />
+            <Info label="Date de début actuelle" value={contract.start} />
+            <Info label="Date de fin actuelle" value={contract.end} />
+            <Info label="Loyer actuel" value={financials.amount} />
+            <Info label="Caution actuelle" value={financials.deposit} />
+            <Info label="Commission actuelle" value={financials.commission} />
+          </div>
+        </div>
+        <div className="form-section">
+          <h3>Nouvelles conditions</h3>
           <div className="form-grid compact-form">
-            <label>Ancienne date de fin<input value={values.oldEnd} readOnly /></label>
             <label>Nouvelle date de début<input value={values.newStart} onChange={update("newStart")} /></label>
             <label>Nouvelle date de fin<input value={values.newEnd} onChange={update("newEnd")} /></label>
-            <label>Nouveau montant du loyer, si changement<input value={values.newAmount} onChange={update("newAmount")} /></label>
-            <label>Nouvelle caution, si changement<input value={values.newDeposit} onChange={update("newDeposit")} /></label>
-            <label>Nouvelle commission, si changement<input value={values.newCommission} onChange={update("newCommission")} /></label>
-            <label>Modèle de renouvellement<input value={values.model} onChange={update("model")} /></label>
+            <label>Nouveau loyer<input value={values.newAmount} onChange={update("newAmount")} /></label>
+            <label>Nouvelle caution<input value={values.newDeposit} onChange={update("newDeposit")} /></label>
+            <label>Commission agence<input value={values.newCommission} onChange={update("newCommission")} /></label>
             <label>Générer avenant ?<select value={values.generateAmendment} onChange={update("generateAmendment")}><option>Oui</option><option>Non</option></select></label>
             <label className="full">Conditions particulières<textarea value={values.terms} onChange={update("terms")} /></label>
           </div>
         </div>
+        {values.generateAmendment === "Oui" && (
+          <div className="form-section">
+            <h3>Document</h3>
+            <div className="form-grid compact-form">
+              <label>Choix du modèle d’avenant<input value={values.model} onChange={update("model")} /></label>
+              <div className="document-inline-action">
+                <Button onClick={() => setPreview(true)}><Eye size={17} /> Prévisualiser l’avenant</Button>
+              </div>
+            </div>
+          </div>
+        )}
         {preview && (
           <div className="notice">
             Aperçu avenant : {contract.number} renouvelé du {values.newStart} au {values.newEnd}, montant {values.newAmount}.
           </div>
         )}
+        {confirmRenewal && (
+          <div className="sensitive-confirmation">
+            <div>
+              <AlertTriangle size={20} />
+              <span>
+                <strong>Confirmer le renouvellement de ce contrat ? Les nouvelles dates seront appliquées au bien et au locataire concerné.</strong>
+                <small>Le contrat, la fiche bien, la fiche locataire et les archives Docs seront mis à jour.</small>
+              </span>
+            </div>
+          </div>
+        )}
         <div className="action-row compact-row">
           <Button onClick={onClose}>Annuler</Button>
-          <Button onClick={() => setPreview(true)}><Eye size={17} /> Prévisualiser avenant</Button>
-          <Button variant="primary" onClick={() => onSave({ contract, values })}><RefreshCw size={17} /> Confirmer renouvellement</Button>
+          <Button onClick={() => setPreview(true)}><Eye size={17} /> Prévisualiser</Button>
+          <Button variant="primary" onClick={submit}><RefreshCw size={17} /> Confirmer le renouvellement</Button>
         </div>
       </section>
     </div>
