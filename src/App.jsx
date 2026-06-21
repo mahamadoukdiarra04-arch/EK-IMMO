@@ -2202,6 +2202,7 @@ function visitMatchesQuickFilter(visit, quickFilter) {
 function App() {
   const [activePage, setActivePage] = useState("Dashboard");
   const [showLogin, setShowLogin] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => window.sessionStorage.getItem("ekimmo-session") !== "logged-out");
   const [modal, setModal] = useState(null);
   const [demoActive, setDemoActive] = useState(false);
   const [demoIndex, setDemoIndex] = useState(0);
@@ -2323,6 +2324,16 @@ function App() {
 
   const openAction = (label, context = {}) => {
     const normalizedAction = normalizeSearch(label);
+
+    if (normalizedAction === "mon profil") {
+      setModal("Mon profil");
+      return;
+    }
+
+    if (normalizedAction === "changer mot de passe") {
+      setModal("Changer mot de passe");
+      return;
+    }
 
     if (normalizedAction === "loyers en retard") {
       setModal("Relancer locataires dashboard");
@@ -2726,13 +2737,32 @@ function App() {
   };
 
   const handleNav = (item) => {
+    if (!isAuthenticated) return;
     setActivePage(item);
     if (item === "Biens") {
       setPropertyView("list");
     }
   };
 
+  const handleLogin = () => {
+    window.sessionStorage.setItem("ekimmo-session", "active");
+    setIsAuthenticated(true);
+    setShowLogin(false);
+    window.history.replaceState({ ekimmoSession: "active" }, "", window.location.href);
+  };
+
+  const handleLogout = () => {
+    window.sessionStorage.setItem("ekimmo-session", "logged-out");
+    setIsAuthenticated(false);
+    setShowLogin(true);
+    setModal(null);
+    setDemoActive(false);
+    setDemoRect(null);
+    window.history.replaceState({ ekimmoSession: "logged-out" }, "", window.location.href);
+  };
+
   const showPropertyDetail = (property) => {
+    if (!isAuthenticated) return;
     setSelectedProperty(propertiesWithArchiveState.find((item) => item.code === property.code) ?? property);
     setPropertyView("detail");
     setActivePage("Biens");
@@ -4024,6 +4054,18 @@ function App() {
   };
 
   useEffect(() => {
+    const enforceLoginAfterLogout = () => {
+      if (window.sessionStorage.getItem("ekimmo-session") === "logged-out") {
+        setIsAuthenticated(false);
+        setShowLogin(true);
+      }
+    };
+
+    window.addEventListener("popstate", enforceLoginAfterLogout);
+    return () => window.removeEventListener("popstate", enforceLoginAfterLogout);
+  }, []);
+
+  useEffect(() => {
     if (!demoActive) return;
 
     const step = demoSteps[demoIndex];
@@ -4097,8 +4139,8 @@ function App() {
     };
   }, [demoActive, demoStep, activePage, propertyView, propertyTab, clientTab, contractTab, financeTab, adminTab, reportType]);
 
-  if (showLogin) {
-    return <LoginScreen onLogin={() => setShowLogin(false)} />;
+  if (!isAuthenticated || showLogin) {
+    return <LoginScreen onLogin={handleLogin} />;
   }
 
   return (
@@ -4109,7 +4151,7 @@ function App() {
         onQueryChange={setGlobalQuery}
         onNav={handleNav}
         onAction={openAction}
-        onProfile={() => setShowLogin(true)}
+        onLogout={handleLogout}
         onStartDemo={startDemo}
         demoActive={demoActive}
         notifications={topbarNotifications}
@@ -4500,6 +4542,10 @@ function App() {
             setModal(null);
           }}
         />
+      ) : modal === "Mon profil" ? (
+        <UserProfileModal onClose={() => setModal(null)} />
+      ) : modal === "Changer mot de passe" ? (
+        <ChangePasswordModal onClose={() => setModal(null)} />
       ) : modal === "Choisir document" ? (
         <DocumentContextMenu property={documentContext?.property ?? selectedProperty} onSelect={handleDocumentTemplateSelection} onClose={() => setModal(null)} />
       ) : modal === "Fiche PDF" ? (
@@ -4629,7 +4675,7 @@ function DemoTour({ step, index, total, rect, onNext, onPrevious, onStop }) {
   );
 }
 
-function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onProfile, onStartDemo, demoActive, notifications = notificationAlerts }) {
+function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onLogout, onStartDemo, demoActive, notifications = notificationAlerts }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -4656,7 +4702,7 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onPro
   const handleUserAction = (label) => {
     setUserMenuOpen(false);
     if (label === "Déconnexion") {
-      onProfile();
+      onLogout();
       return;
     }
     onAction(label);
@@ -10857,6 +10903,115 @@ function ForgotPasswordModal({ onClose }) {
         <div className="action-row compact-row">
           <Button onClick={onClose}>Annuler</Button>
           <Button variant="primary" onClick={sendResetLink}><Mail size={17} /> Envoyer le lien</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function UserProfileModal({ onClose }) {
+  const [editing, setEditing] = useState(false);
+  const [values, setValues] = useState({
+    name: "Aïssata Diarra",
+    email: "admin@ekimmo.ml",
+    role: "Administratrice",
+    phone: "+223 72 77 71 77",
+    lastLogin: "21/06/2026 à 09:42",
+    status: "Actif",
+  });
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card compact-modal profile-account-modal" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="profile-modal-head">
+          <Avatar name={values.name} initials="AD" />
+          <div>
+            <span>Compte utilisateur</span>
+            <h2 id="profile-modal-title">Mon profil</h2>
+            <p>Espace personnel E.K immo</p>
+          </div>
+        </div>
+
+        <div className={editing ? "profile-fields editable" : "profile-fields"}>
+          <label>Nom complet<input value={values.name} onChange={update("name")} readOnly={!editing} /></label>
+          <label>Email<input type="email" value={values.email} onChange={update("email")} readOnly={!editing} /></label>
+          <label>Rôle<input value={values.role} onChange={update("role")} readOnly={!editing} /></label>
+          <label>Téléphone<input value={values.phone} onChange={update("phone")} readOnly={!editing} /></label>
+          <label>Dernière connexion<input value={values.lastLogin} readOnly /></label>
+          <label>Statut du compte<input value={values.status} readOnly /></label>
+        </div>
+
+        <div className="action-row compact-row">
+          <Button onClick={() => setEditing((value) => !value)}>
+            <Pencil size={17} /> {editing ? "Terminer la modification" : "Modifier mes informations"}
+          </Button>
+          <Button variant="primary" onClick={onClose}>Fermer</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ChangePasswordModal({ onClose }) {
+  const [values, setValues] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [status, setStatus] = useState(null);
+  const [message, setMessage] = useState("");
+  const update = (field) => (event) => {
+    setValues((current) => ({ ...current, [field]: event.target.value }));
+    setStatus(null);
+    setMessage("");
+  };
+
+  const savePassword = () => {
+    if (!values.currentPassword.trim()) {
+      setStatus("error");
+      setMessage("Le mot de passe actuel est obligatoire.");
+      return;
+    }
+    if (!values.newPassword.trim()) {
+      setStatus("error");
+      setMessage("Veuillez renseigner un nouveau mot de passe.");
+      return;
+    }
+    if (values.newPassword !== values.confirmPassword) {
+      setStatus("error");
+      setMessage("Le nouveau mot de passe et sa confirmation doivent être identiques.");
+      return;
+    }
+
+    setStatus("success");
+    setMessage("Mot de passe modifié avec succès.");
+    setValues({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card compact-modal password-modal" role="dialog" aria-modal="true" aria-labelledby="password-modal-title" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="round-icon">
+          <LockKeyhole size={22} />
+        </div>
+        <h2 id="password-modal-title">Changer mot de passe</h2>
+        <p>Mettez à jour votre accès utilisateur E.K immo.</p>
+        <div className="password-fields">
+          <label>Mot de passe actuel<input type="password" value={values.currentPassword} onChange={update("currentPassword")} autoComplete="current-password" /></label>
+          <label>Nouveau mot de passe<input type="password" value={values.newPassword} onChange={update("newPassword")} autoComplete="new-password" /></label>
+          <label>Confirmer nouveau mot de passe<input type="password" value={values.confirmPassword} onChange={update("confirmPassword")} autoComplete="new-password" /></label>
+        </div>
+        {status && (
+          <div className={`modal-status ${status}`} role="status">
+            <strong>{message}</strong>
+          </div>
+        )}
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={savePassword}><CheckCircle2 size={17} /> Enregistrer</Button>
         </div>
       </section>
     </div>
