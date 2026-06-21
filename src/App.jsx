@@ -3118,8 +3118,8 @@ function App() {
       ...current,
       [key]: [
         {
-          date: "20/06/2026",
-          user: "Aissata Diarra",
+          date: "21/06/2026",
+          user: "Aïssata Diarra",
           ...entry,
         },
         ...(current[key] ?? []),
@@ -3143,7 +3143,7 @@ function App() {
     setPropertyHistoryOverrides((current) => ({
       ...current,
       [nextContract.property]: [
-        [entry?.action ?? "Contrat mis à jour", entry?.comment ?? `${nextContract.number} mis à jour.`, "20/06/2026"],
+        [entry?.action ?? "Contrat mis à jour", entry?.comment ?? `${nextContract.number} mis à jour.`, "21/06/2026"],
         ...(current[nextContract.property] ?? []),
       ],
     }));
@@ -3197,6 +3197,7 @@ function App() {
   };
 
   const handleContractRenewalSave = ({ contract, values }) => {
+    const amendmentReference = values.generateAmendment === "Oui" ? makeDocumentNumber("AVN", allContracts.length + 1) : "";
     updateContract(contract, {
       status: "Renouvelé",
       start: values.newStart,
@@ -3207,13 +3208,35 @@ function App() {
       renewalModel: values.model,
       renewalTerms: values.terms,
       amendmentGenerated: values.generateAmendment,
+      amendmentReference,
       nextDueDate: values.newStart,
+      renewalDate: values.newStart,
     }, {
       action: "Renouvellement",
       comment: values.generateAmendment === "Oui"
-        ? `Avenant généré pour la période ${values.newStart} - ${values.newEnd}.`
+        ? `Avenant ${amendmentReference} généré pour la période ${values.newStart} - ${values.newEnd}.`
         : `Nouvelle période ${values.newStart} - ${values.newEnd}.`,
     });
+
+    setSelectedProperty((current) => current.name === contract.property ? {
+      ...current,
+      activeContractNumber: contract.number,
+      renewalDate: values.newStart,
+      contractEnd: values.newEnd,
+      lastAction: values.generateAmendment === "Oui"
+        ? `Contrat ${contract.number} renouvelé avec avenant ${amendmentReference}`
+        : `Contrat ${contract.number} renouvelé`,
+      history: [
+        ...(current.history ?? []),
+        [
+          "Contrat renouvelé",
+          values.generateAmendment === "Oui"
+            ? `${contract.number} renouvelé du ${values.newStart} au ${values.newEnd}. Avenant ${amendmentReference} généré.`
+            : `${contract.number} renouvelé du ${values.newStart} au ${values.newEnd}.`,
+          "21/06/2026",
+        ],
+      ],
+    } : current);
 
     const tenant = allTenants.find((item) => item.name === contract.client);
     if (tenant) {
@@ -3223,6 +3246,12 @@ function App() {
           ...(current[tenant.id] ?? {}),
           contractEnd: values.newEnd,
           activeContract: contract.number,
+          contractStatus: "Renouvelé",
+          renewalDate: values.newStart,
+          amendmentReference,
+          lastAction: values.generateAmendment === "Oui"
+            ? `Avenant ${amendmentReference} généré`
+            : "Contrat renouvelé",
         },
       }));
     }
@@ -12242,28 +12271,28 @@ function ContractRenewalModal({ contract, onSave, onClose }) {
       <section className="modal-card wide-modal prospect-form-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
         <button className="modal-close" onClick={onClose}>×</button>
         <h2>Renouveler le contrat</h2>
-        <p>{contract.number} - {contract.property}</p>
+        <p>{contract.number} — {contract.property}</p>
         <div className="form-section">
           <div className="form-grid compact-form">
             <label>Ancienne date de fin<input value={values.oldEnd} readOnly /></label>
-            <label>Nouvelle date de debut<input value={values.newStart} onChange={update("newStart")} /></label>
+            <label>Nouvelle date de début<input value={values.newStart} onChange={update("newStart")} /></label>
             <label>Nouvelle date de fin<input value={values.newEnd} onChange={update("newEnd")} /></label>
-            <label>Nouveau montant du loyer<input value={values.newAmount} onChange={update("newAmount")} /></label>
-            <label>Nouvelle caution<input value={values.newDeposit} onChange={update("newDeposit")} /></label>
-            <label>Nouvelle commission<input value={values.newCommission} onChange={update("newCommission")} /></label>
-            <label>Modele de renouvellement<input value={values.model} onChange={update("model")} /></label>
-            <label>Generer avenant ?<select value={values.generateAmendment} onChange={update("generateAmendment")}><option>Oui</option><option>Non</option></select></label>
-            <label className="full">Conditions particulieres<textarea value={values.terms} onChange={update("terms")} /></label>
+            <label>Nouveau montant du loyer, si changement<input value={values.newAmount} onChange={update("newAmount")} /></label>
+            <label>Nouvelle caution, si changement<input value={values.newDeposit} onChange={update("newDeposit")} /></label>
+            <label>Nouvelle commission, si changement<input value={values.newCommission} onChange={update("newCommission")} /></label>
+            <label>Modèle de renouvellement<input value={values.model} onChange={update("model")} /></label>
+            <label>Générer avenant ?<select value={values.generateAmendment} onChange={update("generateAmendment")}><option>Oui</option><option>Non</option></select></label>
+            <label className="full">Conditions particulières<textarea value={values.terms} onChange={update("terms")} /></label>
           </div>
         </div>
         {preview && (
           <div className="notice">
-            Apercu avenant : {contract.number} renouvele du {values.newStart} au {values.newEnd}, montant {values.newAmount}.
+            Aperçu avenant : {contract.number} renouvelé du {values.newStart} au {values.newEnd}, montant {values.newAmount}.
           </div>
         )}
         <div className="action-row compact-row">
           <Button onClick={onClose}>Annuler</Button>
-          <Button onClick={() => setPreview(true)}><Eye size={17} /> Previsualiser avenant</Button>
+          <Button onClick={() => setPreview(true)}><Eye size={17} /> Prévisualiser avenant</Button>
           <Button variant="primary" onClick={() => onSave({ contract, values })}><RefreshCw size={17} /> Confirmer renouvellement</Button>
         </div>
       </section>
