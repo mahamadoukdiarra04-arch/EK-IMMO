@@ -2113,6 +2113,7 @@ function App() {
   const [propertyView, setPropertyView] = useState("list");
   const [propertyDisplay, setPropertyDisplay] = useState("cartes");
   const [propertyTab, setPropertyTab] = useState("Résumé");
+  const [propertyOverrides, setPropertyOverrides] = useState({});
   const [clientTab, setClientTab] = useState("Propriétaires");
   const [selectedOwner, setSelectedOwner] = useState(owners[0]);
   const [createdOwners, setCreatedOwners] = useState([]);
@@ -2200,17 +2201,18 @@ function App() {
   }, [allVisits]);
   const allReversals = useMemo(() => [...ownerReversements, ...reversals], [ownerReversements]);
   const propertiesWithArchiveState = useMemo(() => properties.map((property) => {
+    const propertyWithOverride = { ...property, ...(propertyOverrides[property.code] ?? {}) };
     const archive = archivedProperties[property.code];
-    if (!archive) return property;
+    if (!archive) return propertyWithOverride;
     return {
-      ...property,
+      ...propertyWithOverride,
       status: "Archivé",
       archived: true,
       archiveReason: archive.reason,
       archiveDate: archive.date,
       lastAction: `Archivé : ${archive.reason}`,
     };
-  }), [archivedProperties]);
+  }), [archivedProperties, propertyOverrides]);
   const activeProperties = useMemo(
     () => propertiesWithArchiveState.filter((property) => !property.archived),
     [propertiesWithArchiveState]
@@ -2359,14 +2361,10 @@ function App() {
       "gerer echeances contrat",
       "modifier contrat",
       "renouveler contrat",
+      "resilier contrat",
     ].includes(normalizedAction)) {
       setContractActionContext({ contract: context.contract ?? allContracts[0] ?? contracts[0] });
       setModal(label);
-      return;
-    }
-
-    if (normalizedAction === "resilier contrat" && context.contract) {
-      handleContractStatusAction(context.contract, "Résilié", "Résiliation enregistrée depuis la fiche contrat.");
       return;
     }
 
@@ -3261,6 +3259,96 @@ function App() {
     setContractActionContext(null);
   };
 
+  const handleContractTerminationSave = ({ contract, values }) => {
+    const terminationReference = values.generateDocument === "Oui" ? makeDocumentNumber("RES", allContracts.length + 1) : "";
+    const property = propertiesWithArchiveState.find((item) => item.name === contract.property) ?? properties.find((item) => item.name === contract.property);
+    const tenant = allTenants.find((item) => item.name === contract.client);
+    const detachTenant = values.detachTenant === "Oui";
+
+    updateContract(contract, {
+      status: "Résilié",
+      terminationDate: values.date,
+      terminationReason: values.reason,
+      depositReturn: values.returnDeposit,
+      depositReturnAmount: values.returnAmount,
+      remainingArrears: values.remainingArrears,
+      terminationObservations: values.observations,
+      terminationDocumentGenerated: values.generateDocument,
+      terminationDocumentReference: terminationReference,
+    }, {
+      action: "Résiliation",
+      comment: values.generateDocument === "Oui"
+        ? `${contract.number} résilié le ${values.date}. Document ${terminationReference} généré.`
+        : `${contract.number} résilié le ${values.date}. Motif : ${values.reason}.`,
+    });
+
+    if (property) {
+      const nextProperty = {
+        ...property,
+        status: values.propertyStatus,
+        tenant: detachTenant ? "Libre" : property.tenant,
+        lastAction: `Contrat ${contract.number} résilié`,
+        terminationDate: values.date,
+        activeContractNumber: "",
+      };
+
+      setPropertyOverrides((current) => ({
+        ...current,
+        [property.code]: nextProperty,
+      }));
+
+      setPropertyHistoryOverrides((current) => ({
+        ...current,
+        [property.name]: [
+          [
+            "Contrat résilié",
+            detachTenant
+              ? `${contract.number} résilié le ${values.date}. Bien passé en ${values.propertyStatus} et locataire détaché.`
+              : `${contract.number} résilié le ${values.date}. Bien passé en ${values.propertyStatus}.`,
+            "21/06/2026",
+          ],
+          ...(current[property.name] ?? []),
+        ],
+      }));
+
+      setSelectedProperty((current) => current.code === property.code ? {
+        ...current,
+        ...nextProperty,
+        history: [
+          ...(current.history ?? []),
+          [
+            "Contrat résilié",
+            detachTenant
+              ? `${contract.number} résilié le ${values.date}. Bien passé en ${values.propertyStatus} et locataire détaché.`
+              : `${contract.number} résilié le ${values.date}. Bien passé en ${values.propertyStatus}.`,
+            "21/06/2026",
+          ],
+        ],
+      } : current);
+    }
+
+    if (tenant) {
+      setTenantOverrides((current) => ({
+        ...current,
+        [tenant.id]: {
+          ...(current[tenant.id] ?? {}),
+          contractStatus: "Résilié",
+          exitDate: values.date,
+          activeContract: "",
+          property: detachTenant ? "Détaché du bien" : tenant.property,
+          paymentStatus: values.remainingArrears && parseFCFA(values.remainingArrears) > 0 ? "Solde à régulariser" : "Sorti",
+          terminationReason: values.reason,
+          terminationDocumentReference: terminationReference,
+          lastAction: `Résiliation ${contract.number}`,
+        },
+      }));
+    }
+
+    setPropertyTab("Historique");
+    setModal(null);
+    setContractActionContext(null);
+  };
+
   const handleContractStatusAction = (contract, status, comment) => {
     updateContract(contract, { status }, {
       action: "Changement de statut",
@@ -3848,6 +3936,8 @@ function App() {
         <ContractEditModal contract={contractActionContext?.contract ?? allContracts[0]} onSave={handleContractEditSave} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "Renouveler contrat" ? (
         <ContractRenewalModal contract={contractActionContext?.contract ?? allContracts[0]} onSave={handleContractRenewalSave} onClose={() => { setContractActionContext(null); setModal(null); }} />
+      ) : modal === "Resilier contrat" ? (
+        <ContractTerminationModal contract={contractActionContext?.contract ?? allContracts[0]} onSave={handleContractTerminationSave} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "Enregistrer paiement" ? (
         <PaymentRegistrationModal context={paymentContext} paymentsList={allPayments} rentRowsList={allRentRows} onSave={handlePaymentRegistration} onClose={() => setModal(null)} />
       ) : modal === "Ajouter entretien" ? (
@@ -12294,6 +12384,75 @@ function ContractRenewalModal({ contract, onSave, onClose }) {
           <Button onClick={onClose}>Annuler</Button>
           <Button onClick={() => setPreview(true)}><Eye size={17} /> Prévisualiser avenant</Button>
           <Button variant="primary" onClick={() => onSave({ contract, values })}><RefreshCw size={17} /> Confirmer renouvellement</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ContractTerminationModal({ contract, onSave, onClose }) {
+  const financials = getContractFinancials(contract);
+  const [preview, setPreview] = useState(false);
+  const [confirmStrong, setConfirmStrong] = useState(false);
+  const [values, setValues] = useState({
+    date: "30/06/2026",
+    reason: "Fin normale",
+    returnDeposit: "Oui",
+    returnAmount: financials.deposit,
+    remainingArrears: "0 FCFA",
+    observations: "Résiliation préparée avec état du bien, solde locataire et document de sortie.",
+    generateDocument: "Oui",
+    propertyStatus: "Disponible",
+    detachTenant: "Oui",
+  });
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+  const submit = () => {
+    if (!confirmStrong) {
+      setConfirmStrong(true);
+      return;
+    }
+    onSave({ contract, values });
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal prospect-form-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <h2>Résilier le contrat</h2>
+        <p>{contract.number} — {contract.property}</p>
+        <div className="form-section">
+          <div className="form-grid compact-form">
+            <label>Date de résiliation<input type="date" value={values.date} onChange={update("date")} /></label>
+            <label>Motif<select value={values.reason} onChange={update("reason")}><option>Fin normale</option><option>Départ locataire</option><option>Non-paiement</option><option>Accord amiable</option><option>Vente du bien</option><option>Autre</option></select></label>
+            <label>Caution à restituer<select value={values.returnDeposit} onChange={update("returnDeposit")}><option>Oui</option><option>Non</option></select></label>
+            <label>Montant à restituer<input value={values.returnAmount} onChange={update("returnAmount")} /></label>
+            <label>Impayés restants<input value={values.remainingArrears} onChange={update("remainingArrears")} /></label>
+            <label>Document de résiliation à générer<select value={values.generateDocument} onChange={update("generateDocument")}><option>Oui</option><option>Non</option></select></label>
+            <label>Statut du bien après résiliation<select value={values.propertyStatus} onChange={update("propertyStatus")}><option>Disponible</option><option>Indisponible</option></select></label>
+            <label>Détacher le locataire du bien ?<select value={values.detachTenant} onChange={update("detachTenant")}><option>Oui</option><option>Non</option></select></label>
+            <label className="full">Observations<textarea value={values.observations} onChange={update("observations")} /></label>
+          </div>
+        </div>
+        {preview && (
+          <div className="notice">
+            Aperçu document : résiliation de {contract.number} au {values.date}, motif {values.reason}, bien marqué {values.propertyStatus}.
+          </div>
+        )}
+        {confirmStrong && (
+          <div className="sensitive-confirmation">
+            <div>
+              <AlertTriangle size={20} />
+              <span>
+                <strong>Cette action modifiera le statut du contrat et peut libérer le bien. Confirmer ?</strong>
+                <small>Après confirmation, l'historique, la fiche bien et la fiche locataire seront mis à jour.</small>
+              </span>
+            </div>
+          </div>
+        )}
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button onClick={() => setPreview(true)}><Eye size={17} /> Prévisualiser document</Button>
+          <Button variant="primary" onClick={submit}><XCircle size={17} /> Confirmer résiliation</Button>
         </div>
       </section>
     </div>
