@@ -757,12 +757,42 @@ const visits = [
   {
     client: "Amadou Cissé",
     property: "Résidence ACI Baobab",
-    date: "28/05/2026",
+    date: "21/06/2026",
     time: "10:00",
     agent: "Mariam Traoré",
     status: "Prévue",
     feedback: "Souhaite voir parking",
     next: "Confirmer la présence",
+  },
+  {
+    client: "Bintou Dembélé",
+    property: "Villa Sotuba Jardin",
+    date: "21/06/2026",
+    time: "11:30",
+    agent: "Mariam Traoré",
+    status: "Prévue",
+    feedback: "Première visite, recherche villa familiale",
+    next: "Envoyer itinéraire WhatsApp",
+  },
+  {
+    client: "Cabinet Yelen",
+    property: "Plateau Office Center",
+    date: "21/06/2026",
+    time: "15:30",
+    agent: "Issa Maïga",
+    status: "Prévue",
+    feedback: "Direction générale attendue sur site",
+    next: "Confirmer badges d'accès",
+  },
+  {
+    client: "Salimata Bagayoko",
+    property: "Villa Sotuba Jardin",
+    date: "21/06/2026",
+    time: "17:00",
+    agent: "Cheick Camara",
+    status: "Prévue",
+    feedback: "Souhaite comparer avec Badalabougou",
+    next: "Préparer fiche caution",
   },
   {
     client: "Cabinet Yelen",
@@ -1723,6 +1753,32 @@ function shouldOpenMaintenanceModal(label) {
   return ["ajouter entretien", "ajouter un entretien", "planifier entretien"].includes(text) || text.startsWith("planifier ");
 }
 
+function getDashboardOverdueRows(rows = rentRows) {
+  return rows
+    .filter((row) => parseFCFA(row.balance) > 0 && row.status !== "Payé")
+    .slice(0, 3);
+}
+
+function getLatestRelanceForTenant(relances = [], tenantName) {
+  return relances.find((item) => item.tenant === tenantName || item.tenantName === tenantName);
+}
+
+function contractMatchesDueFilter(contract, dueFilter) {
+  if (dueFilter === "Toutes échéances") return true;
+  const endDate = parseContractDate(contract.end);
+  if (!endDate) return getContractDueLabel(contract).includes(dueFilter.replace("Échéance ", ""));
+  if (dueFilter === "Ce mois") return endDate.getMonth() === contractReferenceDate.getMonth() && endDate.getFullYear() === contractReferenceDate.getFullYear();
+  if (dueFilter === "Cette année") return endDate.getFullYear() === contractReferenceDate.getFullYear();
+  if (dueFilter === "Cette semaine") {
+    const startOfWeek = new Date(contractReferenceDate);
+    startOfWeek.setDate(contractReferenceDate.getDate() - contractReferenceDate.getDay() + 1);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    return endDate >= startOfWeek && endDate <= endOfWeek;
+  }
+  return getContractDueLabel(contract).includes(dueFilter.replace("Échéance ", ""));
+}
+
 function makeMaintenanceCharge(maintenance, sequence = 1) {
   const property = getPropertyByName(maintenance.property) ?? properties[0];
   const payer = maintenance.payer === "À déterminer" ? "À valider" : maintenance.payer;
@@ -2121,7 +2177,7 @@ function visitMatchesPeriod(visit, period) {
   if (period === "Toutes périodes") return true;
   const date = parseVisitDate(visit.date);
   if (!date) return false;
-  const reference = new Date(2026, 5, 20);
+  const reference = new Date(2026, 5, 21);
   const startOfWeek = new Date(reference);
   startOfWeek.setDate(reference.getDate() - reference.getDay() + 1);
   const endOfWeek = new Date(startOfWeek);
@@ -2178,6 +2234,7 @@ function App() {
   const [visitOverrides, setVisitOverrides] = useState({});
   const [visitHistories, setVisitHistories] = useState({});
   const [visitActionContext, setVisitActionContext] = useState(null);
+  const [clientFilterRequest, setClientFilterRequest] = useState(null);
   const [contractTab, setContractTab] = useState("Contrats");
   const [generatedContracts, setGeneratedContracts] = useState([]);
   const [contractOverrides, setContractOverrides] = useState({});
@@ -2185,6 +2242,7 @@ function App() {
   const [contractDeadlines, setContractDeadlines] = useState({});
   const [contractActionContext, setContractActionContext] = useState(null);
   const [contractDetailRequest, setContractDetailRequest] = useState(null);
+  const [contractFilterRequest, setContractFilterRequest] = useState(null);
   const [clientDetailRequest, setClientDetailRequest] = useState(null);
   const [recordedPayments, setRecordedPayments] = useState([]);
   const [paymentContext, setPaymentContext] = useState(null);
@@ -2263,6 +2321,57 @@ function App() {
 
   const openAction = (label, context = {}) => {
     const normalizedAction = normalizeSearch(label);
+
+    if (normalizedAction === "loyers en retard") {
+      setModal("Relancer locataires dashboard");
+      return;
+    }
+
+    if (normalizedAction === "visites du jour") {
+      setClientTab("Visites");
+      setClientFilterRequest({
+        tab: "Visites",
+        filters: {
+          visitPeriod: "Aujourd'hui",
+          visitStatus: "Prévue",
+          visitQuick: "Visites du jour",
+        },
+        nonce: Date.now(),
+      });
+      setActivePage("Clients");
+      return;
+    }
+
+    if (normalizedAction === "contrats a echeance") {
+      setContractTab("Contrats");
+      setContractFilterRequest({
+        filters: {
+          due: "Ce mois",
+          status: "Actif",
+        },
+        nonce: Date.now(),
+      });
+      setActivePage("Contrats");
+      return;
+    }
+
+    if (normalizedAction === "maintenance urgente") {
+      setMaintenanceContext({
+        property: properties.find((property) => property.name === "Studio Badalabougou") ?? selectedProperty,
+        maintenance: {
+          type: "Plomberie",
+          priority: "Critique",
+          description: "Fuite d'eau signalée dans le studio, intervention urgente à coordonner.",
+          date: "21/06/2026",
+          manager: "Cheick Camara",
+          provider: "Bamako Plomberie Services",
+          cost: "95 000 FCFA",
+          payer: "Propriétaire",
+        },
+      });
+      setModal("Intervention urgente");
+      return;
+    }
 
     if (normalizedAction === "nouveau proprietaire") {
       setClientTab("Propriétaires");
@@ -2498,7 +2607,10 @@ function App() {
     }
 
     if (normalizedAction === "ajouter relance") {
-      setTenantActionContext({ tenant: context.tenant ?? selectedTenant, property: context.property, contract: context.contract, row: context.row, activeTenantTab: context.activeTenantTab ?? "Impayés & relances" });
+      const rowTenant = context.row?.tenant
+        ? allTenants.find((tenant) => tenant.name === context.row.tenant) ?? tenants.find((tenant) => tenant.name === context.row.tenant)
+        : null;
+      setTenantActionContext({ tenant: context.tenant ?? rowTenant ?? selectedTenant, property: context.property, contract: context.contract, row: context.row, activeTenantTab: context.activeTenantTab ?? "Impayés & relances" });
       setModal("Relance locataire");
       return;
     }
@@ -3125,6 +3237,63 @@ function App() {
     setActivePage("Clients");
     setModal(null);
     setTenantActionContext(null);
+  };
+
+  const handleDashboardRelanceSave = ({ rows, values, markAsRelanced = false }) => {
+    const selectedRows = rows.length ? rows : getDashboardOverdueRows(allRentRows);
+    const createdRelances = selectedRows.map((row, index) => {
+      const tenant = allTenants.find((item) => item.name === row.tenant) ?? tenants.find((item) => item.name === row.tenant);
+      return {
+        reference: makeDocumentNumber("REL", 300 + tenantRelances.length + index + 1),
+        tenantId: tenant?.id ?? `REL-TENANT-${index + 1}`,
+        tenant: row.tenant,
+        property: row.property,
+        reason: "Loyer en retard",
+        amount: row.balance,
+        channel: values.channel,
+        comment: values.comment,
+        promise: markAsRelanced ? "Relance enregistrée depuis le tableau de bord" : "Suivi à poursuivre",
+        nextDate: values.nextDate,
+        responsible: values.responsible,
+        date: "21/06/2026",
+        status: markAsRelanced ? "Relancé" : "Planifiée",
+        source: "Dashboard",
+      };
+    });
+
+    setTenantRelances((current) => [
+      ...createdRelances,
+      ...current.filter((item) => !createdRelances.some((created) => created.reference === item.reference)),
+    ]);
+
+    setTenantOverrides((current) => {
+      const next = { ...current };
+      createdRelances.forEach((relance) => {
+        const tenant = allTenants.find((item) => item.name === relance.tenant) ?? tenants.find((item) => item.name === relance.tenant);
+        if (!tenant) return;
+        next[tenant.id] = {
+          ...(next[tenant.id] ?? {}),
+          paymentStatus: markAsRelanced ? "Relancé" : tenant.paymentStatus,
+          nextReminder: relance.nextDate,
+          lastReminder: relance.channel,
+        };
+      });
+      return next;
+    });
+
+    setPropertyHistoryOverrides((current) => {
+      const next = { ...current };
+      createdRelances.forEach((relance) => {
+        next[relance.property] = [
+          ["Relance impayé", `${relance.tenant} relancé par ${relance.channel}. Montant dû : ${relance.amount}.`, "21/06/2026"],
+          ...(next[relance.property] ?? []),
+        ];
+      });
+      return next;
+    });
+
+    setFinanceTab("Impayés");
+    setModal(null);
   };
 
   const handleTenantReceiptArchive = ({ tenant, receipt }) => {
@@ -3905,6 +4074,8 @@ function App() {
             visitsList={allVisits}
             visitHistories={visitHistories}
             detailRequest={clientDetailRequest}
+            filterRequest={clientFilterRequest}
+            onFilterRequestConsumed={() => setClientFilterRequest(null)}
             tenantRelances={tenantRelances}
             tenantReceiptArchives={tenantReceiptArchives}
             onAction={openAction}
@@ -3928,9 +4099,11 @@ function App() {
             detailRequest={contractDetailRequest}
             onDetailRequestConsumed={() => setContractDetailRequest(null)}
             onDetailReturn={handleContractDetailReturn}
+            filterRequest={contractFilterRequest}
+            onFilterRequestConsumed={() => setContractFilterRequest(null)}
           />
         )}
-        {activePage === "Finance" && <FinancePage activeTab={financeTab} onTab={setFinanceTab} onAction={openAction} paymentsList={allPayments} rentRowsList={allRentRows} chargesList={allCharges} maintenancesList={allMaintenances} reversalsList={allReversals} />}
+        {activePage === "Finance" && <FinancePage activeTab={financeTab} onTab={setFinanceTab} onAction={openAction} paymentsList={allPayments} rentRowsList={allRentRows} chargesList={allCharges} maintenancesList={allMaintenances} reversalsList={allReversals} relancesList={tenantRelances} />}
         {activePage === "Rapports" && (
           <ReportsPage selected={reportType} onSelect={setReportType} onAction={openAction} />
         )}
@@ -4164,6 +4337,13 @@ function App() {
             setModal(null);
           }}
         />
+      ) : modal === "Relancer locataires dashboard" ? (
+        <DashboardRentReminderModal
+          rows={getDashboardOverdueRows(allRentRows)}
+          relancesList={tenantRelances}
+          onSave={handleDashboardRelanceSave}
+          onClose={() => setModal(null)}
+        />
       ) : modal === "Relance locataire" ? (
         <TenantReminderModal
           tenant={tenantActionContext?.tenant ?? selectedTenant}
@@ -4223,6 +4403,8 @@ function App() {
         <PaymentRegistrationModal context={paymentContext} paymentsList={allPayments} rentRowsList={allRentRows} onSave={handlePaymentRegistration} onClose={() => setModal(null)} />
       ) : modal === "Ajouter entretien" ? (
         <MaintenanceFormModal context={maintenanceContext} onSave={handleMaintenanceSchedule} onClose={() => setModal(null)} />
+      ) : modal === "Intervention urgente" ? (
+        <UrgentMaintenanceModal context={maintenanceContext} onSave={handleMaintenanceSchedule} onClose={() => setModal(null)} />
       ) : modal === "Choisir document" ? (
         <DocumentContextMenu property={documentContext?.property ?? selectedProperty} onSelect={handleDocumentTemplateSelection} onClose={() => setModal(null)} />
       ) : modal === "Fiche PDF" ? (
@@ -5611,7 +5793,7 @@ function PropertyHistory({ property, historyItems = [] }) {
   );
 }
 
-function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = owners, selectedTenant, onTenant, tenantsList = tenants, prospectsList = prospects, prospectProposals = {}, prospectActivities = {}, prospectConversions = {}, visitsList = visits, visitHistories = {}, detailRequest = null, tenantRelances = [], tenantReceiptArchives = [], onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, reversalsList = reversals }) {
+function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = owners, selectedTenant, onTenant, tenantsList = tenants, prospectsList = prospects, prospectProposals = {}, prospectActivities = {}, prospectConversions = {}, visitsList = visits, visitHistories = {}, detailRequest = null, filterRequest = null, onFilterRequestConsumed, tenantRelances = [], tenantReceiptArchives = [], onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, reversalsList = reversals }) {
   const tabs = ["Propriétaires", "Locataires", "Prospects", "Visites"];
   const [detailView, setDetailView] = useState(null);
   const [selectedProspect, setSelectedProspect] = useState(prospects[0]);
@@ -5662,6 +5844,16 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
       setDetailView("tenant");
     }
   }, [detailRequest, onOwner, onTenant, ownersList, selectedOwner, selectedTenant, tenantsList]);
+
+  useEffect(() => {
+    if (!filterRequest?.filters) return;
+    if (filterRequest.tab && filterRequest.tab !== activeTab) onTab(filterRequest.tab);
+    setDetailView(null);
+    setClientSearch("");
+    setClientFilterOpen(true);
+    setClientFilters((current) => ({ ...current, ...filterRequest.filters }));
+    onFilterRequestConsumed?.();
+  }, [filterRequest?.nonce]);
 
   const updateClientFilter = (key, value) => {
     setClientFilters((current) => ({ ...current, [key]: value }));
@@ -6733,6 +6925,8 @@ function ContractsPage({
   detailRequest = null,
   onDetailRequestConsumed,
   onDetailReturn,
+  filterRequest = null,
+  onFilterRequestConsumed,
 }) {
   const tabs = ["Contrats", "Génération de document", "Archives"];
   const effectiveTab = activeTab === "Factures & reçus" ? "Archives" : activeTab;
@@ -6752,6 +6946,8 @@ function ContractsPage({
           detailRequest={detailRequest}
           onDetailRequestConsumed={onDetailRequestConsumed}
           onDetailReturn={onDetailReturn}
+          filterRequest={filterRequest}
+          onFilterRequestConsumed={onFilterRequestConsumed}
         />
       )}
       {effectiveTab === "Génération de document" && <DocumentGeneration onAction={onAction} documentDraft={documentDraft} />}
@@ -6768,6 +6964,8 @@ function ContractsList({
   detailRequest = null,
   onDetailRequestConsumed,
   onDetailReturn,
+  filterRequest = null,
+  onFilterRequestConsumed,
 }) {
   const [selected, setSelected] = useState(contractsList[0] ?? contracts[0]);
   const [query, setQuery] = useState("");
@@ -6805,6 +7003,15 @@ function ContractsList({
     onDetailRequestConsumed?.();
   }, [detailRequest?.nonce]);
 
+  useEffect(() => {
+    if (!filterRequest?.filters) return;
+    setQuery("");
+    setFiltersOpen(true);
+    setFilters((current) => ({ ...current, ...filterRequest.filters }));
+    closeDetail();
+    onFilterRequestConsumed?.();
+  }, [filterRequest?.nonce]);
+
   const closeContractDetail = () => {
     if (returnRequest?.returnTo) {
       onDetailReturn?.(returnRequest);
@@ -6840,11 +7047,12 @@ function ContractsList({
         filters.status === "Tous statuts" ||
         contract.status === filters.status ||
         displayState.label === filters.status ||
+        (filters.status === "Actif" && (["À échéance", "Échéance proche", "Suivi"].includes(contract.status) || displayState.label === "Échéance proche")) ||
         (filters.status === "Document signé manquant" && signatureMissing);
       const propertyMatch = filters.property === "Tous biens" || contract.property === filters.property;
       const ownerMatch = filters.owner === "Tous propriétaires" || contract.owner === filters.owner;
       const tenantMatch = filters.tenant === "Tous locataires" || contract.client === filters.tenant;
-      const dueMatch = filters.due === "Toutes échéances" || dueLabel.includes(filters.due.replace("Échéance ", ""));
+      const dueMatch = contractMatchesDueFilter(contract, filters.due);
       const signatureMatch =
         filters.signature === "Tous documents" ||
         (filters.signature === "Signé" && !signatureMissing) ||
@@ -6896,7 +7104,7 @@ function ContractsList({
       <section className="client-list-workspace" data-demo="contracts-workspace">
         <Panel title="Liste des contrats">
           <DataTable
-            columns={["Numéro contrat", "Type", "Bien", "Propriétaire", "Locataire / client", "Date début", "Date fin", "Statut", "Échéance", "Action"]}
+            columns={["Numéro contrat", "Type", "Bien", "Propriétaire", "Locataire / client", "Date début", "Date fin", "Statut", "Échéance", "Actions"]}
             rows={filteredContracts.map((contract) => [
               contract.number,
               contract.type,
@@ -6907,7 +7115,13 @@ function ContractsList({
               contract.end,
               <ContractStatusStack contract={contract} />,
               getContractDueLabel(contract),
-              <Button compact onClick={() => openContract(contract)}><Eye size={16} /> Fiche</Button>,
+              <div className="table-actions">
+                <Button compact onClick={() => openContract(contract)}><Eye size={16} /> Fiche</Button>
+                <Button compact onClick={() => onAction("Renouveler contrat", { contract })}><RefreshCw size={15} /> Renouveler</Button>
+                <Button compact onClick={() => onAction("Resilier contrat", { contract })}><XCircle size={15} /> Résilier</Button>
+                <Button compact onClick={() => onAction("Renouveler contrat", { contract })}><FileText size={15} /> Avenant</Button>
+                <Button compact onClick={() => onAction("Archiver contrat", { contract })}><Archive size={15} /> Archiver</Button>
+              </div>,
             ])}
           />
         </Panel>
@@ -9302,7 +9516,7 @@ function InvoiceActions({ invoice, onAction }) {
   );
 }
 
-function FinancePage({ activeTab, onTab, onAction, paymentsList = paymentRecords, rentRowsList = rentRows, chargesList = charges, maintenancesList = maintenances, reversalsList = reversals }) {
+function FinancePage({ activeTab, onTab, onAction, paymentsList = paymentRecords, rentRowsList = rentRows, chargesList = charges, maintenancesList = maintenances, reversalsList = reversals, relancesList = [] }) {
   const tabs = ["Loyers", "Paiements", "Impayés", "Commissions", "Charges", "Entretiens", "Reversements"];
   const effectiveTab = tabs.includes(activeTab) ? activeTab : "Loyers";
   const agencyRentRows = rentRowsList.filter((row) => isAgencyCollectedProperty(row.property));
@@ -9322,7 +9536,7 @@ function FinancePage({ activeTab, onTab, onAction, paymentsList = paymentRecords
       <Tabs tabs={tabs} active={effectiveTab} onChange={onTab} demo="finance-tabs" />
       {effectiveTab === "Loyers" && <FinanceTable title="Loyers attendus par E.K immo" onAction={onAction} rows={agencyRentRows.map((row) => [row.period, row.tenant, row.property, row.owner, row.expected, row.paid, row.balance, <Badge label={row.status} />, <RentActions row={row} onAction={onAction} />])} columns={["Période", "Locataire", "Bien", "Propriétaire", "Attendu", "Payé", "Solde", "Statut", "Actions"]} />}
       {effectiveTab === "Paiements" && <PaymentForm onAction={onAction} paymentsList={paymentsList} rentRowsList={rentRowsList} />}
-      {effectiveTab === "Impayés" && <ArrearsView onAction={onAction} rentRowsList={rentRowsList} />}
+      {effectiveTab === "Impayés" && <ArrearsView onAction={onAction} rentRowsList={rentRowsList} relancesList={relancesList} />}
       {effectiveTab === "Commissions" && <CommissionsView onAction={onAction} />}
       {effectiveTab === "Charges" && <ChargesView onAction={onAction} chargesList={chargesList} />}
       {effectiveTab === "Entretiens" && <MaintenancesView onAction={onAction} maintenancesList={maintenancesList} />}
@@ -10075,8 +10289,10 @@ function PaymentForm({ onAction, paymentsList = paymentRecords, rentRowsList = r
   );
 }
 
-function ArrearsView({ onAction, rentRowsList = rentRows }) {
-  const rows = rentRowsList.filter((row) => isAgencyCollectedProperty(row.property)).filter((row) => row.status === "Partiel" || row.status === "Impayé" || row.status === "En retard");
+function ArrearsView({ onAction, rentRowsList = rentRows, relancesList = [] }) {
+  const rows = rentRowsList
+    .filter((row) => isAgencyCollectedProperty(row.property))
+    .filter((row) => parseFCFA(row.balance) > 0 && row.status !== "Payé");
   const [selected, setSelected] = useState(rows[0]);
   const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
 
@@ -10098,17 +10314,20 @@ function ArrearsView({ onAction, rentRowsList = rentRows }) {
       <Panel title="Impayés & relances">
         <DataTable
           columns={["Locataire", "Bien", "Propriétaire", "Montant dû", "Ancienneté", "Dernière relance", "Prochaine action", "Statut", "Actions"]}
-          rows={rows.map((row, index) => [
-            row.tenant,
-            row.property,
-            row.owner,
-            row.balance,
-            index === 0 ? "12 jours" : "28 jours",
-            index === 0 ? "SMS le 22/05" : "Appel le 24/05",
-            index === 0 ? "Encaisser solde" : "Lettre de relance",
-            <Badge label={row.status === "Partiel" ? "Relancé" : "En retard"} />,
-            <div className="table-actions"><Button compact onClick={() => openArrear(row)}><Eye size={15} /> Fiche</Button><Button compact onClick={() => onAction("Ajouter relance")}>Relancer</Button></div>,
-          ])}
+          rows={rows.map((row, index) => {
+            const relance = getLatestRelanceForTenant(relancesList, row.tenant);
+            return [
+              row.tenant,
+              row.property,
+              row.owner,
+              row.balance,
+              relance ? "Relance récente" : index === 0 ? "12 jours" : "28 jours",
+              relance ? `${relance.channel} le ${relance.date}` : index === 0 ? "SMS le 22/05" : "Appel le 24/05",
+              relance?.nextDate ?? (index === 0 ? "Encaisser solde" : "Lettre de relance"),
+              <Badge label={relance?.status ?? (row.status === "Partiel" ? "Relancé" : "En retard")} />,
+              <div className="table-actions"><Button compact onClick={() => openArrear(row)}><Eye size={15} /> Fiche</Button><Button compact onClick={() => onAction("Ajouter relance", { row })}>Relancer</Button></div>,
+            ];
+          })}
         />
       </Panel>
     </section>
@@ -12075,6 +12294,93 @@ function TenantReceiptModal({ tenant, property, payment, paymentsList = paymentR
   );
 }
 
+function DashboardRentReminderModal({ rows = [], relancesList = [], onSave, onClose }) {
+  const [selectedKeys, setSelectedKeys] = useState(() => rows.map((row) => `${row.tenant}-${row.property}-${row.period}`));
+  const [values, setValues] = useState({
+    channel: "WhatsApp",
+    comment: "Bonjour, votre loyer présente un retard. Merci de régulariser ou de confirmer une date de paiement.",
+    nextDate: "2026-06-24",
+    responsible: "Aïssata Diarra",
+  });
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+  const toggleRow = (key) => {
+    setSelectedKeys((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key]);
+  };
+  const toggleAll = (event) => {
+    setSelectedKeys(event.target.checked ? rows.map((row) => `${row.tenant}-${row.property}-${row.period}`) : []);
+  };
+  const selectedRows = rows.filter((row) => selectedKeys.includes(`${row.tenant}-${row.property}-${row.period}`));
+  const submit = (markAsRelanced = false) => {
+    if (!selectedRows.length) return;
+    onSave({ rows: selectedRows, values, markAsRelanced });
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal dashboard-reminder-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Loyers en retard</span>
+            <h2>Relancer les locataires</h2>
+            <p>3 locataires — 3.2M FCFA en retard</p>
+          </div>
+          <Badge label={`${selectedRows.length} sélectionné(s)`} />
+        </div>
+
+        <div className="reminder-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th><input type="checkbox" checked={selectedRows.length === rows.length && rows.length > 0} onChange={toggleAll} aria-label="Sélectionner tous les locataires" /></th>
+                <th>Locataire</th>
+                <th>Bien</th>
+                <th>Montant dû</th>
+                <th>Ancienneté</th>
+                <th>Dernière relance</th>
+                <th>Prochaine action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, index) => {
+                const key = `${row.tenant}-${row.property}-${row.period}`;
+                const relance = getLatestRelanceForTenant(relancesList, row.tenant);
+                return (
+                  <tr key={key}>
+                    <td><input type="checkbox" checked={selectedKeys.includes(key)} onChange={() => toggleRow(key)} aria-label={`Sélectionner ${row.tenant}`} /></td>
+                    <td><strong>{row.tenant}</strong><small>{row.period}</small></td>
+                    <td>{row.property}</td>
+                    <td>{row.balance}</td>
+                    <td>{relance ? "Relance récente" : index === 0 ? "12 jours" : index === 1 ? "28 jours" : "7 jours"}</td>
+                    <td>{relance ? `${relance.channel} le ${relance.date}` : index === 0 ? "SMS le 22/05" : "Appel le 24/05"}</td>
+                    <td>{relance?.nextDate ?? (index === 0 ? "Encaisser solde" : "Relance formelle")}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="form-section">
+          <h3>Relance</h3>
+          <div className="form-grid compact-form">
+            <label>Canal<select value={values.channel} onChange={update("channel")}><option>Appel</option><option>WhatsApp</option><option>SMS</option><option>Email</option><option>Visite</option></select></label>
+            <label>Date de prochaine relance<input type="date" value={values.nextDate} onChange={update("nextDate")} /></label>
+            <label>Responsable de suivi<select value={values.responsible} onChange={update("responsible")}><option>Aïssata Diarra</option><option>Mariam Traoré</option><option>Issa Maïga</option><option>Cheick Camara</option></select></label>
+            <label className="full">Message / commentaire<textarea value={values.comment} onChange={update("comment")} /></label>
+          </div>
+        </div>
+
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button disabled={!selectedRows.length} onClick={() => submit(false)}><Bell size={17} /> Enregistrer relance</Button>
+          <Button variant="primary" disabled={!selectedRows.length} onClick={() => submit(true)}><CheckCircle2 size={17} /> Enregistrer et marquer comme relancé</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function TenantReminderModal({ tenant, row, onSave, onClose }) {
   const [values, setValues] = useState({
     reason: "Retard de paiement",
@@ -12549,6 +12855,118 @@ function PaymentRegistrationModal({ context, paymentsList = paymentRecords, rent
           <Button onClick={onClose}>Annuler</Button>
           {!isDirectCollection && <Button variant="primary" onClick={() => submit(false)}><CheckCircle2 size={17} /> Enregistrer paiement</Button>}
           {!isDirectCollection && <Button onClick={() => submit(true)}><ReceiptText size={17} /> Enregistrer et générer reçu</Button>}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function UrgentMaintenanceModal({ context, onSave, onClose }) {
+  const baseProperty = context?.property ?? getPropertyByName(context?.maintenance?.property) ?? properties[0];
+  const baseMaintenance = context?.maintenance ?? {};
+  const [values, setValues] = useState({
+    property: baseMaintenance.property ?? baseProperty.name,
+    type: baseMaintenance.type ?? "Plomberie",
+    description: baseMaintenance.description ?? baseMaintenance.note ?? "Fuite d'eau signalée. Intervention urgente à coordonner avec le prestataire.",
+    priority: baseMaintenance.priority ?? "Critique",
+    manager: baseMaintenance.manager ?? "Cheick Camara",
+    provider: baseMaintenance.provider ?? baseProperty.serviceProvider?.company ?? "",
+    date: baseMaintenance.date ?? "21/06/2026",
+    cost: baseMaintenance.cost ?? "95 000 FCFA",
+    payer: baseMaintenance.payer ?? "Propriétaire",
+    proof: "",
+  });
+  const selectedProperty = getPropertyByName(values.property) ?? baseProperty;
+  const interventionTypes = ["Plomberie", "Électricité", "Nettoyage", "Réparation", "Autre"];
+  const priorities = ["Normale", "Urgente", "Critique"];
+  const managers = ["Mariam Traoré", "Aïssata Diarra", "Issa Maïga", "Cheick Camara"];
+  const payers = ["Agence", "Propriétaire", "Locataire", "À déterminer"];
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+
+  useEffect(() => {
+    const provider = selectedProperty.serviceProvider?.company;
+    if (provider && !baseMaintenance.provider) {
+      setValues((current) => ({ ...current, provider }));
+    }
+  }, [baseMaintenance.provider, selectedProperty.name]);
+
+  const submit = (createCharge = false) => {
+    onSave({
+      maintenance: {
+        reference: baseMaintenance.reference,
+        property: values.property,
+        type: values.type,
+        date: values.date,
+        manager: values.manager,
+        cost: values.cost,
+        realCost: undefined,
+        payer: values.payer,
+        status: values.priority === "Critique" ? "Critique" : "Urgent",
+        note: values.description,
+        priority: values.priority,
+        provider: values.provider || "Prestataire à confirmer",
+        proof: values.proof || undefined,
+        source: "Dashboard - alerte maintenance urgente",
+      },
+      createCharge,
+    });
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal urgent-maintenance-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Dashboard · maintenance urgente</span>
+            <h2>Intervention urgente</h2>
+            <p>{selectedProperty.name} · {selectedProperty.address}</p>
+          </div>
+          <Badge label={values.priority} />
+        </div>
+
+        <div className="urgent-maintenance-summary">
+          <span><AlertTriangle size={20} /></span>
+          <div>
+            <strong>Créer une intervention prioritaire</strong>
+            <small>L'action sera ajoutée au suivi des entretiens du bien et au module Finance. Une charge peut être créée en même temps si le coût doit être suivi.</small>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Intervention</h3>
+          <div className="form-grid compact-form">
+            <label>Bien concerné<select value={values.property} onChange={update("property")}>{properties.map((property) => <option key={property.code}>{property.name}</option>)}</select></label>
+            <label>Type d'intervention<select value={values.type} onChange={update("type")}>{interventionTypes.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <label>Priorité<select value={values.priority} onChange={update("priority")}>{priorities.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <label>Date prévue<input value={values.date} onChange={update("date")} placeholder="JJ/MM/AAAA" /></label>
+            <label>Responsable interne<select value={values.manager} onChange={update("manager")}>{managers.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <label>Prestataire<input value={values.provider} onChange={update("provider")} placeholder="Prestataire à confirmer" /></label>
+            <label className="full">Description du problème<textarea value={values.description} onChange={update("description")} /></label>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Coût & prise en charge</h3>
+          <div className="form-grid compact-form">
+            <label>Coût estimatif<input value={values.cost} onChange={update("cost")} /></label>
+            <label>Prise en charge<select value={values.payer} onChange={update("payer")}>{payers.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <label>Adresse du bien<input value={selectedProperty.address} readOnly /></label>
+            <label>Statut de suivi<input value={values.priority === "Critique" ? "Intervention critique" : "Intervention urgente"} readOnly /></label>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Justificatif / photo</h3>
+          <div className="document-upload-grid urgent-upload-grid">
+            <label>Fichier joint<input type="file" onChange={(event) => setValues((current) => ({ ...current, proof: event.target.files?.[0]?.name ?? "" }))} /><small>{values.proof || "Aucun fichier sélectionné"}</small></label>
+          </div>
+        </div>
+
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => submit(false)}><Wrench size={17} /> Créer intervention</Button>
+          <Button onClick={() => submit(true)}><ReceiptText size={17} /> Créer intervention et charge</Button>
         </div>
       </section>
     </div>
