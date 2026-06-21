@@ -2373,6 +2373,7 @@ function App() {
       "resilier contrat",
       "pdf contrat",
       "imprimer contrat",
+      "archiver contrat",
     ].includes(normalizedAction)) {
       setContractActionContext({ contract: context.contract ?? allContracts[0] ?? contracts[0] });
       setModal(["joindre contrat signe", "contrat signe"].includes(normalizedAction) ? "Document signe contrat" : label);
@@ -2381,11 +2382,6 @@ function App() {
 
     if (normalizedAction === "telecharger contrat" && context.contract) {
       handleContractDocumentAction(context.contract, "Document telecharge", "PDF du contrat ouvert pour telechargement.");
-      return;
-    }
-
-    if (normalizedAction === "archiver contrat" && context.contract) {
-      handleContractStatusAction(context.contract, "Archive", "Contrat archive avec historique conserve.");
       return;
     }
 
@@ -3531,6 +3527,21 @@ function App() {
     window.setTimeout(() => window.print(), 0);
   };
 
+  const handleContractArchive = ({ contract, values }) => {
+    updateContract(contract, {
+      status: "Archivé",
+      archiveReason: values.reason,
+      archiveComment: values.comment,
+      archiveDate: "21/06/2026",
+    }, {
+      action: "Archivage",
+      comment: `${contract.number} archivé. Motif : ${values.reason}. ${values.comment}`,
+    });
+    setContractTab("Archives");
+    setContractActionContext(null);
+    setModal(null);
+  };
+
   const handlePaymentRegistration = (payment) => {
     const paymentKey = getPaymentKey(payment);
 
@@ -4105,6 +4116,8 @@ function App() {
         <ContractPdfModal contract={contractActionContext?.contract ?? allContracts[0]} onPdfAction={handleContractPdfAction} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "Imprimer contrat" ? (
         <ContractPrintModal contract={contractActionContext?.contract ?? allContracts[0]} onPrint={handleContractPrint} onClose={() => { setContractActionContext(null); setModal(null); }} />
+      ) : modal === "Archiver contrat" ? (
+        <ContractArchiveModal contract={contractActionContext?.contract ?? allContracts[0]} onArchive={handleContractArchive} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "Modifier contrat" ? (
         <ContractEditModal contract={contractActionContext?.contract ?? allContracts[0]} onSave={handleContractEditSave} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "Renouveler contrat" ? (
@@ -6602,13 +6615,14 @@ function VisitReminderModal({ visit, onSave, onClose }) {
 function ContractsPage({ activeTab, onTab, onAction, contractsList = contracts, paymentsList = paymentRecords, documentDraft = null, propertyPdfArchives = [], contractTimelines = {}, contractDeadlines = {} }) {
   const tabs = ["Contrats", "Génération de document", "Archives"];
   const effectiveTab = activeTab === "Factures & reçus" ? "Archives" : activeTab;
+  const activeContracts = contractsList.filter((contract) => contract.status !== "Archivé");
   return (
     <>
       <PageIntro
         title="Contrats & documents"
       />
       <Tabs tabs={tabs} active={effectiveTab} onChange={onTab} demo="contract-tabs" />
-      {effectiveTab === "Contrats" && <ContractsList onAction={onAction} contractsList={contractsList} contractTimelines={contractTimelines} contractDeadlines={contractDeadlines} />}
+      {effectiveTab === "Contrats" && <ContractsList onAction={onAction} contractsList={activeContracts} contractTimelines={contractTimelines} contractDeadlines={contractDeadlines} />}
       {effectiveTab === "Génération de document" && <DocumentGeneration onAction={onAction} documentDraft={documentDraft} />}
       {effectiveTab === "Archives" && <ArchivesView onAction={onAction} contractsList={contractsList} paymentsList={paymentsList} propertyPdfArchives={propertyPdfArchives} />}
     </>
@@ -12545,6 +12559,44 @@ function ContractPrintModal({ contract, onPrint, onClose }) {
         <div className="action-row compact-row">
           <Button onClick={onClose}>Annuler</Button>
           <Button variant="primary" onClick={() => onPrint({ contract, values })}><Printer size={17} /> Imprimer</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ContractArchiveModal({ contract, onArchive, onClose }) {
+  const [values, setValues] = useState({
+    reason: "Fin de suivi contractuel",
+    comment: "Contrat conservé avec ses documents, échéances et historique.",
+  });
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+  const canArchive = values.reason.trim().length > 0;
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card prospect-form-modal compact-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="archive-target">
+          <span>Contrat</span>
+          <strong>{contract.number}</strong>
+          <small>{contract.property} · {contract.client}</small>
+        </div>
+        <h2>Archiver ce contrat ?</h2>
+        <p>
+          Le contrat ne sera plus visible dans la liste active, mais restera disponible dans les archives avec ses documents et son historique.
+        </p>
+
+        <div className="form-section">
+          <div className="form-grid compact-form">
+            <label>Motif d’archivage<input value={values.reason} onChange={update("reason")} /></label>
+            <label>Commentaire<textarea value={values.comment} onChange={update("comment")} /></label>
+          </div>
+        </div>
+
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" disabled={!canArchive} onClick={() => onArchive({ contract, values })}><Archive size={17} /> Confirmer l’archivage</Button>
         </div>
       </section>
     </div>
