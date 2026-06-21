@@ -2362,6 +2362,7 @@ function App() {
       "modifier contrat",
       "renouveler contrat",
       "resilier contrat",
+      "pdf contrat",
     ].includes(normalizedAction)) {
       setContractActionContext({ contract: context.contract ?? allContracts[0] ?? contracts[0] });
       setModal(label);
@@ -3145,6 +3146,8 @@ function App() {
         ...(current[nextContract.property] ?? []),
       ],
     }));
+
+    return nextContract;
   };
 
   const handleContractDeadlineSave = ({ contract, values }) => {
@@ -3360,6 +3363,89 @@ function App() {
     addContractTimeline(contract, { action, comment });
     setContractActionContext({ contract, documentAction: action });
     setModal("Document signe contrat");
+  };
+
+  const handleContractPdfAction = (contract, action) => {
+    const currentContract = { ...contract, ...(contractOverrides[getContractKey(contract)] ?? {}) };
+    const currentVersion = Number(currentContract.pdfVersion ?? (hasContractPdf(currentContract) ? 1 : 0));
+    const nextVersion = action === "new-version" ? currentVersion + 1 : Math.max(currentVersion, 1);
+    const pdfReference = action === "generate" || action === "new-version"
+      ? `PDF-${currentContract.number}-V${nextVersion}`
+      : currentContract.pdfReference ?? `PDF-${currentContract.number}-V${Math.max(nextVersion, 1)}`;
+    const actionMeta = {
+      generate: {
+        patch: {
+          pdfGenerated: true,
+          pdfStatus: "Généré",
+          pdfVersion: nextVersion,
+          pdfReference,
+          pdfDate: "21/06/2026",
+          pdfLastAction: "PDF généré",
+        },
+        timeline: "Génération PDF",
+        comment: `Version ${pdfReference} générée depuis la fiche contrat.`,
+      },
+      preview: {
+        patch: {
+          pdfGenerated: true,
+          pdfReference,
+          pdfVersion: nextVersion,
+          pdfLastAction: "PDF prévisualisé",
+        },
+        timeline: "Prévisualisation PDF",
+        comment: `Aperçu de ${pdfReference} ouvert avant impression.`,
+      },
+      download: {
+        patch: {
+          pdfGenerated: true,
+          pdfReference,
+          pdfVersion: nextVersion,
+          pdfLastAction: "PDF téléchargé",
+        },
+        timeline: "Document téléchargé",
+        comment: `${pdfReference} téléchargé depuis la fiche contrat.`,
+      },
+      archive: {
+        patch: {
+          pdfGenerated: true,
+          pdfArchived: true,
+          pdfStatus: "Archivé",
+          pdfReference,
+          pdfVersion: nextVersion,
+          pdfArchivedAt: "21/06/2026",
+          pdfLastAction: "PDF archivé",
+        },
+        timeline: "Archivage PDF",
+        comment: `${pdfReference} archivé dans Docs.`,
+      },
+      "new-version": {
+        patch: {
+          pdfGenerated: true,
+          pdfArchived: false,
+          pdfStatus: "Généré",
+          pdfVersion: nextVersion,
+          pdfReference,
+          pdfDate: "21/06/2026",
+          pdfLastAction: "Nouvelle version PDF",
+        },
+        timeline: "Nouvelle version PDF",
+        comment: `${pdfReference} généré en remplacement de la version précédente.`,
+      },
+    }[action];
+
+    if (!actionMeta) return currentContract;
+
+    const nextContract = updateContract(currentContract, actionMeta.patch, {
+      action: actionMeta.timeline,
+      comment: actionMeta.comment,
+    });
+    setContractActionContext((current) => ({
+      ...(current ?? {}),
+      contract: nextContract,
+      pdfAction: action,
+      pdfNotice: actionMeta.comment,
+    }));
+    return nextContract;
   };
 
   const handlePaymentRegistration = (payment) => {
@@ -3932,6 +4018,8 @@ function App() {
         <ContractDueActionsModal contract={contractActionContext?.contract ?? allContracts[0]} onAction={openAction} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "Document signe contrat" ? (
         <ContractDocumentModal contract={contractActionContext?.contract ?? allContracts[0]} action={contractActionContext?.documentAction} onAction={openAction} onClose={() => { setContractActionContext(null); setModal(null); }} />
+      ) : modal === "PDF contrat" ? (
+        <ContractPdfModal contract={contractActionContext?.contract ?? allContracts[0]} onPdfAction={handleContractPdfAction} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "Modifier contrat" ? (
         <ContractEditModal contract={contractActionContext?.contract ?? allContracts[0]} onSave={handleContractEditSave} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "Renouveler contrat" ? (
@@ -6626,7 +6714,7 @@ function ContractProfilePanel({ contract, onAction, timelineEntries = [], custom
         <Button variant="primary" onClick={() => onAction("Modifier contrat", { contract })}><Pencil size={17} /> Modifier</Button>
         <Button onClick={() => onAction("Renouveler contrat", { contract })}><RefreshCw size={17} /> Renouveler</Button>
         <Button onClick={() => onAction("Resilier contrat", { contract })}><XCircle size={17} /> Résilier</Button>
-        <Button onClick={() => onAction("Telecharger contrat", { contract })}><Download size={17} /> PDF</Button>
+        <Button onClick={() => onAction("PDF contrat", { contract })}><Download size={17} /> PDF</Button>
         <Button onClick={() => onAction("Imprimer contrat", { contract })}><Printer size={17} /> Imprimer</Button>
         <Button onClick={() => onAction("Joindre contrat signe", { contract })}><Upload size={17} /> Contrat signé</Button>
         <Button onClick={() => onAction("Archiver contrat", { contract })}><Archive size={17} /> Archiver</Button>
@@ -6768,15 +6856,15 @@ function InvoicesView({ onAction }) {
 
 function getArchiveRecords(contractsList = contracts, paymentsList = paymentRecords, propertyPdfArchives = []) {
   const contractArchives = contractsList
-    .filter((contract) => contract.generated || ["Archivé", "Expiré"].includes(contract.status))
+    .filter((contract) => contract.generated || contract.pdfGenerated || contract.pdfArchived || ["Archivé", "Expiré"].includes(contract.status))
     .map((contract) => ({
-      id: `contract-${contract.number}`,
+      id: `contract-${contract.pdfReference ?? contract.number}`,
       category: "Contrats et mandats",
-      reference: contract.number,
-      title: contract.type,
+      reference: contract.pdfReference ?? contract.number,
+      title: contract.pdfGenerated ? `PDF ${contract.type}` : contract.type,
       linked: `${contract.property} · ${contract.client}`,
-      date: contract.generated ? "18/06/2026" : contract.end === "Vendu" ? "02/11/2024" : contract.end,
-      status: contract.status === "Expiré" ? "Archivé" : contract.status,
+      date: contract.pdfArchivedAt ?? contract.pdfDate ?? (contract.generated ? "18/06/2026" : contract.end === "Vendu" ? "02/11/2024" : contract.end),
+      status: contract.pdfArchived ? "Archivé" : contract.pdfStatus ?? (contract.status === "Expiré" ? "Archivé" : contract.status),
       module: "Docs",
       owner: contract.owner,
     }));
@@ -12208,6 +12296,128 @@ function ContractDueActionsModal({ contract, onAction, onClose }) {
           <button onClick={() => onAction("Renouveler contrat", { contract })}><RefreshCw size={20} /><span><strong>Renouveler</strong><small>Préparer une nouvelle période et un avenant.</small></span></button>
           <button onClick={() => onAction("Resilier contrat", { contract })}><XCircle size={20} /><span><strong>Résilier</strong><small>Mettre le contrat en sortie suivie.</small></span></button>
         </div>
+      </section>
+    </div>
+  );
+}
+
+function hasContractPdf(contract = {}) {
+  return Boolean(
+    contract.pdfGenerated ||
+    contract.pdfReference ||
+    contract.pdfArchived ||
+    contract.generated ||
+    ["Archivé", "Expiré"].includes(contract.status)
+  );
+}
+
+function getContractPdfReference(contract = {}) {
+  if (contract.pdfReference) return contract.pdfReference;
+  if (!hasContractPdf(contract)) return "";
+  return `PDF-${contract.number}-V${contract.pdfVersion ?? 1}`;
+}
+
+function getContractPdfValues(contract) {
+  const property = properties.find((item) => item.name === contract.property) ?? properties[0];
+  const owner = owners.find((item) => item.name === contract.owner) ?? owners[0];
+  const tenant = tenants.find((item) => item.name === contract.client) ?? { name: contract.client, phone: "" };
+  const financials = getContractFinancials(contract);
+  const defaults = getDocumentDefaults("bail", { property, owner, tenant });
+
+  return {
+    ...defaults,
+    contratNo: contract.number,
+    objet: contract.type?.includes("Mandat") ? "Mandat de gestion" : "CONTRAT DE BAIL À USAGE PROFESSIONNEL",
+    souscritLe: contract.start,
+    effetDate: contract.start,
+    expirationDate: contract.end,
+    preneur: contract.client,
+    locataire: contract.client,
+    bien: contract.property,
+    adresse: property.location ?? property.address ?? defaults.adresse,
+    localAdresse: property.address ?? property.location ?? defaults.localAdresse,
+    localType: property.type ?? defaults.localType,
+    designationLocal: property.name ?? defaults.designationLocal,
+    loyer: financials.amount,
+    loyerHt: financials.amount,
+    loyerTtc: financials.amount,
+    caution: financials.deposit,
+    commission: financials.commission,
+    conditions: contract.specialTerms ?? defaults.conditions,
+    dateSignature: contract.start,
+    lieuSignature: "Bamako",
+  };
+}
+
+function ContractPdfModal({ contract, onPdfAction, onClose }) {
+  const [workingContract, setWorkingContract] = useState(contract);
+  const [preview, setPreview] = useState(false);
+  const [notice, setNotice] = useState("");
+  const hasPdf = hasContractPdf(workingContract);
+  const pdfReference = getContractPdfReference(workingContract);
+  const pdfValues = getContractPdfValues(workingContract);
+
+  useEffect(() => {
+    setWorkingContract(contract);
+    setPreview(false);
+    setNotice("");
+  }, [contract?.number]);
+
+  const runAction = (action) => {
+    const nextContract = onPdfAction?.(workingContract, action) ?? workingContract;
+    setWorkingContract(nextContract);
+    if (action === "preview") setPreview(true);
+    if (action === "generate") setNotice("PDF généré. Les actions de prévisualisation, téléchargement et archivage sont maintenant disponibles.");
+    if (action === "download") setNotice("Version PDF préparée pour téléchargement et enregistrée dans l'historique du contrat.");
+    if (action === "archive") setNotice("PDF archivé dans Docs. Il restera disponible dans Archives.");
+    if (action === "new-version") {
+      setPreview(true);
+      setNotice("Nouvelle version PDF générée à partir des dernières informations du contrat.");
+    }
+  };
+
+  return (
+    <div className="modal-backdrop document-print-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className={`modal-card ${preview ? "document-print-modal" : "prospect-form-modal"}`} role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="document-print-head contract-pdf-head">
+          <div>
+            <span>PDF du contrat</span>
+            <h2>{workingContract.number}</h2>
+            <p>{workingContract.property} · {workingContract.client}</p>
+          </div>
+          {hasPdf && <Badge label={workingContract.pdfStatus ?? "Disponible"} />}
+        </div>
+
+        {!hasPdf ? (
+          <>
+            <div className="notice">
+              Aucun PDF généré pour ce contrat. Voulez-vous en générer un ?
+            </div>
+            <div className="action-row compact-row">
+              <Button onClick={onClose}>Annuler</Button>
+              <Button variant="primary" onClick={() => runAction("generate")}><Download size={17} /> Générer PDF</Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="document-menu-list compact-document-menu">
+              <button onClick={() => runAction("preview")}><Eye size={20} /><span><strong>Prévisualiser PDF</strong><small>{pdfReference || "Version prête à contrôler avant impression."}</small></span></button>
+              <button onClick={() => runAction("download")}><Download size={20} /><span><strong>Télécharger PDF</strong><small>Préparer la version PDF du contrat pour export.</small></span></button>
+              <button onClick={() => runAction("archive")}><Archive size={20} /><span><strong>Archiver PDF</strong><small>Classer le PDF dans Docs, catégorie contrats.</small></span></button>
+              <button onClick={() => runAction("new-version")}><RefreshCw size={20} /><span><strong>Générer nouvelle version</strong><small>Créer une version PDF actualisée depuis les données du contrat.</small></span></button>
+            </div>
+            {notice && <div className="notice">{notice}</div>}
+            <div className="action-row compact-row">
+              <Button onClick={onClose}>Fermer</Button>
+            </div>
+            {preview && (
+              <div className="contract-pdf-preview">
+                <OriginalLeaseDocument values={pdfValues} />
+              </div>
+            )}
+          </>
+        )}
       </section>
     </div>
   );

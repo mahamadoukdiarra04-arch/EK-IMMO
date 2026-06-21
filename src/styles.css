@@ -4148,6 +4148,10 @@ td:last-child {
   padding-right: 0;
 }
 
+.contract-pdf-head {
+  align-items: center;
+}
+
 .document-print-head span {
   color: var(--gold-dark);
   font-size: 0.78rem;
@@ -5641,6 +5645,20 @@ td:last-child {
   color: var(--muted);
   background: var(--surface-soft);
   font-weight: 720;
+}
+
+.contract-pdf-preview {
+  margin-top: 18px;
+  max-height: 78vh;
+  overflow: auto;
+  padding: 18px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: #edf4f8;
+}
+
+.contract-pdf-preview .original-lease-document {
+  margin-inline: auto;
 }
 
 .payment-layout {
