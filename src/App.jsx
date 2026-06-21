@@ -796,6 +796,11 @@ const contracts = [
     start: "01/01/2026",
     end: "31/12/2026",
     status: "Actif",
+    signedDocument: "Contrat signé CON-2026-014.pdf",
+    signedFileName: "Contrat signé CON-2026-014.pdf",
+    signedAt: "01/01/2026",
+    signedImportedAt: "02/01/2026",
+    signedImportedBy: "Aïssata Diarra",
   },
   {
     number: "CON-2026-023",
@@ -806,6 +811,11 @@ const contracts = [
     start: "15/03/2026",
     end: "14/03/2027",
     status: "Actif",
+    signedDocument: "Mandat signé CON-2026-023.pdf",
+    signedFileName: "Mandat signé CON-2026-023.pdf",
+    signedAt: "15/03/2026",
+    signedImportedAt: "16/03/2026",
+    signedImportedBy: "Aïssata Diarra",
   },
   {
     number: "CON-2026-041",
@@ -816,6 +826,11 @@ const contracts = [
     start: "01/04/2026",
     end: "31/03/2027",
     status: "Actif",
+    signedDocument: "Contrat signé CON-2026-041.pdf",
+    signedFileName: "Contrat signé CON-2026-041.pdf",
+    signedAt: "01/04/2026",
+    signedImportedAt: "01/04/2026",
+    signedImportedBy: "Mariam Traoré",
   },
   {
     number: "CON-2026-044",
@@ -826,6 +841,11 @@ const contracts = [
     start: "01/05/2026",
     end: "30/04/2027",
     status: "Suivi",
+    signedDocument: "Convention signée CON-2026-044.pdf",
+    signedFileName: "Convention signée CON-2026-044.pdf",
+    signedAt: "01/05/2026",
+    signedImportedAt: "02/05/2026",
+    signedImportedBy: "Issa Maïga",
   },
   {
     number: "CON-2025-088",
@@ -836,6 +856,21 @@ const contracts = [
     start: "01/07/2025",
     end: "30/06/2026",
     status: "À échéance",
+  },
+  {
+    number: "CON-2025-091",
+    type: "Convention entretien",
+    property: "Plateau Office Center",
+    owner: "Foncière Mandé",
+    client: "Cabinet Diarra & Associés",
+    start: "01/06/2025",
+    end: "15/06/2026",
+    status: "Actif",
+    signedDocument: "Convention signée CON-2025-091.pdf",
+    signedFileName: "Convention signée CON-2025-091.pdf",
+    signedAt: "01/06/2025",
+    signedImportedAt: "03/06/2025",
+    signedImportedBy: "Cheick Camara",
   },
   {
     number: "CON-2024-112",
@@ -2364,6 +2399,7 @@ function App() {
 
     if ([
       "document signe contrat",
+      "importer contrat signe",
       "joindre contrat signe",
       "contrat signe",
       "actions echeance contrat",
@@ -2376,7 +2412,7 @@ function App() {
       "archiver contrat",
     ].includes(normalizedAction)) {
       setContractActionContext({ contract: context.contract ?? allContracts[0] ?? contracts[0] });
-      setModal(["joindre contrat signe", "contrat signe"].includes(normalizedAction) ? "Document signe contrat" : label);
+      setModal(["joindre contrat signe", "contrat signe", "importer contrat signe"].includes(normalizedAction) ? "Document signe contrat" : label);
       return;
     }
 
@@ -6668,14 +6704,24 @@ function ContractsList({ onAction, contractsList = contracts, contractTimelines 
     const search = normalizeSearch(query);
     return contractsList.filter((contract) => {
       const dueLabel = getContractDueLabel(contract);
-      const haystack = normalizeSearch(`${contract.number} ${contract.type} ${contract.property} ${contract.owner} ${contract.client} ${contract.status} ${dueLabel}`);
+      const displayState = getContractDisplayState(contract);
+      const signatureMissing = !hasSignedContractDocument(contract);
+      const haystack = normalizeSearch(`${contract.number} ${contract.type} ${contract.property} ${contract.owner} ${contract.client} ${contract.status} ${displayState.label} ${signatureMissing ? "Document signé manquant" : "Document signé"} ${dueLabel}`);
       const typeMatch = filters.type === "Tous types" || contract.type === filters.type;
-      const statusMatch = filters.status === "Tous statuts" || contract.status === filters.status;
+      const statusMatch =
+        filters.status === "Tous statuts" ||
+        contract.status === filters.status ||
+        displayState.label === filters.status ||
+        (filters.status === "Document signé manquant" && signatureMissing);
       const propertyMatch = filters.property === "Tous biens" || contract.property === filters.property;
       const ownerMatch = filters.owner === "Tous propriétaires" || contract.owner === filters.owner;
       const tenantMatch = filters.tenant === "Tous locataires" || contract.client === filters.tenant;
       const dueMatch = filters.due === "Toutes échéances" || dueLabel.includes(filters.due.replace("Échéance ", ""));
-      const signatureMatch = filters.signature === "Tous documents" || filters.signature === "Archivé";
+      const signatureMatch =
+        filters.signature === "Tous documents" ||
+        (filters.signature === "Signé" && !signatureMissing) ||
+        (filters.signature === "À signer" && signatureMissing) ||
+        (filters.signature === "Archivé" && contract.status === "Archivé");
       return (!search || haystack.includes(search)) && typeMatch && statusMatch && propertyMatch && ownerMatch && tenantMatch && dueMatch && signatureMatch;
     });
   }, [contractsList, filters, query]);
@@ -6689,7 +6735,7 @@ function ContractsList({ onAction, contractsList = contracts, contractTimelines 
             <input placeholder="Rechercher un contrat, bien, propriétaire..." value={query} onChange={(event) => setQuery(event.target.value)} />
           </label>
           <select value={filters.type} onChange={(event) => updateFilter("type", event.target.value)}><option>Tous types</option><option>Contrat de location</option><option>Mandat de gestion</option></select>
-          <select value={filters.status} onChange={(event) => updateFilter("status", event.target.value)}><option>Tous statuts</option><option>Actif</option><option>Expiré</option><option>Archivé</option></select>
+          <select value={filters.status} onChange={(event) => updateFilter("status", event.target.value)}><option>Tous statuts</option><option>Actif</option><option>Suivi</option><option>Échéance proche</option><option>Expiré</option><option>Document signé manquant</option><option>Archivé</option></select>
           <select value={filters.property} onChange={(event) => updateFilter("property", event.target.value)}><option>Tous biens</option>{properties.map((property) => <option key={property.code}>{property.name}</option>)}</select>
           <select value={filters.owner} onChange={(event) => updateFilter("owner", event.target.value)}><option>Tous propriétaires</option>{owners.map((owner) => <option key={owner.id}>{owner.name}</option>)}</select>
           <select value={filters.tenant} onChange={(event) => updateFilter("tenant", event.target.value)}><option>Tous locataires</option>{tenants.map((tenant) => <option key={tenant.id}>{tenant.name}</option>)}</select>
@@ -6731,7 +6777,7 @@ function ContractsList({ onAction, contractsList = contracts, contractTimelines 
               contract.client,
               contract.start,
               contract.end,
-              <Badge label={contract.status} />,
+              <ContractStatusStack contract={contract} />,
               getContractDueLabel(contract),
               <Button compact onClick={() => openContract(contract)}><Eye size={16} /> Fiche</Button>,
             ])}
@@ -6743,6 +6789,18 @@ function ContractsList({ onAction, contractsList = contracts, contractTimelines 
   );
 }
 
+function ContractStatusStack({ contract }) {
+  const displayState = getContractDisplayState(contract);
+  const signatureMissing = !hasSignedContractDocument(contract);
+
+  return (
+    <span className="contract-badge-stack">
+      <Badge label={displayState.label} />
+      {signatureMissing && <Badge label="Document signé manquant" />}
+    </span>
+  );
+}
+
 function ContractProfilePanel({ contract, onAction, timelineEntries = [], customDeadlines = [] }) {
   const financials = getContractFinancials(contract);
   const property = properties.find((item) => item.name === contract.property);
@@ -6750,6 +6808,8 @@ function ContractProfilePanel({ contract, onAction, timelineEntries = [], custom
   const deadlines = getContractDeadlines(contract, financials, customDeadlines);
   const timeline = getContractTimeline(contract, property, timelineEntries);
   const nextRent = contract.nextDueDate ?? deadlines.find((item) => item.type === "Prochain loyer")?.date ?? "05/07/2026";
+  const displayState = getContractDisplayState(contract);
+  const signatureMissing = !hasSignedContractDocument(contract);
 
   return (
     <Panel title="Fiche contrat" className="profile-panel">
@@ -6760,6 +6820,10 @@ function ContractProfilePanel({ contract, onAction, timelineEntries = [], custom
         <div>
           <h3>{contract.number}</h3>
           <p>{contract.type}</p>
+          <div className="contract-header-badges">
+            <Badge label={displayState.label} />
+            {signatureMissing && <Badge label="Document signé manquant" />}
+          </div>
         </div>
       </div>
       <div className="simple-list">
@@ -6772,13 +6836,23 @@ function ContractProfilePanel({ contract, onAction, timelineEntries = [], custom
         <p><span>Mode financier</span><strong>{contract.financialMode ?? property?.financialMode ?? "À définir"}</strong></p>
         <p><span>Caution</span><strong>{financials.deposit}</strong></p>
         <p><span>Commission</span><strong>{financials.commission}</strong></p>
-        <p><span>Statut</span><Badge label={contract.status} /></p>
+        <p><span>Statut</span><span className="contract-badge-stack"><Badge label={displayState.label} /></span></p>
         <button className="info-link-row" onClick={() => onAction("Document signe contrat", { contract })}><span>Document signé</span><strong>{hasSignedContractDocument(contract) ? getSignedContractFileName(contract) : "À importer"}</strong></button>
         <button className="info-link-row" onClick={() => onAction("Actions echeance contrat", { contract })}><span>Échéance</span><strong>{getContractDueLabel(contract)}</strong></button>
         <p><span>Prochain loyer</span><strong>{nextRent}</strong></p>
         <p><span>Fin du contrat</span><strong>{contract.end}</strong></p>
-        <p><span>Alerte</span><Badge label={contract.number === "CON-2025-088" ? "À valider" : "Planifiée"} /></p>
+        <p><span>Alerte</span><span className="contract-badge-stack"><Badge label={signatureMissing ? "Document signé manquant" : displayState.label === "Échéance proche" ? "Échéance proche" : "Planifiée"} /></span></p>
       </div>
+      {signatureMissing && (
+        <div className="contract-alert-card">
+          <span><AlertTriangle size={20} /></span>
+          <div>
+            <strong>Document signé manquant</strong>
+            <p>Le contrat peut rester suivi, mais la version signée doit être importée pour compléter les archives.</p>
+          </div>
+          <Button compact onClick={() => onAction("Importer contrat signe", { contract })}><Upload size={15} /> Importer contrat signé</Button>
+        </div>
+      )}
       {directOwnerCollection && (
         <div className="notice">
           Encaissement direct propriétaire : le contrat reste suivi par E.K immo, mais les loyers ne sont pas ajoutés aux paiements agence à collecter.
@@ -6846,11 +6920,15 @@ function getContractDeadlines(contract, financials, customDeadlines = []) {
 }
 
 function getContractTimeline(contract, property, timelineEntries = []) {
+  const signatureEntry = hasSignedContractDocument(contract)
+    ? [{ date: contract.signedAt ?? contract.signedImportedAt ?? "18/06/2026", user: contract.signedImportedBy ?? "Aïssata Diarra", action: "Signature ajoutée", comment: "Document signé archivé" }]
+    : [{ date: "21/06/2026", user: "Système", action: "Alerte document", comment: "Document signé manquant" }];
+
   return [
     ...timelineEntries,
     { date: contract.start, user: contract.owner, action: "Contrat créé", comment: `${contract.number} lié à ${contract.property}` },
     { date: contract.start, user: "Aïssata Diarra", action: "Génération PDF", comment: "Modèle E.K immo alimenté et prêt à archiver" },
-    { date: contract.signedAt ?? "18/06/2026", user: "Aïssata Diarra", action: "Signature ajoutée", comment: "Document signé archivé" },
+    ...signatureEntry,
     { date: contract.end, user: "Système", action: "Alerte envoyée", comment: getContractDueLabel(contract) },
     { date: "20/06/2026", user: "Aïssata Diarra", action: "Dernière vérification", comment: `${property?.status ?? "Actif"} · fiche bien liée` },
   ];
@@ -6866,9 +6944,63 @@ function getContractFinancials(contract) {
   };
 }
 
+const contractReferenceDate = new Date(2026, 5, 21);
+const contractSoonThresholdDays = 45;
+
+function parseContractDate(value) {
+  if (!value || typeof value !== "string") return null;
+  const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) return null;
+  const [, day, month, year] = match;
+  return new Date(Number(year), Number(month) - 1, Number(day));
+}
+
+function getDaysUntilContractEnd(contract) {
+  const endDate = parseContractDate(contract.end);
+  if (!endDate) return null;
+  return Math.ceil((endDate.getTime() - contractReferenceDate.getTime()) / 86400000);
+}
+
+function getContractDisplayState(contract = {}) {
+  const status = contract.status ?? "";
+  const normalizedStatus = normalizeSearch(status);
+  const daysUntilEnd = getDaysUntilContractEnd(contract);
+
+  if (normalizedStatus === "archive") {
+    return { label: "Archivé", description: "Contrat classé dans les archives.", daysUntilEnd };
+  }
+
+  if (normalizedStatus === "resilie") {
+    return { label: "Résilié", description: "Contrat clôturé avec historique conservé.", daysUntilEnd };
+  }
+
+  if (normalizedStatus === "suivi") {
+    return { label: "Suivi", description: "Contrat en suivi opérationnel.", daysUntilEnd };
+  }
+
+  if (normalizedStatus === "expire" || (daysUntilEnd !== null && daysUntilEnd < 0)) {
+    return { label: "Expiré", description: "Contrat arrivé à échéance.", daysUntilEnd };
+  }
+
+  if (normalizedStatus.includes("echeance") || (daysUntilEnd !== null && daysUntilEnd <= contractSoonThresholdDays)) {
+    return { label: "Échéance proche", description: "Contrat à renouveler, résilier ou archiver.", daysUntilEnd };
+  }
+
+  if (normalizedStatus === "actif") {
+    return { label: "Actif", description: "Contrat actif et suivi normalement.", daysUntilEnd };
+  }
+
+  return { label: status || "À qualifier", description: "Statut à contrôler.", daysUntilEnd };
+}
+
 function getContractDueLabel(contract) {
-  if (contract.status === "Archivé") return "Archivé";
-  if (contract.number === "CON-2025-088") return "32 jours";
+  const displayState = getContractDisplayState(contract);
+  if (displayState.label === "Archivé") return "Archivé";
+  if (displayState.label === "Expiré") return "Expiré";
+  if (displayState.label === "Échéance proche") {
+    if (displayState.daysUntilEnd === null) return "Échéance proche";
+    return displayState.daysUntilEnd <= 0 ? "Échéance aujourd'hui" : `${displayState.daysUntilEnd} jours`;
+  }
   if (contract.end === "Vendu") return "Clôturé";
   return "En cours";
 }
@@ -10467,8 +10599,8 @@ function Badge({ label }) {
 function statusTone(label) {
   if (["Disponible", "Actif", "À jour", "Payé", "Payée", "Validée", "Déduite", "Conclu", "Archivé", "Imprimé", "Généré", "Réalisée", "Présent", "Justificatif joint"].includes(label)) return "success";
   if (["Loué", "Visite prévue", "Prévue", "Contacté", "Réservé", "Planifié", "À payer", "À reverser", "Refacturable", "Ouverte", "Entretien seul"].includes(label)) return "purple";
-  if (["En travaux", "Partiel", "À valider", "À échéance", "À déduire", "En attente", "En cours", "Reportée", "Relancé", "Client intéressé", "Brouillon", "Encaissement propriétaire", "Gestion multi-lots", "Suivi"].includes(label)) return "warning";
-  if (["Impayé", "En retard", "Litige", "Perdu", "Suspendu", "Annulée", "Justificatif manquant"].includes(label)) return "danger";
+  if (["En travaux", "Partiel", "À valider", "À échéance", "Échéance proche", "À déduire", "En attente", "En cours", "Reportée", "Relancé", "Client intéressé", "Brouillon", "Encaissement propriétaire", "Gestion multi-lots", "Suivi"].includes(label)) return "warning";
+  if (["Expiré", "Document signé manquant", "Impayé", "En retard", "Litige", "Perdu", "Suspendu", "Annulée", "Justificatif manquant"].includes(label)) return "danger";
   if (["Inactif", "Indisponible", "Vendu", "Manquant"].includes(label)) return "muted";
   return "default";
 }
