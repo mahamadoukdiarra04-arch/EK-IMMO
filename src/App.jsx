@@ -40,6 +40,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
+  Trash2,
   Upload,
   UserCog,
   UserRound,
@@ -2075,6 +2076,12 @@ function toInputDate(value) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+function fromInputDate(value) {
+  const date = parseVisitDate(value);
+  if (!date) return "21/06/2026";
+  return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
+}
+
 function visitMatchesPeriod(visit, period) {
   if (period === "Toutes périodes") return true;
   const date = parseVisitDate(visit.date);
@@ -2357,6 +2364,8 @@ function App() {
 
     if ([
       "document signe contrat",
+      "joindre contrat signe",
+      "contrat signe",
       "actions echeance contrat",
       "gerer echeances contrat",
       "modifier contrat",
@@ -2366,17 +2375,12 @@ function App() {
       "imprimer contrat",
     ].includes(normalizedAction)) {
       setContractActionContext({ contract: context.contract ?? allContracts[0] ?? contracts[0] });
-      setModal(label);
+      setModal(["joindre contrat signe", "contrat signe"].includes(normalizedAction) ? "Document signe contrat" : label);
       return;
     }
 
     if (normalizedAction === "telecharger contrat" && context.contract) {
       handleContractDocumentAction(context.contract, "Document telecharge", "PDF du contrat ouvert pour telechargement.");
-      return;
-    }
-
-    if (normalizedAction === "joindre contrat signe" && context.contract) {
-      handleContractDocumentAction(context.contract, "Signature ajoutee", "Document signe joint au dossier.");
       return;
     }
 
@@ -3361,6 +3365,71 @@ function App() {
     setModal("Document signe contrat");
   };
 
+  const handleContractSignedDocumentImport = ({ contract, values, mode = "import" }) => {
+    const fileName = values.fileName || `Contrat signé ${contract.number}.pdf`;
+    const nextContract = updateContract(contract, {
+      signedDocument: fileName,
+      signedFileName: fileName,
+      signedImportedAt: values.importDate || "21/06/2026",
+      signedImportedBy: values.importedBy || "Aïssata Diarra",
+      signedSigners: values.signers,
+      signedObservation: values.observation,
+      signedDocumentType: values.fileType || "PDF",
+      signedDeleteAllowed: true,
+      signedAt: values.signatureDate,
+    }, {
+      action: mode === "replace" ? "Document signé remplacé" : "Signature ajoutée",
+      comment: `${fileName} archivé le ${values.importDate || "21/06/2026"} pour ${values.signers}.`,
+    });
+
+    setContractActionContext((current) => ({
+      ...(current ?? {}),
+      contract: nextContract,
+      documentAction: mode === "replace" ? "Document signé remplacé" : "Signature ajoutée",
+    }));
+    return nextContract;
+  };
+
+  const handleContractSignedDocumentAction = (contract, action) => {
+    const currentContract = { ...contract, ...(contractOverrides[getContractKey(contract)] ?? {}) };
+    const actionMeta = {
+      preview: {
+        action: "Document signé consulté",
+        comment: `${currentContract.signedFileName ?? currentContract.signedDocument} prévisualisé.`,
+      },
+      download: {
+        action: "Document téléchargé",
+        comment: `${currentContract.signedFileName ?? currentContract.signedDocument} téléchargé.`,
+      },
+      delete: {
+        action: "Document signé supprimé",
+        comment: "Document signé retiré du dossier après autorisation.",
+      },
+    }[action];
+
+    if (!actionMeta) return currentContract;
+
+    if (action === "delete") {
+      const nextContract = updateContract(currentContract, {
+        signedDocument: "",
+        signedFileName: "",
+        signedImportedAt: "",
+        signedImportedBy: "",
+        signedSigners: "",
+        signedObservation: "",
+        signedDocumentType: "",
+        signedDeleteAllowed: false,
+        signedAt: "",
+      }, actionMeta);
+      setContractActionContext((current) => ({ ...(current ?? {}), contract: nextContract, documentAction: actionMeta.action }));
+      return nextContract;
+    }
+
+    addContractTimeline(currentContract, actionMeta);
+    setContractActionContext((current) => ({ ...(current ?? {}), contract: currentContract, documentAction: actionMeta.action }));
+    return currentContract;
+  };
+
   const handleContractPdfAction = (contract, action) => {
     const currentContract = { ...contract, ...(contractOverrides[getContractKey(contract)] ?? {}) };
     const currentVersion = Number(currentContract.pdfVersion ?? (hasContractPdf(currentContract) ? 1 : 0));
@@ -4031,7 +4100,7 @@ function App() {
       ) : modal === "Actions echeance contrat" ? (
         <ContractDueActionsModal contract={contractActionContext?.contract ?? allContracts[0]} onAction={openAction} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "Document signe contrat" ? (
-        <ContractDocumentModal contract={contractActionContext?.contract ?? allContracts[0]} action={contractActionContext?.documentAction} onAction={openAction} onClose={() => { setContractActionContext(null); setModal(null); }} />
+        <ContractDocumentModal contract={contractActionContext?.contract ?? allContracts[0]} action={contractActionContext?.documentAction} onImport={handleContractSignedDocumentImport} onSignedAction={handleContractSignedDocumentAction} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "PDF contrat" ? (
         <ContractPdfModal contract={contractActionContext?.contract ?? allContracts[0]} onPdfAction={handleContractPdfAction} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "Imprimer contrat" ? (
@@ -6690,7 +6759,7 @@ function ContractProfilePanel({ contract, onAction, timelineEntries = [], custom
         <p><span>Caution</span><strong>{financials.deposit}</strong></p>
         <p><span>Commission</span><strong>{financials.commission}</strong></p>
         <p><span>Statut</span><Badge label={contract.status} /></p>
-        <button className="info-link-row" onClick={() => onAction("Document signe contrat", { contract })}><span>Document signé</span><strong>{contract.signedDocument ?? "Archivé"}</strong></button>
+        <button className="info-link-row" onClick={() => onAction("Document signe contrat", { contract })}><span>Document signé</span><strong>{hasSignedContractDocument(contract) ? getSignedContractFileName(contract) : "À importer"}</strong></button>
         <button className="info-link-row" onClick={() => onAction("Actions echeance contrat", { contract })}><span>Échéance</span><strong>{getContractDueLabel(contract)}</strong></button>
         <p><span>Prochain loyer</span><strong>{nextRent}</strong></p>
         <p><span>Fin du contrat</span><strong>{contract.end}</strong></p>
@@ -6732,7 +6801,7 @@ function ContractProfilePanel({ contract, onAction, timelineEntries = [], custom
         <Button onClick={() => onAction("Resilier contrat", { contract })}><XCircle size={17} /> Résilier</Button>
         <Button onClick={() => onAction("PDF contrat", { contract })}><Download size={17} /> PDF</Button>
         <Button onClick={() => onAction("Imprimer contrat", { contract })}><Printer size={17} /> Imprimer</Button>
-        <Button onClick={() => onAction("Joindre contrat signe", { contract })}><Upload size={17} /> Contrat signé</Button>
+        <Button onClick={() => onAction("Contrat signé", { contract })}><Upload size={17} /> Contrat signé</Button>
         <Button onClick={() => onAction("Archiver contrat", { contract })}><Archive size={17} /> Archiver</Button>
         <Button onClick={() => onAction("Ouvrir bien contrat", { contract })}><Home size={17} /> Voir fiche bien</Button>
         <Button onClick={() => onAction("Ouvrir proprietaire contrat", { contract })}><UserRound size={17} /> Voir propriétaire</Button>
@@ -12482,19 +12551,118 @@ function ContractPrintModal({ contract, onPrint, onClose }) {
   );
 }
 
-function ContractDocumentModal({ contract, action, onAction, onClose }) {
+function hasSignedContractDocument(contract = {}) {
+  return Boolean(contract.signedFileName || contract.signedDocument || contract.signedImportedAt);
+}
+
+function getSignedContractFileName(contract = {}) {
+  return contract.signedFileName || contract.signedDocument || `Contrat signé ${contract.number}.pdf`;
+}
+
+function ContractDocumentModal({ contract, action, onImport, onSignedAction, onClose }) {
+  const [workingContract, setWorkingContract] = useState(contract);
+  const [mode, setMode] = useState(hasSignedContractDocument(contract) ? "view" : "import");
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [values, setValues] = useState({
+    fileName: "",
+    fileType: "PDF",
+    signatureDate: "21/06/2026",
+    importDate: "21/06/2026",
+    importedBy: "Aïssata Diarra",
+    signers: `${contract.owner}, ${contract.client}, E.K immo`,
+    observation: "Contrat signé par les parties et archivé dans le dossier contractuel.",
+  });
+
+  useEffect(() => {
+    setWorkingContract(contract);
+    setMode(hasSignedContractDocument(contract) ? "view" : "import");
+    setPreviewOpen(false);
+    setValues((current) => ({
+      ...current,
+      signers: `${contract.owner}, ${contract.client}, E.K immo`,
+    }));
+  }, [contract?.number]);
+
+  const hasDocument = hasSignedContractDocument(workingContract);
+  const fileName = getSignedContractFileName(workingContract);
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+  const updateFile = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setValues((current) => ({
+      ...current,
+      fileName: file.name,
+      fileType: file.type?.includes("image") ? "Image" : "PDF",
+    }));
+  };
+  const importDocument = () => {
+    const nextContract = onImport?.({ contract: workingContract, values, mode: hasDocument ? "replace" : "import" }) ?? workingContract;
+    setWorkingContract(nextContract);
+    setMode("view");
+    setPreviewOpen(false);
+  };
+  const runSignedAction = (signedAction) => {
+    const nextContract = onSignedAction?.(workingContract, signedAction) ?? workingContract;
+    setWorkingContract(nextContract);
+    if (signedAction === "preview") setPreviewOpen(true);
+    if (signedAction === "delete") {
+      setMode("import");
+      setPreviewOpen(false);
+    }
+  };
+
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <section className="modal-card prospect-form-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+      <section className="modal-card prospect-form-modal signed-contract-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
         <button className="modal-close" onClick={onClose}>×</button>
-        <h2>Document signe</h2>
-        <p>{contract.number} - {contract.signedDocument ?? "Contrat signé archivé"}</p>
-        {action && <div className="notice">{action} ajoute a la timeline du contrat.</div>}
-        <div className="action-row compact-row">
-          <Button onClick={() => onAction("Telecharger contrat", { contract })}><Download size={17} /> Telecharger</Button>
-          <Button onClick={() => onAction("Imprimer contrat", { contract })}><Printer size={17} /> Imprimer</Button>
-          <Button variant="primary" onClick={() => onAction("Joindre contrat signe", { contract })}><Upload size={17} /> Joindre signature</Button>
-        </div>
+        <h2>Contrat signé</h2>
+        <p>{workingContract.number} - {workingContract.property}</p>
+        {action && <div className="notice">{action} enregistré dans la timeline du contrat.</div>}
+
+        {mode === "import" ? (
+          <>
+            <div className="form-section">
+              <h3>Import du document signé</h3>
+              <div className="form-grid signed-document-form">
+                <label>Importer fichier PDF ou image<input type="file" accept="application/pdf,image/*" onChange={updateFile} /></label>
+                <label>Nom du fichier<input value={values.fileName} onChange={update("fileName")} placeholder={`Contrat signé ${workingContract.number}.pdf`} /></label>
+                <label>Date de signature<input type="date" value={toInputDate(values.signatureDate)} onChange={(event) => setValues((current) => ({ ...current, signatureDate: fromInputDate(event.target.value), importDate: fromInputDate(event.target.value) }))} /></label>
+                <label>Signataires<input value={values.signers} onChange={update("signers")} /></label>
+                <label className="full">Observation<textarea value={values.observation} onChange={update("observation")} /></label>
+              </div>
+            </div>
+            <div className="action-row compact-row">
+              <Button onClick={onClose}>Annuler</Button>
+              <Button variant="primary" onClick={importDocument}><Archive size={17} /> Importer et archiver</Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="simple-list signed-contract-details">
+              <p><span>Nom du fichier</span><strong>{fileName}</strong></p>
+              <p><span>Date d’import</span><strong>{workingContract.signedImportedAt || workingContract.signedAt || "21/06/2026"}</strong></p>
+              <p><span>Importé par</span><strong>{workingContract.signedImportedBy || "Aïssata Diarra"}</strong></p>
+              <p><span>Signataires</span><strong>{workingContract.signedSigners || `${workingContract.owner}, ${workingContract.client}, E.K immo`}</strong></p>
+              {workingContract.signedObservation && <p><span>Observation</span><strong>{workingContract.signedObservation}</strong></p>}
+            </div>
+            <div className="action-row compact-row">
+              <Button onClick={() => runSignedAction("preview")}><Eye size={17} /> Prévisualiser</Button>
+              <Button onClick={() => runSignedAction("download")}><Download size={17} /> Télécharger</Button>
+              <Button onClick={() => setMode("import")}><Upload size={17} /> Remplacer</Button>
+              {workingContract.signedDeleteAllowed !== false && (
+                <Button onClick={() => runSignedAction("delete")}><Trash2 size={17} /> Supprimer</Button>
+              )}
+            </div>
+            {previewOpen && (
+              <div className="notice">
+                Aperçu du document signé : {fileName}. Dans la démonstration, le fichier importé est archivé dans la fiche contrat et disponible depuis cette vue.
+              </div>
+            )}
+            <div className="action-row compact-row">
+              <Button onClick={onClose}>Fermer</Button>
+            </div>
+          </>
+        )}
       </section>
     </div>
   );

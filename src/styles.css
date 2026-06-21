@@ -6105,6 +6105,24 @@ td:last-child {
   width: min(1120px, 100%);
 }
 
+.signed-contract-modal {
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.signed-contract-modal .form-section {
+  margin-top: 14px;
+}
+
+.signed-contract-modal .form-grid {
+  gap: 12px;
+}
+
+.signed-contract-modal .form-grid textarea {
+  min-height: 76px;
+}
+
 .prospect-proposal-modal {
   width: min(980px, 100%);
 }
