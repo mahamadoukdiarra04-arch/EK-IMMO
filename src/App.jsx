@@ -2220,6 +2220,7 @@ function App() {
   const [ownerActionContext, setOwnerActionContext] = useState(null);
   const [ownerReversements, setOwnerReversements] = useState([]);
   const [selectedTenant, setSelectedTenant] = useState(tenants[0]);
+  const [createdTenants, setCreatedTenants] = useState([]);
   const [tenantOverrides, setTenantOverrides] = useState({});
   const [tenantActionContext, setTenantActionContext] = useState(null);
   const [tenantRelances, setTenantRelances] = useState([]);
@@ -2277,10 +2278,10 @@ function App() {
     const applyOverride = (owner) => ({ ...owner, ...(ownerOverrides[owner.id] ?? {}) });
     return [...createdOwners.map(applyOverride), ...owners.map(applyOverride)];
   }, [createdOwners, ownerOverrides]);
-  const allTenants = useMemo(
-    () => tenants.map((tenant) => ({ ...tenant, ...(tenantOverrides[tenant.id] ?? {}) })),
-    [tenantOverrides]
-  );
+  const allTenants = useMemo(() => {
+    const applyOverride = (tenant) => ({ ...tenant, ...(tenantOverrides[tenant.id] ?? {}) });
+    return [...createdTenants.map(applyOverride), ...tenants.map(applyOverride)];
+  }, [createdTenants, tenantOverrides]);
   const allProspects = useMemo(() => {
     const applyOverride = (prospect) => ({ ...prospect, ...(prospectOverrides[getProspectKey(prospect)] ?? {}) });
     return [...createdProspects.map(applyOverride), ...prospects.map(applyOverride)];
@@ -2408,6 +2409,13 @@ function App() {
     if (normalizedAction === "nouveau proprietaire") {
       setClientTab("Propriétaires");
       setModal("Nouveau propriétaire");
+      return;
+    }
+
+    if (normalizedAction === "nouveau locataire") {
+      setClientTab("Locataires");
+      setActivePage("Clients");
+      setModal("Nouveau locataire");
       return;
     }
 
@@ -2848,6 +2856,18 @@ function App() {
   };
 
   const handleTenantSave = ({ tenant }) => {
+    const isBaseTenant = tenants.some((item) => item.id === tenant.id);
+
+    if (!isBaseTenant) {
+      setCreatedTenants((current) => {
+        const existingIndex = current.findIndex((item) => item.id === tenant.id);
+        if (existingIndex >= 0) {
+          return current.map((item, index) => (index === existingIndex ? tenant : item));
+        }
+        return [tenant, ...current];
+      });
+    }
+
     setTenantOverrides((current) => ({
       ...current,
       [tenant.id]: tenant,
@@ -2857,6 +2877,64 @@ function App() {
     setActivePage("Clients");
     setModal(null);
     setTenantActionContext(null);
+  };
+
+  const handleNewTenantSave = ({ tenant, property, createContract = false }) => {
+    const targetProperty =
+      propertiesWithArchiveState.find((item) => item.code === property?.code) ??
+      propertiesWithArchiveState.find((item) => item.name === tenant.property) ??
+      property ??
+      selectedProperty;
+
+    const savedTenant = {
+      ...tenant,
+      property: targetProperty.name,
+      owner: targetProperty.owner,
+    };
+
+    setCreatedTenants((current) => [
+      savedTenant,
+      ...current.filter((item) => item.id !== savedTenant.id),
+    ]);
+
+    setSelectedTenant(savedTenant);
+    setClientTab("Locataires");
+    setActivePage("Clients");
+
+    const nextProperty = {
+      ...targetProperty,
+      status: createContract ? "Loué" : targetProperty.status,
+      tenant: savedTenant.name,
+      attachedTenant: savedTenant,
+      activeContractNumber: createContract ? savedTenant.contract : targetProperty.activeContractNumber,
+      lastAction: `Locataire ${savedTenant.name} rattaché`,
+    };
+
+    setPropertyOverrides((current) => ({
+      ...current,
+      [targetProperty.code]: nextProperty,
+    }));
+
+    setPropertyHistoryOverrides((current) => ({
+      ...current,
+      [targetProperty.name]: [
+        [
+          "Locataire ajouté",
+          `${savedTenant.name} rattaché au bien avec statut initial ${savedTenant.paymentStatus}.`,
+          "22/06/2026",
+        ],
+        ...(current[targetProperty.name] ?? []),
+      ],
+    }));
+
+    setSelectedProperty(nextProperty);
+
+    if (createContract) {
+      setModal("Créer contrat");
+      return;
+    }
+
+    setModal(null);
   };
 
   const handleProspectSave = ({ prospect, proposeProperty = false }) => {
@@ -4436,6 +4514,13 @@ function App() {
             setTenantActionContext(null);
             setModal(null);
           }}
+        />
+      ) : modal === "Nouveau locataire" ? (
+        <NewTenantFormModal
+          sequence={tenants.length + createdTenants.length + 1}
+          propertiesList={propertiesWithArchiveState}
+          onSave={handleNewTenantSave}
+          onClose={() => setModal(null)}
         />
       ) : modal === "Paiement locataire" ? (
         <TenantPaymentModal
@@ -12345,6 +12430,167 @@ function TenantFormModal({ tenant, property, onSave, onClose }) {
         <div className="action-row compact-row">
           <Button onClick={onClose}>Annuler</Button>
           <Button variant="primary" disabled={!canSave} onClick={submit}><CheckCircle2 size={17} /> Enregistrer les modifications</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function NewTenantFormModal({ sequence = 1, propertiesList = properties, onSave, onClose }) {
+  const propertyOptions = propertiesList.filter((property) => !property.archived);
+  const firstProperty = propertyOptions[0] ?? propertiesList[0] ?? properties[0];
+  const suggestedId = makeDocumentNumber("LOC", sequence);
+  const [validationMessage, setValidationMessage] = useState("");
+  const [values, setValues] = useState({
+    id: suggestedId,
+    name: "",
+    phone: "",
+    email: "",
+    address: "",
+    profession: "",
+    identity: "",
+    propertyCode: firstProperty.code,
+    entryDate: "2026-06-22",
+    agent: "Aïssata Diarra",
+    rent: firstProperty.price ?? "",
+    deposit: firstProperty.deposit ?? "",
+    periodicity: "Mensuelle",
+    paymentStatus: "À jour",
+    createContractNow: "Non",
+    existingContract: "",
+    observations: "Nouveau dossier locataire créé depuis Clients > Locataires.",
+  });
+
+  const selectedProperty = propertyOptions.find((property) => property.code === values.propertyCode) ?? firstProperty;
+  const canSave = values.name.trim() && values.phone.trim() && selectedProperty?.code;
+
+  const update = (field) => (event) => {
+    setValidationMessage("");
+    setValues((current) => ({ ...current, [field]: event.target.value }));
+  };
+
+  const updateProperty = (event) => {
+    const nextProperty = propertyOptions.find((property) => property.code === event.target.value) ?? selectedProperty;
+    setValidationMessage("");
+    setValues((current) => ({
+      ...current,
+      propertyCode: nextProperty.code,
+      rent: nextProperty.price ?? current.rent,
+      deposit: nextProperty.deposit ?? current.deposit,
+    }));
+  };
+
+  const submit = (forceContract = false) => {
+    if (!values.name.trim()) {
+      setValidationMessage("Veuillez renseigner le nom complet du locataire.");
+      return;
+    }
+
+    if (!values.phone.trim()) {
+      setValidationMessage("Veuillez renseigner le téléphone du locataire.");
+      return;
+    }
+
+    if (!selectedProperty?.code) {
+      setValidationMessage("Veuillez sélectionner un bien occupé.");
+      return;
+    }
+
+    const createContract = forceContract || values.createContractNow === "Oui";
+    const contractReference = createContract
+      ? "À créer maintenant"
+      : values.existingContract.trim() || "À créer";
+
+    onSave({
+      createContract,
+      property: selectedProperty,
+      tenant: {
+        id: values.id,
+        name: values.name.trim(),
+        phone: values.phone.trim(),
+        email: values.email.trim() || "email à compléter",
+        address: values.address.trim() || selectedProperty.address,
+        profession: values.profession.trim() || "Locataire",
+        identity: values.identity.trim() || "Pièce d'identité à compléter",
+        property: selectedProperty.name,
+        owner: selectedProperty.owner,
+        rent: values.rent.trim() || selectedProperty.price,
+        deposit: values.deposit.trim() || "À compléter",
+        periodicity: values.periodicity,
+        paymentStatus: values.paymentStatus,
+        contract: contractReference,
+        entryDate: values.entryDate,
+        agent: values.agent,
+        observations: values.observations,
+        documents: ["Pièce d'identité", "Contrat existant", "Autres documents"],
+      },
+    });
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal tenant-form-modal new-tenant-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Clients → Locataires</span>
+            <h2>Nouveau locataire</h2>
+            <p>Créer une fiche locataire, la rattacher à un bien et préparer le contrat si nécessaire.</p>
+          </div>
+          <Badge label={values.id} />
+        </div>
+
+        <div className="form-section">
+          <h3>Identité</h3>
+          <div className="form-grid tenant-creation-grid">
+            <label>Nom complet<input value={values.name} onChange={update("name")} placeholder="Ex. Aminata Coulibaly" /></label>
+            <label>Téléphone<input value={values.phone} onChange={update("phone")} placeholder="+223 70 00 00 00" /></label>
+            <label>Email<input value={values.email} onChange={update("email")} placeholder="locataire@ekimmo.ml" /></label>
+            <label>Profession<input value={values.profession} onChange={update("profession")} placeholder="Ex. Consultante" /></label>
+            <label className="full">Adresse<input value={values.address} onChange={update("address")} placeholder="Adresse de résidence ou contact" /></label>
+            <label>Pièce d'identité<input value={values.identity} onChange={update("identity")} placeholder="NINA, passeport, carte consulaire..." /></label>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Rattachement immobilier</h3>
+          <div className="form-grid tenant-creation-grid">
+            <label>Bien occupé<select value={values.propertyCode} onChange={updateProperty}>{propertyOptions.map((property) => <option key={property.code} value={property.code}>{property.name}</option>)}</select></label>
+            <label>Propriétaire<input value={selectedProperty.owner} readOnly /></label>
+            <label>Date d'entrée<input type="date" value={values.entryDate} onChange={update("entryDate")} /></label>
+            <label>Agent responsable<select value={values.agent} onChange={update("agent")}><option>Aïssata Diarra</option><option>Mariam Traoré</option><option>Issa Maïga</option><option>Cheick Camara</option></select></label>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Conditions locatives</h3>
+          <div className="form-grid tenant-creation-grid">
+            <label>Loyer mensuel<input value={values.rent} onChange={update("rent")} /></label>
+            <label>Caution<input value={values.deposit} onChange={update("deposit")} /></label>
+            <label>Périodicité<select value={values.periodicity} onChange={update("periodicity")}><option>Mensuelle</option><option>Trimestrielle</option><option>Semestrielle</option><option>Annuelle</option></select></label>
+            <label>Statut initial<select value={values.paymentStatus} onChange={update("paymentStatus")}><option>À jour</option><option>En attente</option><option>Brouillon</option></select></label>
+            <label>Créer contrat maintenant ?<select value={values.createContractNow} onChange={update("createContractNow")}><option>Non</option><option>Oui</option></select></label>
+            <label>Contrat existant, si disponible<input value={values.existingContract} onChange={update("existingContract")} placeholder="CON-2026-..." /></label>
+            <label className="full">Observations<textarea value={values.observations} onChange={update("observations")} /></label>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Documents</h3>
+          <div className="document-upload-grid owner-document-grid">
+            <label>Pièce d'identité<input type="file" /><small>Carte NINA, passeport ou document d'identification.</small></label>
+            <label>Contrat existant<input type="file" /><small>À joindre si le contrat est déjà signé.</small></label>
+            <label>Justificatif caution<input type="file" /><small>Reçu, preuve de virement ou bordereau.</small></label>
+            <label>Autres documents<input type="file" multiple /><small>Tout document utile au dossier locataire.</small></label>
+          </div>
+        </div>
+
+        {validationMessage && <p className="form-alert">{validationMessage}</p>}
+
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" disabled={!canSave} onClick={() => submit(false)}><CheckCircle2 size={17} /> Enregistrer</Button>
+          <Button disabled={!canSave} onClick={() => submit(true)}><FileText size={17} /> Enregistrer et créer contrat</Button>
         </div>
       </section>
     </div>

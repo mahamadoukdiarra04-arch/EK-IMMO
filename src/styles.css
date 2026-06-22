@@ -3757,6 +3757,10 @@ td:last-child {
   grid-template-columns: 1fr;
 }
 
+.tenant-creation-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .form-grid label {
   display: grid;
   gap: 8px;
@@ -3792,6 +3796,20 @@ td:last-child {
 
 .form-grid .full {
   grid-column: 1 / -1;
+}
+
+.form-alert {
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(214, 0, 0, 0.18);
+  border-radius: 10px;
+  background: #fff1f1;
+  color: var(--danger);
+  font-weight: 800;
+}
+
+.new-tenant-modal .document-upload-grid {
+  margin-top: 4px;
 }
 
 .compact-row {
@@ -6704,6 +6722,10 @@ td:last-child {
   }
 
   .owner-document-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tenant-creation-grid {
     grid-template-columns: 1fr;
   }
 }
