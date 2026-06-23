@@ -2212,6 +2212,7 @@ function App() {
   const [propertyView, setPropertyView] = useState("list");
   const [propertyDisplay, setPropertyDisplay] = useState("cartes");
   const [propertyTab, setPropertyTab] = useState("Résumé");
+  const [propertyReturnContext, setPropertyReturnContext] = useState(null);
   const [propertyOverrides, setPropertyOverrides] = useState({});
   const [clientTab, setClientTab] = useState("Propriétaires");
   const [selectedOwner, setSelectedOwner] = useState(owners[0]);
@@ -2547,6 +2548,32 @@ function App() {
       return;
     }
 
+    if (normalizedAction === "voir bien proprietaire" && context.property && context.owner) {
+      const property =
+        propertiesWithArchiveState.find((item) => item.code === context.property.code) ??
+        context.property;
+      const owner =
+        allOwners.find((item) => item.id === context.owner.id) ??
+        context.owner;
+
+      setSelectedOwner(owner);
+      setSelectedProperty(property);
+      setPropertyTab("Résumé");
+      setPropertyReturnContext({
+        page: "Clients",
+        tab: "Propriétaires",
+        detailType: "owner",
+        ownerId: owner.id,
+        propertyId: property.code,
+        ownerName: owner.name,
+        propertyName: property.name,
+        ownerTab: "Biens",
+      });
+      setPropertyView("detail");
+      setActivePage("Biens");
+      return;
+    }
+
     if ([
       "document signe contrat",
       "importer contrat signe",
@@ -2748,6 +2775,7 @@ function App() {
     if (!isAuthenticated) return;
     setActivePage(item);
     if (item === "Biens") {
+      setPropertyReturnContext(null);
       setPropertyView("list");
     }
   };
@@ -2771,9 +2799,34 @@ function App() {
 
   const showPropertyDetail = (property) => {
     if (!isAuthenticated) return;
+    setPropertyReturnContext(null);
     setSelectedProperty(propertiesWithArchiveState.find((item) => item.code === property.code) ?? property);
     setPropertyView("detail");
     setActivePage("Biens");
+  };
+
+  const handlePropertyBack = () => {
+    if (propertyReturnContext?.page === "Clients" && propertyReturnContext.detailType === "owner") {
+      const owner =
+        allOwners.find((item) => item.id === propertyReturnContext.ownerId) ??
+        selectedOwner;
+
+      setSelectedOwner(owner);
+      setClientTab(propertyReturnContext.tab ?? "Propriétaires");
+      setClientDetailRequest({
+        type: "owner",
+        key: owner.id,
+        initialTab: propertyReturnContext.ownerTab ?? "Biens",
+        returnFromPropertyId: propertyReturnContext.propertyId,
+        nonce: Date.now(),
+      });
+      setActivePage("Clients");
+      setPropertyReturnContext(null);
+      return;
+    }
+
+    setPropertyReturnContext(null);
+    setPropertyView("list");
   };
 
   const handleContractDetailReturn = (request) => {
@@ -4248,7 +4301,7 @@ function App() {
             propertyTab={propertyTab}
             onTab={setPropertyTab}
             onSelect={showPropertyDetail}
-            onBack={() => setPropertyView("list")}
+            onBack={handlePropertyBack}
             onAction={openAction}
             contractsList={allContracts}
             paymentsList={allPayments}
@@ -6040,6 +6093,7 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
   const [clientSearch, setClientSearch] = useState("");
   const [clientFilterOpen, setClientFilterOpen] = useState(false);
   const [clientExportOpen, setClientExportOpen] = useState(false);
+  const [ownerInitialTab, setOwnerInitialTab] = useState("Résumé");
   const [clientFilters, setClientFilters] = useState({
     ownerStatus: "Tous statuts",
     ownerType: "Tous types",
@@ -6074,6 +6128,7 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
     if (detailRequest.type === "owner") {
       const owner = ownersList.find((item) => item.id === detailRequest.key) ?? selectedOwner;
       onOwner(owner);
+      setOwnerInitialTab(detailRequest.initialTab ?? "Résumé");
       setDetailView("owner");
     }
     if (detailRequest.type === "tenant") {
@@ -6174,7 +6229,10 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
 
   const openDetail = (type, item) => {
     setSavedScroll(window.scrollY);
-    if (type === "owner") onOwner(item);
+    if (type === "owner") {
+      onOwner(item);
+      setOwnerInitialTab("Résumé");
+    }
     if (type === "tenant") onTenant(item);
     if (type === "prospect") setSelectedProspect(item);
     if (type === "visit") setSelectedVisit(item);
@@ -6190,7 +6248,7 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
 
   const detailContent = detailView === "owner" ? (
     <DetailPageShell title="Fiche propriétaire" subtitle={selectedOwner.name} onBack={closeDetail}>
-      <OwnerProfilePanel owner={selectedOwner} onAction={onAction} contractsList={contractsList} paymentsList={paymentsList} reversalsList={reversalsList} />
+      <OwnerProfilePanel owner={selectedOwner} initialTab={ownerInitialTab} onAction={onAction} contractsList={contractsList} paymentsList={paymentsList} reversalsList={reversalsList} />
     </DetailPageShell>
   ) : detailView === "tenant" ? (
     <DetailPageShell title="Fiche locataire" subtitle={selectedTenant.name} onBack={closeDetail}>
@@ -6799,8 +6857,8 @@ function OwnersView({ ownersList = owners, selected, onOpenDetail }) {
   );
 }
 
-function OwnerProfilePanel({ owner, onAction, contractsList = contracts, paymentsList = paymentRecords, reversalsList = reversals }) {
-  const [tab, setTab] = useState("Résumé");
+function OwnerProfilePanel({ owner, initialTab = "Résumé", onAction, contractsList = contracts, paymentsList = paymentRecords, reversalsList = reversals }) {
+  const [tab, setTab] = useState(initialTab);
   const ownedProperties = properties.filter((property) => property.owner === owner.name);
   const ownerCharges = charges.filter((charge) => charge.owner === owner.name);
   const ownerReversals = reversalsList.filter((reversal) => reversal.owner === owner.name);
@@ -6809,6 +6867,10 @@ function OwnerProfilePanel({ owner, onAction, contractsList = contracts, payment
   const collectedForOwner = ownerPayments.reduce((sum, payment) => sum + parseFCFA(payment.paid), 0);
   const lastOwnerPayment = ownerPayments[0];
   const tabs = ["Résumé", "Biens", "Situation financière", "Charges", "Reversements", "Documents", "Historique"];
+
+  useEffect(() => {
+    setTab(tabs.includes(initialTab) ? initialTab : "Résumé");
+  }, [initialTab, owner.id]);
 
   return (
     <Panel title="Fiche propriétaire" className="profile-panel">
@@ -6852,7 +6914,17 @@ function OwnerProfilePanel({ owner, onAction, contractsList = contracts, payment
             <Badge label={property.status} />,
             property.tenant,
             `${property.price} ${property.period}`,
-            <Button compact onClick={() => onAction(`Voir ${property.code}`)}><Eye size={15} /> Voir</Button>,
+            <Button compact onClick={() => onAction("Voir bien propriétaire", {
+              property,
+              owner,
+              returnTo: {
+                page: "Clients",
+                tab: "Propriétaires",
+                ownerId: owner.id,
+                ownerTab: "Biens",
+                propertyId: property.code,
+              },
+            })}><Eye size={15} /> Voir</Button>,
           ])}
         />
       )}
