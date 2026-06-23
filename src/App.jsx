@@ -6161,6 +6161,17 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
     });
   }, [clientFilters, clientSearch, visitsList]);
 
+  const clientExportPayload = useMemo(() => buildClientExportPayload({
+    activeTab,
+    filters: clientFilters,
+    search: clientSearch,
+    ownersList: filteredOwners,
+    tenantsList: filteredTenants,
+    prospectsList: filteredProspects,
+    visitsList: filteredVisits,
+    rentRowsList,
+  }), [activeTab, clientFilters, clientSearch, filteredOwners, filteredProspects, filteredTenants, filteredVisits, rentRowsList]);
+
   const openDetail = (type, item) => {
     setSavedScroll(window.scrollY);
     if (type === "owner") onOwner(item);
@@ -6235,7 +6246,7 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
             <Button onClick={() => setClientExportOpen((value) => !value)}>
               <Download size={17} /> Exporter
             </Button>
-            {clientExportOpen && <ClientExportMenu activeTab={activeTab} onAction={onAction} onClose={() => setClientExportOpen(false)} />}
+            {clientExportOpen && <ClientExportMenu payload={clientExportPayload} onClose={() => setClientExportOpen(false)} />}
           </div>
         </div>
         {clientFilterOpen && (
@@ -6370,25 +6381,366 @@ function ClientFilterControls({ activeTab, filters, onChange, onReset, ownersLis
   );
 }
 
-function ClientExportMenu({ activeTab, onAction, onClose }) {
-  const isVisits = activeTab === "Visites";
-  const options = isVisits
-    ? ["Export Excel visites", "Export PDF visites", "Imprimer planning des visites"]
-    : [`Export Excel ${activeTab}`, `Export PDF ${activeTab}`, `Imprimer liste ${activeTab}`];
+function ClientExportMenu({ payload, onClose }) {
+  const options = [
+    ["Export Excel", Download, () => exportClientReportAsXlsx(payload)],
+    ["Export PDF", FileText, () => openClientReportPrintView(payload, "pdf")],
+    ["Impression", Printer, () => openClientReportPrintView(payload, "print")],
+  ];
 
   return (
     <div className="inline-action-menu">
-      {options.map((option) => (
-        <button key={option} onClick={() => {
-          onAction(option);
+      {options.map(([label, Icon, action]) => (
+        <button key={label} onClick={() => {
+          action();
           onClose();
         }}>
-          {option.includes("PDF") ? <FileText size={16} /> : option.includes("Imprimer") ? <Printer size={16} /> : <Download size={16} />}
-          <span>{option.replace(/^Export /, "Export ")}</span>
+          <Icon size={16} />
+          <span>{label}</span>
         </button>
       ))}
     </div>
   );
+}
+
+function buildClientExportPayload({ activeTab, filters, search, ownersList, tenantsList, prospectsList, visitsList, rentRowsList }) {
+  const exportedAt = new Date();
+  const basePayload = {
+    activeTab,
+    title: `Rapport clients - ${activeTab}`,
+    exportedAt,
+    exportedAtLabel: exportedAt.toLocaleString("fr-FR"),
+    user: "Aïssata Diarra",
+    filters: getClientExportFilters(activeTab, filters, search),
+    filename: `ek-immo-${slugifyFilename(activeTab)}-${exportedAt.toISOString().slice(0, 10)}`,
+  };
+
+  if (activeTab === "Propriétaires") {
+    return {
+      ...basePayload,
+      columns: ["Propriétaire", "Identifiant", "Téléphone", "Email", "Biens gérés", "Valeur locative", "Statut"],
+      rows: ownersList.map((owner) => [
+        owner.name,
+        owner.id,
+        owner.phone,
+        owner.email,
+        owner.properties,
+        owner.balance,
+        owner.status,
+      ]),
+    };
+  }
+
+  if (activeTab === "Locataires") {
+    return {
+      ...basePayload,
+      columns: ["Locataire", "Identifiant", "Téléphone", "Email", "Bien occupé", "Propriétaire", "Loyer", "Impayé", "Contrat actif", "Statut"],
+      rows: tenantsList.map((tenant) => [
+        tenant.name,
+        tenant.id,
+        tenant.phone,
+        tenant.email,
+        tenant.property,
+        properties.find((property) => property.name === tenant.property)?.owner ?? tenant.owner ?? "-",
+        tenant.rent,
+        rentRowsList.find((row) => row.tenant === tenant.name)?.balance ?? "0 FCFA",
+        tenant.contract,
+        tenant.paymentStatus,
+      ]),
+    };
+  }
+
+  if (activeTab === "Prospects") {
+    return {
+      ...basePayload,
+      columns: ["Prospect", "Téléphone", "Besoin", "Quartiers souhaités", "Budget", "Agent", "Statut", "Prochaine action"],
+      rows: prospectsList.map((prospect) => [
+        prospect.name,
+        prospect.phone,
+        prospect.need,
+        prospect.district,
+        prospect.budget,
+        prospect.agent,
+        prospect.status,
+        prospect.next,
+      ]),
+    };
+  }
+
+  return {
+    ...basePayload,
+    columns: ["Date", "Heure", "Client / prospect", "Bien", "Quartier", "Agent", "Statut", "Retour client", "Prochaine action"],
+    rows: visitsList.map((visit) => {
+      const property = properties.find((item) => item.name === visit.property);
+      return [
+        visit.date,
+        visit.time,
+        visit.client,
+        visit.property,
+        property?.district ?? "-",
+        visit.agent,
+        visit.status,
+        visit.feedback,
+        visit.next,
+      ];
+    }),
+  };
+}
+
+function getClientExportFilters(activeTab, filters, search) {
+  const items = [];
+  if (search.trim()) items.push(`Recherche : ${search.trim()}`);
+
+  if (activeTab === "Propriétaires") {
+    if (filters.ownerStatus !== "Tous statuts") items.push(`Statut : ${filters.ownerStatus}`);
+    if (filters.ownerType !== "Tous types") items.push(`Type : ${filters.ownerType}`);
+  }
+
+  if (activeTab === "Locataires") {
+    if (filters.tenantStatus !== "Tous statuts") items.push(`Statut : ${filters.tenantStatus}`);
+    if (filters.tenantProperty !== "Tous biens") items.push(`Bien : ${filters.tenantProperty}`);
+  }
+
+  if (activeTab === "Prospects") {
+    if (filters.prospectStatus !== "Tous statuts") items.push(`Statut : ${filters.prospectStatus}`);
+    if (filters.prospectAgent !== "Tous agents") items.push(`Agent : ${filters.prospectAgent}`);
+  }
+
+  if (activeTab === "Visites") {
+    if (filters.visitPeriod !== "Toutes périodes") items.push(`Période : ${filters.visitPeriod}`);
+    if (filters.visitStatus !== "Tous statuts") items.push(`Statut : ${filters.visitStatus}`);
+    if (filters.visitAgent !== "Tous agents") items.push(`Agent : ${filters.visitAgent}`);
+    if (filters.visitProperty !== "Tous biens") items.push(`Bien : ${filters.visitProperty}`);
+    if (filters.visitProspect !== "Tous prospects") items.push(`Prospect : ${filters.visitProspect}`);
+    if (filters.visitQuick !== "Toutes visites") items.push(`Filtre rapide : ${filters.visitQuick}`);
+  }
+
+  return items.length ? items : ["Aucun filtre spécifique"];
+}
+
+function exportClientReportAsXlsx(payload) {
+  const workbookRows = [
+    [payload.title],
+    [`Date d'export : ${payload.exportedAtLabel}`],
+    [`Généré par : ${payload.user}`],
+    [`Filtres appliqués : ${payload.filters.join(" | ")}`],
+    [],
+    payload.columns,
+    ...payload.rows,
+  ];
+
+  const blob = createXlsxBlob(workbookRows, payload.activeTab);
+  downloadBlob(blob, `${payload.filename}.xlsx`);
+}
+
+function openClientReportPrintView(payload, mode) {
+  const reportWindow = window.open("", "_blank", "width=1180,height=820");
+  if (!reportWindow) return;
+
+  reportWindow.document.open();
+  reportWindow.document.write(buildClientReportHtml(payload, mode));
+  reportWindow.document.close();
+  reportWindow.focus();
+  reportWindow.setTimeout(() => reportWindow.print(), 250);
+}
+
+function buildClientReportHtml(payload, mode) {
+  const filterList = payload.filters.map((filter) => `<span>${escapeHtml(filter)}</span>`).join("");
+  const headerCells = payload.columns.map((column) => `<th>${escapeHtml(column)}</th>`).join("");
+  const rows = payload.rows.length
+    ? payload.rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")
+    : `<tr><td colspan="${payload.columns.length}">Aucun résultat pour les filtres appliqués.</td></tr>`;
+
+  return `<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(payload.title)}</title>
+  <style>
+    :root { color: #071b3d; font-family: Arial, sans-serif; }
+    body { margin: 0; padding: 28px; background: #fff; }
+    header { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; border-bottom: 3px solid #c9a227; padding-bottom: 18px; margin-bottom: 22px; }
+    h1 { margin: 0 0 8px; font-size: 25px; }
+    p { margin: 4px 0; color: #46536a; }
+    .brand { font-weight: 900; font-size: 22px; color: #06366f; white-space: nowrap; }
+    .filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 20px; }
+    .filters span { border: 1px solid #d7e2ef; border-radius: 999px; padding: 6px 10px; background: #f3f8fd; font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    th { text-align: left; background: #eef4fa; color: #071b3d; font-size: 12px; text-transform: uppercase; padding: 10px 8px; border: 1px solid #cbd9e8; }
+    td { padding: 9px 8px; border: 1px solid #dce7f2; vertical-align: top; word-break: break-word; }
+    tr:nth-child(even) td { background: #f8fbfe; }
+    footer { margin-top: 22px; color: #62708a; font-size: 12px; }
+    .screen-actions { position: sticky; top: 0; display: flex; justify-content: flex-end; gap: 10px; padding: 0 0 14px; background: #fff; }
+    button { border: 1px solid #cbd9e8; border-radius: 9px; background: #06366f; color: #fff; font-weight: 800; padding: 10px 14px; cursor: pointer; }
+    @media print {
+      body { padding: 16px; }
+      .screen-actions { display: none; }
+      header { break-after: avoid; }
+      table { font-size: 11px; }
+      tr { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="screen-actions">
+    <button onclick="window.print()">${mode === "pdf" ? "Enregistrer en PDF" : "Imprimer"}</button>
+  </div>
+  <header>
+    <div>
+      <h1>${escapeHtml(payload.title)}</h1>
+      <p>${mode === "pdf" ? "État PDF simple" : "Mise en page d'impression"} · ${payload.rows.length} résultat(s)</p>
+      <p>Date d'export : ${escapeHtml(payload.exportedAtLabel)}</p>
+      <p>Généré par : ${escapeHtml(payload.user)}</p>
+    </div>
+    <div class="brand">E.K IMMO</div>
+  </header>
+  <section class="filters">${filterList}</section>
+  <table>
+    <thead><tr>${headerCells}</tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <footer>© 2026 E.K immo · Rapport généré depuis le module Clients.</footer>
+</body>
+</html>`;
+}
+
+function createXlsxBlob(rows, sheetName = "Export") {
+  const safeSheetName = String(sheetName).replace(/[\\/?*[\]:]/g, " ").slice(0, 31) || "Export";
+  const sheetRows = rows.map((row, rowIndex) => `<row r="${rowIndex + 1}">${row.map((cell, cellIndex) => {
+    const ref = `${columnLetter(cellIndex + 1)}${rowIndex + 1}`;
+    return `<c r="${ref}" t="inlineStr"><is><t>${escapeXml(cell)}</t></is></c>`;
+  }).join("")}</row>`).join("");
+
+  const files = {
+    "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`,
+    "_rels/.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>`,
+    "docProps/app.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>E.K immo</Application></Properties>`,
+    "docProps/core.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:creator>E.K immo</dc:creator><cp:lastModifiedBy>E.K immo</cp:lastModifiedBy><dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:created></cp:coreProperties>`,
+    "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${escapeXml(safeSheetName)}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    "xl/_rels/workbook.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
+    "xl/styles.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font><sz val="11"/><name val="Arial"/></font></fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellXfs></styleSheet>`,
+    "xl/worksheets/sheet1.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"/></sheetViews><cols>${rows[5]?.map((_, index) => `<col min="${index + 1}" max="${index + 1}" width="22" customWidth="1"/>`).join("") ?? ""}</cols><sheetData>${sheetRows}</sheetData></worksheet>`,
+  };
+
+  return new Blob([zipStore(files)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+
+function zipStore(files) {
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+
+  Object.entries(files).forEach(([name, content]) => {
+    const nameBytes = utf8Bytes(name);
+    const data = utf8Bytes(content);
+    const crc = crc32(data);
+    const localHeader = concatBytes([
+      u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0),
+      u32(crc), u32(data.length), u32(data.length), u16(nameBytes.length), u16(0), nameBytes,
+    ]);
+    const centralHeader = concatBytes([
+      u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0),
+      u32(crc), u32(data.length), u32(data.length), u16(nameBytes.length), u16(0), u16(0),
+      u16(0), u16(0), u32(0), u32(offset), nameBytes,
+    ]);
+
+    localParts.push(localHeader, data);
+    centralParts.push(centralHeader);
+    offset += localHeader.length + data.length;
+  });
+
+  const centralDirectory = concatBytes(centralParts);
+  const endRecord = concatBytes([
+    u32(0x06054b50), u16(0), u16(0), u16(Object.keys(files).length), u16(Object.keys(files).length),
+    u32(centralDirectory.length), u32(offset), u16(0),
+  ]);
+
+  return concatBytes([...localParts, centralDirectory, endRecord]);
+}
+
+function crc32(bytes) {
+  let crc = -1;
+  for (let index = 0; index < bytes.length; index += 1) {
+    crc = (crc >>> 8) ^ crcTable[(crc ^ bytes[index]) & 0xff];
+  }
+  return (crc ^ -1) >>> 0;
+}
+
+const crcTable = Array.from({ length: 256 }, (_, index) => {
+  let value = index;
+  for (let bit = 0; bit < 8; bit += 1) {
+    value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+  }
+  return value >>> 0;
+});
+
+function columnLetter(index) {
+  let label = "";
+  let current = index;
+  while (current > 0) {
+    const remainder = (current - 1) % 26;
+    label = String.fromCharCode(65 + remainder) + label;
+    current = Math.floor((current - 1) / 26);
+  }
+  return label;
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function concatBytes(parts) {
+  const total = parts.reduce((sum, part) => sum + part.length, 0);
+  const output = new Uint8Array(total);
+  let offset = 0;
+  parts.forEach((part) => {
+    output.set(part, offset);
+    offset += part.length;
+  });
+  return output;
+}
+
+function utf8Bytes(value) {
+  return new TextEncoder().encode(String(value));
+}
+
+function u16(value) {
+  return new Uint8Array([value & 0xff, (value >>> 8) & 0xff]);
+}
+
+function u32(value) {
+  return new Uint8Array([value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff]);
+}
+
+function escapeXml(value) {
+  return String(value ?? "").replace(/[<>&"']/g, (character) => ({
+    "<": "&lt;",
+    ">": "&gt;",
+    "&": "&amp;",
+    "\"": "&quot;",
+    "'": "&apos;",
+  }[character]));
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[<>&"']/g, (character) => ({
+    "<": "&lt;",
+    ">": "&gt;",
+    "&": "&amp;",
+    "\"": "&quot;",
+    "'": "&#39;",
+  }[character]));
+}
+
+function slugifyFilename(value) {
+  return normalizeSearch(value).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "clients";
 }
 
 function useDetailNavigation() {
