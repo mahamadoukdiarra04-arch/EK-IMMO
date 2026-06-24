@@ -1870,6 +1870,8 @@ function makePropertyPdfArchive(property) {
     module: "Biens",
     owner: property.owner,
     property: property.name,
+    propertyCode: property.code,
+    documentType: "Fiche PDF",
   };
 }
 
@@ -2253,14 +2255,18 @@ function App() {
   const [scheduledMaintenances, setScheduledMaintenances] = useState([]);
   const [maintenanceCharges, setMaintenanceCharges] = useState([]);
   const [maintenanceContext, setMaintenanceContext] = useState(null);
+  const [chargeContext, setChargeContext] = useState(null);
   const [propertyHistoryOverrides, setPropertyHistoryOverrides] = useState({});
   const [documentContext, setDocumentContext] = useState(null);
+  const [propertyDocumentImportContext, setPropertyDocumentImportContext] = useState(null);
   const [missingDocumentContext, setMissingDocumentContext] = useState(null);
   const [missingDocumentRequests, setMissingDocumentRequests] = useState([]);
   const [documentDraft, setDocumentDraft] = useState(null);
   const [propertyOwnerPrefill, setPropertyOwnerPrefill] = useState("");
   const [propertyPdfContext, setPropertyPdfContext] = useState(null);
   const [propertyPdfArchives, setPropertyPdfArchives] = useState([]);
+  const [propertyDocumentArchives, setPropertyDocumentArchives] = useState([]);
+  const [archiveOpenContext, setArchiveOpenContext] = useState(null);
   const [archiveContext, setArchiveContext] = useState(null);
   const [archivedProperties, setArchivedProperties] = useState({});
   const [financeTab, setFinanceTab] = useState("Loyers");
@@ -2274,7 +2280,14 @@ function App() {
   const allPayments = useMemo(() => mergePaymentRecords(paymentRecords, recordedPayments), [recordedPayments]);
   const allRentRows = useMemo(() => mergeRentRowsWithPayments(rentRows, recordedPayments), [recordedPayments]);
   const allMaintenances = useMemo(() => [...scheduledMaintenances, ...maintenances], [scheduledMaintenances]);
-  const allCharges = useMemo(() => [...maintenanceCharges, ...charges], [maintenanceCharges]);
+  const allCharges = useMemo(() => {
+    const dynamicChargeIds = new Set(maintenanceCharges.map((charge) => charge.id));
+    return [...maintenanceCharges, ...charges.filter((charge) => !dynamicChargeIds.has(charge.id))];
+  }, [maintenanceCharges]);
+  const allPropertyDocumentArchives = useMemo(
+    () => [...propertyDocumentArchives, ...propertyPdfArchives],
+    [propertyDocumentArchives, propertyPdfArchives]
+  );
   const allOwners = useMemo(() => {
     const applyOverride = (owner) => ({ ...owner, ...(ownerOverrides[owner.id] ?? {}) });
     return [...createdOwners.map(applyOverride), ...owners.map(applyOverride)];
@@ -2615,6 +2628,36 @@ function App() {
       return;
     }
 
+    if (["ouvrir archive", "reprendre brouillon"].includes(normalizedAction) && context.archive) {
+      const archiveRecord = context.archive;
+      const linkedContract = archiveRecord.contractKey
+        ? allContracts.find((contract) => getContractKey(contract) === archiveRecord.contractKey)
+        : allContracts.find((contract) => archiveRecord.reference === contract.number || archiveRecord.reference === contract.pdfReference || archiveRecord.title?.includes(contract.number));
+
+      if (linkedContract && archiveRecord.category === "Contrats et mandats") {
+        setContractDetailRequest({
+          contractKey: getContractKey(linkedContract),
+          contractNumber: linkedContract.number,
+          fromArchive: true,
+          nonce: Date.now(),
+        });
+        setContractTab("Contrats");
+        setActivePage("Contrats");
+        return;
+      }
+
+      if (archiveRecord.status === "Brouillon" || normalizedAction === "reprendre brouillon") {
+        setDocumentDraft(makeArchiveDocumentDraft(archiveRecord));
+        setContractTab("Génération de document");
+        setActivePage("Contrats");
+        return;
+      }
+
+      setArchiveOpenContext(archiveRecord);
+      setModal("Aperçu archive");
+      return;
+    }
+
     if (normalizedAction === "telecharger contrat" && context.contract) {
       handleContractDocumentAction(context.contract, "Document telecharge", "PDF du contrat ouvert pour telechargement.");
       return;
@@ -2720,7 +2763,11 @@ function App() {
       return;
     }
 
-    if (normalizedAction === "ajouter charge") {
+    if (["ajouter charge", "ajouter une charge"].includes(normalizedAction)) {
+      setChargeContext({
+        property: context.property ?? selectedProperty,
+        charge: context.charge ?? null,
+      });
       setModal("Ajouter une charge");
       return;
     }
@@ -2728,6 +2775,12 @@ function App() {
     if (normalizedAction === "generer document") {
       setDocumentContext({ property: context.property ?? selectedProperty });
       setModal("Choisir document");
+      return;
+    }
+
+    if (normalizedAction === "importer document") {
+      setPropertyDocumentImportContext({ property: context.property ?? selectedProperty });
+      setModal("Importer document");
       return;
     }
 
@@ -4120,6 +4173,46 @@ function App() {
     setModal(null);
   };
 
+  const handleChargeSave = ({ charge, validate = false }) => {
+    const nextCharge = {
+      ...charge,
+      status: validate ? "Validée" : charge.status,
+      validationDate: validate ? "23/06/2026" : charge.validationDate,
+      validatedBy: validate ? "Admin E.K immo" : charge.validatedBy,
+      history: [
+        ...(charge.history ?? []),
+        validate ? "Charge enregistrée et validée depuis la fiche bien" : "Charge enregistrée depuis la fiche bien",
+      ],
+    };
+
+    setMaintenanceCharges((current) => [
+      nextCharge,
+      ...current.filter((item) => item.id !== nextCharge.id),
+    ]);
+
+    setPropertyHistoryOverrides((current) => ({
+      ...current,
+      [nextCharge.property]: [
+        [
+          validate ? "Charge validée" : "Charge ajoutée",
+          `${nextCharge.type} · ${nextCharge.amount} · ${nextCharge.payer}.`,
+          nextCharge.date,
+        ],
+        ...(current[nextCharge.property] ?? []),
+      ],
+    }));
+
+    setSelectedProperty((current) => current.name === nextCharge.property ? {
+      ...current,
+      lastAction: `${nextCharge.type} ajoutée aux charges`,
+    } : current);
+
+    setPropertyTab("Charges & entretiens");
+    setFinanceTab("Charges");
+    setChargeContext(null);
+    setModal(null);
+  };
+
   const handleDocumentTemplateSelection = (templateKey) => {
     const property = documentContext?.property ?? selectedProperty;
     setDocumentDraft({
@@ -4146,6 +4239,44 @@ function App() {
       ],
     }));
     setPropertyTab("Documents");
+  };
+
+  const handlePropertyDocumentImport = ({ document, open = false }) => {
+    const nextDocument = {
+      ...document,
+      category: document.status === "Brouillon" ? "Brouillons" : "Biens et clients",
+      module: "Biens",
+    };
+
+    setPropertyDocumentArchives((current) => [
+      nextDocument,
+      ...current.filter((item) => item.reference !== nextDocument.reference),
+    ]);
+
+    setPropertyHistoryOverrides((current) => ({
+      ...current,
+      [nextDocument.property]: [
+        [
+          "Document importé",
+          `${nextDocument.documentType} · ${nextDocument.title} · ${nextDocument.status}.`,
+          nextDocument.date,
+        ],
+        ...(current[nextDocument.property] ?? []),
+      ],
+    }));
+
+    setPropertyTab("Documents");
+    setPropertyDocumentImportContext(null);
+
+    if (open) {
+      setActivePage("Contrats");
+      setContractTab("Archives");
+      setArchiveOpenContext(nextDocument);
+      setModal("Aperçu archive");
+      return;
+    }
+
+    setModal(null);
   };
 
   const handlePropertyArchive = ({ property, reason }) => {
@@ -4309,7 +4440,7 @@ function App() {
             chargesList={allCharges}
             maintenancesList={allMaintenances}
             propertyHistoryOverrides={propertyHistoryOverrides}
-            propertyPdfArchives={propertyPdfArchives}
+            propertyPdfArchives={allPropertyDocumentArchives}
             missingDocumentRequests={missingDocumentRequests}
             propertiesList={propertiesWithArchiveState}
             visitsList={allVisits}
@@ -4341,6 +4472,7 @@ function App() {
             contractsList={allContracts}
             paymentsList={allPayments}
             rentRowsList={allRentRows}
+            chargesList={allCharges}
             reversalsList={allReversals}
           />
         )}
@@ -4352,7 +4484,7 @@ function App() {
             contractsList={allContracts}
             paymentsList={allPayments}
             documentDraft={documentDraft}
-            propertyPdfArchives={propertyPdfArchives}
+            propertyPdfArchives={allPropertyDocumentArchives}
             contractTimelines={contractTimelines}
             contractDeadlines={contractDeadlines}
             detailRequest={contractDetailRequest}
@@ -4382,7 +4514,18 @@ function App() {
         />
       )}
       {modal && (["Ajouter une charge"].includes(modal) || modal.startsWith("Modifier charge") ? (
-        <ChargeFormModal title={modal} onClose={() => setModal(null)} />
+        <ChargeFormModal
+          title={modal}
+          context={chargeContext}
+          propertiesList={propertiesWithArchiveState}
+          maintenancesList={allMaintenances}
+          chargesList={allCharges}
+          onSave={handleChargeSave}
+          onClose={() => {
+            setChargeContext(null);
+            setModal(null);
+          }}
+        />
       ) : ["Ajouter un bien", "Modifier le bien"].includes(modal) ? (
         <PropertyFormModal
           title={modal}
@@ -4680,6 +4823,20 @@ function App() {
             setModal(null);
           }}
         />
+      ) : modal === "Importer document" ? (
+        <PropertyDocumentImportModal
+          context={propertyDocumentImportContext}
+          propertiesList={propertiesWithArchiveState}
+          contractsList={allContracts}
+          chargesList={allCharges}
+          maintenancesList={allMaintenances}
+          sequence={propertyDocumentArchives.length + propertyPdfArchives.length + 1}
+          onImport={handlePropertyDocumentImport}
+          onClose={() => {
+            setPropertyDocumentImportContext(null);
+            setModal(null);
+          }}
+        />
       ) : modal === "Mon profil" ? (
         <UserProfileModal onClose={() => setModal(null)} />
       ) : modal === "Changer mot de passe" ? (
@@ -4696,6 +4853,15 @@ function App() {
             setArchiveContext(null);
             setModal(null);
           }}
+        />
+      ) : modal === "Aperçu archive" ? (
+        <ArchivePreviewModal
+          record={archiveOpenContext}
+          onClose={() => {
+            setArchiveOpenContext(null);
+            setModal(null);
+          }}
+          onAction={openAction}
         />
       ) : modal === "Aperçu reçu paiement" && receiptPreviewValues ? (
         <DocumentPreviewModal
@@ -5515,7 +5681,7 @@ function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, on
           <Button onClick={() => onAction("Ajouter entretien", { property })}>
             <Wrench size={17} /> Ajouter entretien
           </Button>
-          <Button onClick={() => onAction("Ajouter charge")}>
+          <Button onClick={() => onAction("Ajouter charge", { property })}>
             <ReceiptText size={17} /> Ajouter charge
           </Button>
           <Button onClick={() => onAction("Générer document")}>
@@ -6021,9 +6187,9 @@ function PropertyMaintenance({ property, chargesList = charges, maintenancesList
 }
 
 function PropertyDocuments({ property, onAction, propertyPdfArchives = [], missingDocumentRequests = [], contractsList = contracts }) {
-  const pdfRows = propertyPdfArchives
+  const archiveRows = propertyPdfArchives
     .filter((archive) => archive.property === property.name)
-    .map((archive) => [archive.title, "Fiche PDF", archive.date, <Badge label={archive.status} />, <DocumentActions />]);
+    .map((archive) => [archive.title, archive.documentType ?? "Fiche PDF", archive.date, <Badge label={archive.status} />, <DocumentActions />]);
   const amendmentRows = contractsList
     .filter((contract) => contract.property === property.name && contract.amendmentReference)
     .map((contract) => [
@@ -6044,11 +6210,11 @@ function PropertyDocuments({ property, onAction, propertyPdfArchives = [], missi
     ]);
 
   return (
-    <Panel title={`Documents - ${property.code}`} toolbar={<Button compact onClick={() => onAction("Importer document")}><Upload size={16} /> Importer</Button>}>
+    <Panel title={`Documents - ${property.code}`} toolbar={<Button compact onClick={() => onAction("Importer document", { property })}><Upload size={16} /> Importer</Button>}>
       <DataTable
         columns={["Document", "Type", "Date", "Statut", "Actions"]}
         rows={[
-          ...pdfRows,
+          ...archiveRows,
           ...amendmentRows,
           ...missingRows,
           ["Contrat de location signé", "Contrat", "01/01/2026", <Badge label="Archivé" />, <DocumentActions />],
@@ -6084,7 +6250,7 @@ function PropertyHistory({ property, historyItems = [] }) {
   );
 }
 
-function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = owners, selectedTenant, onTenant, tenantsList = tenants, prospectsList = prospects, prospectProposals = {}, prospectActivities = {}, prospectConversions = {}, visitsList = visits, visitHistories = {}, detailRequest = null, filterRequest = null, onFilterRequestConsumed, tenantRelances = [], tenantReceiptArchives = [], missingDocumentRequests = [], onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, reversalsList = reversals }) {
+function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = owners, selectedTenant, onTenant, tenantsList = tenants, prospectsList = prospects, prospectProposals = {}, prospectActivities = {}, prospectConversions = {}, visitsList = visits, visitHistories = {}, detailRequest = null, filterRequest = null, onFilterRequestConsumed, tenantRelances = [], tenantReceiptArchives = [], missingDocumentRequests = [], onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, chargesList = charges, reversalsList = reversals }) {
   const tabs = ["Propriétaires", "Locataires", "Prospects", "Visites"];
   const [detailView, setDetailView] = useState(null);
   const [selectedProspect, setSelectedProspect] = useState(prospects[0]);
@@ -6248,7 +6414,7 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
 
   const detailContent = detailView === "owner" ? (
     <DetailPageShell title="Fiche propriétaire" subtitle={selectedOwner.name} onBack={closeDetail}>
-      <OwnerProfilePanel owner={selectedOwner} initialTab={ownerInitialTab} onAction={onAction} contractsList={contractsList} paymentsList={paymentsList} reversalsList={reversalsList} />
+      <OwnerProfilePanel owner={selectedOwner} initialTab={ownerInitialTab} onAction={onAction} contractsList={contractsList} paymentsList={paymentsList} chargesList={chargesList} reversalsList={reversalsList} />
     </DetailPageShell>
   ) : detailView === "tenant" ? (
     <DetailPageShell title="Fiche locataire" subtitle={selectedTenant.name} onBack={closeDetail}>
@@ -6857,14 +7023,15 @@ function OwnersView({ ownersList = owners, selected, onOpenDetail }) {
   );
 }
 
-function OwnerProfilePanel({ owner, initialTab = "Résumé", onAction, contractsList = contracts, paymentsList = paymentRecords, reversalsList = reversals }) {
+function OwnerProfilePanel({ owner, initialTab = "Résumé", onAction, contractsList = contracts, paymentsList = paymentRecords, chargesList = charges, reversalsList = reversals }) {
   const [tab, setTab] = useState(initialTab);
   const ownedProperties = properties.filter((property) => property.owner === owner.name);
-  const ownerCharges = charges.filter((charge) => charge.owner === owner.name);
+  const ownerCharges = chargesList.filter((charge) => charge.owner === owner.name && (charge.payer === "Propriétaire" || charge.impact?.includes("propriétaire")));
   const ownerReversals = reversalsList.filter((reversal) => reversal.owner === owner.name);
   const ownerContracts = contractsList.filter((contract) => contract.owner === owner.name);
   const ownerPayments = paymentsList.filter((payment) => payment.owner === owner.name);
   const collectedForOwner = ownerPayments.reduce((sum, payment) => sum + parseFCFA(payment.paid), 0);
+  const ownerChargeTotal = ownerCharges.reduce((sum, charge) => sum + parseFCFA(charge.amount), 0);
   const lastOwnerPayment = ownerPayments[0];
   const tabs = ["Résumé", "Biens", "Situation financière", "Charges", "Reversements", "Documents", "Historique"];
 
@@ -6879,7 +7046,7 @@ function OwnerProfilePanel({ owner, initialTab = "Résumé", onAction, contracts
         items={[
           ["Biens confiés", owner.properties],
           ["Loyers encaissés", ownerPayments.length ? formatFCFA(collectedForOwner) : owner.rent],
-          ["Charges", owner.charges],
+          ["Charges", ownerChargeTotal ? formatFCFA(ownerChargeTotal) : owner.charges],
           ["Commissions", owner.commission],
           ["Solde à reverser", owner.balance],
         ]}
@@ -6932,7 +7099,7 @@ function OwnerProfilePanel({ owner, initialTab = "Résumé", onAction, contracts
         <div className="simple-list">
           <p><span>Loyers encaissés pour son compte</span><strong>{ownerPayments.length ? formatFCFA(collectedForOwner) : owner.rent}</strong></p>
           <p><span>Commissions retenues</span><strong>{owner.commission}</strong></p>
-          <p><span>Charges déduites</span><strong>{owner.charges}</strong></p>
+          <p><span>Charges déduites</span><strong>{ownerChargeTotal ? formatFCFA(ownerChargeTotal) : owner.charges}</strong></p>
           <p><span>Reversements effectués</span><strong>{owner.lastPayment}</strong></p>
           <p><span>Solde restant à reverser</span><strong>{owner.balance}</strong></p>
           <p><span>Dernier paiement agence</span><strong>{lastOwnerPayment ? `${lastOwnerPayment.paid} · ${lastOwnerPayment.tenant}` : "Aucun nouveau paiement"}</strong></p>
@@ -6941,7 +7108,7 @@ function OwnerProfilePanel({ owner, initialTab = "Résumé", onAction, contracts
       {tab === "Charges" && (
         <DataTable
           columns={["Date", "Type", "Bien", "Montant", "Prise en charge", "Statut"]}
-          rows={(ownerCharges.length ? ownerCharges : charges.slice(0, 2)).map((charge) => [
+          rows={(ownerCharges.length ? ownerCharges : charges.filter((charge) => charge.owner === owner.name).slice(0, 2)).map((charge) => [
             charge.date,
             charge.type,
             charge.property,
@@ -8026,12 +8193,15 @@ function DocumentGeneration({ onAction, documentDraft = null }) {
     owner: owners[0],
     tenant: tenants[0],
   };
+  const draftTitle = documentDraft?.data?.draftStatus === "Brouillon"
+    ? `Reprendre le brouillon - ${documentDraft.data.draftReference}`
+    : null;
 
   return (
     <DocumentStudio
       initialTemplate={documentDraft?.templateKey ?? "facture"}
       autoOpen={Boolean(documentDraft)}
-      title={documentDraft ? `Générer un document - ${documentTemplates.find((item) => item.key === documentDraft.templateKey)?.label ?? "Document"}` : "Atelier de génération documentaire"}
+      title={draftTitle ?? (documentDraft ? `Générer un document - ${documentTemplates.find((item) => item.key === documentDraft.templateKey)?.label ?? "Document"}` : "Atelier de génération documentaire")}
       onAction={onAction}
       data={defaultData}
     />
@@ -8097,6 +8267,46 @@ function InvoicesView({ onAction }) {
   );
 }
 
+function getArchiveTemplateKey(record = {}) {
+  if (record.templateKey) return record.templateKey;
+  const haystack = normalizeSearch(`${record.reference} ${record.title} ${record.documentType}`);
+  if (haystack.includes("recu") || haystack.includes("quittance")) return "recu";
+  if (haystack.includes("bordereau") || haystack.includes("commission")) return "bordereau";
+  if (haystack.includes("contrat") || haystack.includes("bail") || haystack.includes("mandat")) return "bail";
+  return "facture";
+}
+
+function makeArchiveDocumentDraft(record = {}) {
+  const templateKey = getArchiveTemplateKey(record);
+  const property =
+    (record.propertyCode ? properties.find((item) => item.code === record.propertyCode) : null) ??
+    (record.property ? getPropertyByName(record.property) : null) ??
+    properties.find((item) => record.linked?.includes(item.name)) ??
+    properties[0];
+  const owner = owners.find((item) => item.name === property.owner || item.name === record.owner) ?? owners[0];
+  const tenant = tenants.find((item) => item.property === property.name || record.linked?.includes(item.name)) ?? tenants[0];
+
+  return {
+    templateKey,
+    property,
+    data: {
+      invoice: invoices.find((invoice) => invoice.number === record.reference || record.title?.includes(invoice.client)) ?? invoices[0],
+      payment: paymentRecords.find((payment) => payment.receipt === record.reference || payment.reference === record.reference) ?? paymentRecords[0],
+      commission: commissions.find((commission) => commission.property === property.name || commission.owner === owner.name) ?? commissions[0],
+      property,
+      owner,
+      tenant,
+      archive: record,
+      draftStatus: record.status,
+      draftReference: record.reference,
+      draftTitle: record.title,
+      draftText: record.comment ?? record.description ?? record.linked ?? "",
+      amount: record.amount ?? record.linked?.split("·").slice(-1)[0]?.trim() ?? "",
+      specialConditions: record.specialConditions ?? record.comment ?? "",
+    },
+  };
+}
+
 function getArchiveRecords(contractsList = contracts, paymentsList = paymentRecords, propertyPdfArchives = []) {
   const contractArchives = contractsList
     .filter((contract) => contract.generated || contract.pdfGenerated || contract.pdfArchived || ["Archivé", "Expiré"].includes(contract.status))
@@ -8110,6 +8320,9 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
       status: contract.pdfArchived ? "Archivé" : contract.pdfStatus ?? (contract.status === "Expiré" ? "Archivé" : contract.status),
       module: "Docs",
       owner: contract.owner,
+      contractKey: getContractKey(contract),
+      documentType: contract.type,
+      templateKey: "bail",
     }));
   const amendmentArchives = contractsList
     .filter((contract) => contract.amendmentReference)
@@ -8123,6 +8336,9 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
       status: contract.amendmentArchived ? "Archivé" : "Généré",
       module: "Docs",
       owner: contract.owner,
+      contractKey: getContractKey(contract),
+      documentType: "Avenant",
+      templateKey: "bail",
     }));
 
   const invoiceArchives = invoices.map((invoice) => ({
@@ -8135,6 +8351,8 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
     status: invoice.status,
     module: "Finance",
     owner: invoice.client,
+    documentType: invoice.type,
+    templateKey: invoice.type === "Reçu" || invoice.type === "Quittance" ? "recu" : "facture",
   }));
 
   const receiptArchives = paymentsList
@@ -8149,6 +8367,8 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
       status: payment.status === "Payé" ? "Archivé" : "Généré",
       module: "Finance",
       owner: payment.tenant,
+      documentType: "Reçu",
+      templateKey: "recu",
     }));
 
   const chargeArchives = charges
@@ -8163,6 +8383,7 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
       status: charge.status,
       module: "Finance",
       owner: charge.owner,
+      documentType: "Justificatif",
     }));
 
   const maintenanceArchives = maintenances.map((maintenance, index) => ({
@@ -8175,6 +8396,7 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
     status: maintenance.status,
     module: "Biens",
     owner: maintenance.manager,
+    documentType: "Rapport d’entretien",
   }));
 
   const draftArchives = [
@@ -8190,6 +8412,8 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
         status: "Brouillon",
         module: "Finance",
         owner: charge.createdBy,
+        templateKey: "facture",
+        documentType: "Brouillon charge",
       })),
     {
       id: "draft-bail-a203",
@@ -8201,6 +8425,8 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
       status: "Brouillon",
       module: "Docs",
       owner: "Mariam Traoré",
+      templateKey: "bail",
+      documentType: "Contrat de bail",
     },
     {
       id: "draft-mandat-sotuba",
@@ -8212,6 +8438,8 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
       status: "Brouillon",
       module: "Biens",
       owner: "Cheick Camara",
+      templateKey: "bail",
+      documentType: "Mandat",
     },
     {
       id: "draft-report-may",
@@ -8223,6 +8451,8 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
       status: "Brouillon",
       module: "Rapports",
       owner: "Aïssata Diarra",
+      templateKey: "facture",
+      documentType: "Rapport",
     },
   ];
 
@@ -8407,9 +8637,9 @@ function ArchivesView({ onAction, contractsList = contracts, paymentsList = paym
               <Badge label={record.status} />,
               record.module,
               <div className="table-actions">
-                <Button compact onClick={() => onAction(`Ouvrir archive ${record.reference}`)}><Eye size={15} /> Ouvrir</Button>
+                <Button compact onClick={() => onAction("Ouvrir archive", { archive: record })}><Eye size={15} /> Ouvrir</Button>
                 {record.status === "Brouillon" ? (
-                  <Button compact onClick={() => onAction(`Reprendre brouillon ${record.reference}`)}><Pencil size={15} /> Reprendre</Button>
+                  <Button compact onClick={() => onAction("Reprendre brouillon", { archive: record })}><Pencil size={15} /> Reprendre</Button>
                 ) : (
                   <Button compact onClick={() => onAction(`Télécharger archive ${record.reference}`)}><Download size={15} /> Exporter</Button>
                 )}
@@ -10014,22 +10244,26 @@ function getDocumentDefaults(key, data = {}) {
   const owner = data.owner ?? owners.find((item) => item.name === property.owner) ?? owners[0];
   const tenant = data.tenant ?? tenants.find((item) => item.name === invoice.client) ?? tenants[0];
   const commission = data.commission ?? commissions[0];
-  const amountNumber = invoice.amount.replace(" FCFA", "");
+  const draftReference = data.draftReference;
+  const draftText = data.draftText;
+  const draftAmount = data.amount ? String(data.amount).replace(" FCFA", "").trim() : "";
+  const specialConditions = data.specialConditions || draftText;
+  const amountNumber = draftAmount || invoice.amount.replace(" FCFA", "");
 
   if (key === "recu") {
     return {
-      numero: invoice.number.replace("FAC", "REC").replace("QUI", "REC"),
+      numero: draftReference ?? invoice.number.replace("FAC", "REC").replace("QUI", "REC"),
       date: invoice.date,
       nom: invoice.client,
       structure: tenant.id ?? "Locataire",
       telephone: tenant.phone ?? "+223 72 77 71 77",
-      montantChiffres: invoice.amount,
+      montantChiffres: data.amount || invoice.amount,
       montantLettres: "Quatre cent cinquante mille francs CFA",
       espece: payment.mode === "Espèces",
       cheque: payment.mode === "Chèque",
       virement: payment.mode === "Virement",
       mobileMoney: ["Orange Money", "Moov Money"].includes(payment.mode),
-      objet: `Encaissement ${payment.period} - ${invoice.property}`,
+      objet: draftText || `Encaissement ${payment.period} - ${invoice.property}`,
       lieu: "Bamako",
       agent: "Aïssata Diarra",
     };
@@ -10037,7 +10271,7 @@ function getDocumentDefaults(key, data = {}) {
 
   if (key === "bordereau") {
     return {
-      numero: "BOR-2026-017",
+      numero: draftReference ?? "BOR-2026-017",
       date: "05/06/2026",
       partenaire: owner.name,
       periode: "Janvier 2026 à mars 2026",
@@ -10064,7 +10298,7 @@ function getDocumentDefaults(key, data = {}) {
       total: "16 599 920",
       totalCommission: "1 659 992",
       netProprietaire: "14 939 928",
-      observations: "Bordereau préparé pour validation propriétaire et reversement trimestriel E.K immo.",
+      observations: draftText || "Bordereau préparé pour validation propriétaire et reversement trimestriel E.K immo.",
     };
   }
 
@@ -10074,7 +10308,7 @@ function getDocumentDefaults(key, data = {}) {
     const rentTtc = property.price;
 
     return {
-      contratNo: makeDocumentNumber("CON", 46),
+      contratNo: draftReference ?? makeDocumentNumber("CON", 46),
       souscritLe: "05/06/2026",
       objet: "CONTRAT DE BAIL À USAGE PROFESSIONNEL",
       bailleur: "E.K immo SAS",
@@ -10108,27 +10342,27 @@ function getDocumentDefaults(key, data = {}) {
       domicilePreneur: "Hamdallaye ACI 2000, Bamako (Mali)",
       lieuSignature: "Bamako",
       dateSignature: "05/06/2026",
-      conditions: "Paiement au plus tard le 10 de chaque mois. Assurance obligatoire à fournir avant remise des clés. Caution conservée selon l'état des lieux contradictoire.",
+      conditions: specialConditions || "Paiement au plus tard le 10 de chaque mois. Assurance obligatoire à fournir avant remise des clés. Caution conservée selon l'état des lieux contradictoire.",
     };
   }
 
   return {
-    numero: invoice.number,
+    numero: draftReference ?? invoice.number,
     date: invoice.date,
     client: `${invoice.client}\nBamako, Mali`,
     bien: property.name,
     adresse: property.address ?? property.location,
-    designation: `Loyer de ${invoice.property}`,
+    designation: draftText || `Loyer de ${invoice.property}`,
     loyer: amountNumber,
     quantite: "1",
     montant: amountNumber,
     invoiceLines: [
-      { id: "invoice-line-1", designation: `Loyer de ${invoice.property}`, loyer: amountNumber, quantite: "1", montant: amountNumber },
+      { id: "invoice-line-1", designation: draftText || `Loyer de ${invoice.property}`, loyer: amountNumber, quantite: "1", montant: amountNumber },
     ],
     totalHt: amountNumber,
     tva: "0",
     totalTtc: amountNumber,
-    montantLettres: "Arrêté la présente facture à la somme indiquée en francs CFA.",
+    montantLettres: specialConditions || "Arrêté la présente facture à la somme indiquée en francs CFA.",
   };
 }
 
@@ -10415,6 +10649,25 @@ function fromDateInputValue(value) {
   const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (match) return `${match[3]}/${match[2]}/${match[1]}`;
   return text;
+}
+
+function getPeriodFromInputDate(value) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-\d{2}$/);
+  if (!match) return "Juin 2026";
+  const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+  return `${monthNames[Number(match[2]) - 1] ?? "Juin"} ${match[1]}`;
+}
+
+function normalizeChargeAmount(value) {
+  const amount = parseFCFA(value);
+  return amount ? formatFCFA(amount) : "0 FCFA";
+}
+
+function getChargeImpactForPayer(payer) {
+  if (payer === "Agence") return "Supportée par l'agence";
+  if (payer === "Propriétaire") return "À déduire du reversement propriétaire";
+  if (payer.includes("Locataire")) return "À refacturer au locataire";
+  return "Suivi interne sans impact sur encaissement agence";
 }
 
 function chargeMatchesQuickFilter(charge, filter) {
@@ -12699,63 +12952,160 @@ function OwnerFormModal({ sequence = owners.length + 1, owner = null, mode = "cr
   );
 }
 
-function ChargeFormModal({ title, onClose }) {
+function ChargeFormModal({ title, context = null, propertiesList = properties, maintenancesList = maintenances, chargesList = charges, onSave, onClose }) {
+  const chargeCreationTypes = ["Nettoyage", "Réparation", "Plomberie", "Électricité", "Peinture", "Publicité", "Entretien", "Autre"];
+  const modalChargeId = title.match(/CHG-\d{4}-\d{3}/)?.[0];
+  const editedCharge = context?.charge ?? chargesList.find((charge) => charge.id === modalChargeId) ?? null;
+  const propertyOptions = propertiesList.filter((property) => !property.archived);
+  const initialProperty =
+    (editedCharge ? propertyOptions.find((property) => property.name === editedCharge.property) : null) ??
+    (context?.property ? propertyOptions.find((property) => property.code === context.property.code || property.name === context.property.name) : null) ??
+    propertyOptions[0] ??
+    properties[0];
+  const suggestedId = editedCharge?.id ?? makeDocumentNumber("CHG", chargesList.length + 301);
+  const [message, setMessage] = useState("");
+  const [values, setValues] = useState({
+    id: suggestedId,
+    date: toDateInputValue(editedCharge?.date, "2026-06-23"),
+    type: chargeCreationTypes.includes(editedCharge?.type) ? editedCharge.type : "Réparation",
+    description: editedCharge?.description ?? "",
+    amount: editedCharge?.amount ?? "",
+    status: editedCharge?.status && ["Brouillon", "À valider", "Validée", "Payée"].includes(editedCharge.status) ? editedCharge.status : "À valider",
+    propertyCode: initialProperty.code,
+    linkedMaintenance: editedCharge?.linkedMaintenance ?? "Non lié",
+    agent: editedCharge?.agent ?? "Aïssata Diarra",
+    payer: editedCharge?.payer && chargePayers.includes(editedCharge.payer) ? editedCharge.payer : "Propriétaire",
+    invoiceRef: editedCharge?.paymentRef && editedCharge.paymentRef !== "À compléter" ? editedCharge.paymentRef : "",
+    proofLabel: editedCharge?.proof ?? "",
+    photoLabel: "",
+    observation: editedCharge?.history?.slice(-1)?.[0] ?? "",
+  });
+
+  const selectedProperty = propertyOptions.find((property) => property.code === values.propertyCode) ?? initialProperty;
+  const tenantLabel = selectedProperty?.tenant && !["Libre", "N/A", "Non applicable"].includes(selectedProperty.tenant) ? selectedProperty.tenant : "Non applicable";
+  const relatedMaintenances = maintenancesList.filter((maintenance) => maintenance.property === selectedProperty?.name);
+  const canSave = Boolean(selectedProperty?.name && values.date && values.type && values.description.trim() && parseFCFA(values.amount) > 0);
+
+  const update = (field) => (event) => {
+    setMessage("");
+    setValues((current) => ({ ...current, [field]: event.target.value }));
+  };
+
+  const updateFileLabel = (field) => (event) => {
+    const fileName = event.target.files?.[0]?.name ?? "";
+    setValues((current) => ({ ...current, [field]: fileName }));
+  };
+
+  const submit = (validate = false) => {
+    if (!selectedProperty?.name) {
+      setMessage("Veuillez sélectionner un bien concerné.");
+      return;
+    }
+    if (!values.description.trim()) {
+      setMessage("Veuillez renseigner la description de la charge.");
+      return;
+    }
+    if (parseFCFA(values.amount) <= 0) {
+      setMessage("Veuillez renseigner un montant valide.");
+      return;
+    }
+
+    const proofName = values.proofLabel || values.invoiceRef || values.photoLabel || "Justificatif à joindre";
+    onSave?.({
+      validate,
+      charge: {
+        id: values.id,
+        date: fromDateInputValue(values.date),
+        type: values.type,
+        category: values.type,
+        description: values.description.trim(),
+        property: selectedProperty.name,
+        owner: selectedProperty.owner,
+        tenant: tenantLabel,
+        amount: normalizeChargeAmount(values.amount),
+        payer: values.payer,
+        status: values.status,
+        proof: proofName,
+        proofStatus: proofName === "Justificatif à joindre" ? "Manquant" : "Présent",
+        period: getPeriodFromInputDate(values.date),
+        agent: values.agent,
+        paymentMode: "À déterminer",
+        paymentRef: values.invoiceRef.trim() || "À compléter",
+        linkedMaintenance: values.linkedMaintenance,
+        impact: getChargeImpactForPayer(values.payer),
+        ownerCollection: values.payer === "Suivi interne uniquement" && isMaintenanceOnlyProperty(selectedProperty),
+        createdBy: values.agent,
+        modifiedBy: values.agent,
+        validatedBy: validate ? "Admin E.K immo" : "À confirmer",
+        validationDate: validate ? "23/06/2026" : "À valider",
+        history: [
+          editedCharge ? `Modifiée le ${fromDateInputValue(values.date)}` : `Créée le ${fromDateInputValue(values.date)}`,
+          `Rattachée au bien ${selectedProperty.name}`,
+          getChargeImpactForPayer(values.payer),
+          values.observation.trim() || "Aucune observation complémentaire",
+        ],
+      },
+    });
+  };
+
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section className="modal-card wide-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
         <button className="modal-close" onClick={onClose}>×</button>
-        <h2>{title}</h2>
-        <p>Enregistrement d'une dépense métier sans transformer l'écran en comptabilité complète.</p>
+        <div className="payment-modal-head">
+          <div>
+            <span>Charge métier</span>
+            <h2>{title}</h2>
+            <p>Enregistrer une dépense liée à un bien, puis la rendre visible dans la fiche du bien, Finance et la situation propriétaire si applicable.</p>
+          </div>
+          <Badge label={values.id} />
+        </div>
 
         <div className="form-section">
           <h3>Informations générales</h3>
           <div className="form-grid compact-form">
-            <label>Date de la dépense<input defaultValue="15/06/2026" /></label>
-            <label>Type de charge<select>{chargeTypes.map((item) => <option key={item}>{item}</option>)}</select></label>
-            <label>Montant<input defaultValue="45 000" /></label>
-            <label>Devise<select><option>FCFA</option></select></label>
-            <label>Statut initial<select>{chargeStatuses.map((item) => <option key={item}>{item}</option>)}</select></label>
-            <label className="full">Description<textarea defaultValue="Décrire la dépense, le contexte et la décision attendue." /></label>
+            <label>Date<input type="date" value={values.date} onChange={update("date")} /></label>
+            <label>Type de charge<select value={values.type} onChange={update("type")}>{chargeCreationTypes.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <label>Montant<input value={values.amount} onChange={update("amount")} placeholder="95 000 FCFA" /></label>
+            <label>Statut<select value={values.status} onChange={update("status")}><option>Brouillon</option><option>À valider</option><option>Validée</option><option>Payée</option></select></label>
+            <label className="full">Description<textarea value={values.description} onChange={update("description")} placeholder="Décrire la charge, le besoin ou la dépense engagée." /></label>
           </div>
         </div>
 
         <div className="form-section">
           <h3>Rattachement</h3>
           <div className="form-grid compact-form">
-            <label>Bien concerné<select>{properties.map((property) => <option key={property.code}>{property.name}</option>)}</select></label>
-            <label>Propriétaire concerné<select>{owners.map((owner) => <option key={owner.id}>{owner.name}</option>)}</select></label>
-            <label>Locataire concerné<select><option>Non applicable</option>{tenants.map((tenant) => <option key={tenant.id}>{tenant.name}</option>)}</select></label>
-            <label>Entretien lié<select><option>Non lié</option>{maintenances.map((maintenance) => <option key={`${maintenance.property}-${maintenance.type}`}>{maintenance.type} · {maintenance.property}</option>)}</select></label>
-            <label>Agent responsable<select><option>Mariam Traoré</option><option>Aïssata Diarra</option><option>Issa Maïga</option><option>Cheick Camara</option></select></label>
+            <label>Bien concerné<select value={values.propertyCode} onChange={update("propertyCode")}>{propertyOptions.map((property) => <option key={property.code} value={property.code}>{property.name}</option>)}</select></label>
+            <label>Propriétaire<input value={selectedProperty.owner} readOnly /></label>
+            <label>Locataire<input value={tenantLabel} readOnly /></label>
+            <label>Entretien lié<select value={values.linkedMaintenance} onChange={update("linkedMaintenance")}><option>Non lié</option>{relatedMaintenances.map((maintenance) => <option key={`${maintenance.reference ?? maintenance.type}-${maintenance.date}`} value={maintenance.type}>{maintenance.type} · {maintenance.date}</option>)}</select></label>
+            <label>Agent responsable<select value={values.agent} onChange={update("agent")}><option>Aïssata Diarra</option><option>Mariam Traoré</option><option>Issa Maïga</option><option>Cheick Camara</option></select></label>
           </div>
         </div>
 
         <div className="form-section">
           <h3>Prise en charge</h3>
           <div className="form-grid compact-form">
-            <label>Qui supporte la dépense ?<select>{chargePayers.map((item) => <option key={item}>{item}</option>)}</select></label>
-            <label>Impact métier<select><option>Supportée par l'agence</option><option>À déduire du propriétaire</option><option>À refacturer au locataire</option><option>Suivi interne uniquement</option></select></label>
-            <label>Badge spécifique<select><option>Aucun</option><option>Encaissement propriétaire</option></select></label>
-            <label className="full">Observation métier<textarea defaultValue="Préciser si la charge doit réduire un reversement propriétaire ou être réclamée au locataire." /></label>
+            <label>Prise en charge<select value={values.payer} onChange={update("payer")}>{chargePayers.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <label>Impact calculé<input value={getChargeImpactForPayer(values.payer)} readOnly /></label>
+            <label className="full">Observation métier<textarea value={values.observation} onChange={update("observation")} placeholder="Préciser si la charge est déductible, refacturable ou simplement suivie en interne." /></label>
           </div>
         </div>
 
         <div className="form-section">
-          <h3>Paiement / justificatif</h3>
+          <h3>Justificatif</h3>
           <div className="form-grid compact-form">
-            <label>Mode de paiement<select><option>Espèces</option><option>Mobile money</option><option>Virement</option><option>Carte agence</option><option>Virement propriétaire</option></select></label>
-            <label>Référence paiement<input defaultValue="CHG-2026-NEW" /></label>
-            <label>Justificatif<input type="file" /></label>
-            <label>Photo ou PDF<input type="file" multiple /></label>
-            <label className="full">Observation<textarea defaultValue="Ajouter une note utile au contrôle ou à la validation." /></label>
+            <label>Fichier PDF<input type="file" accept=".pdf" onChange={updateFileLabel("proofLabel")} /><small>{values.proofLabel || "Aucun PDF joint"}</small></label>
+            <label>Photo<input type="file" accept="image/*" onChange={updateFileLabel("photoLabel")} /><small>{values.photoLabel || "Aucune photo jointe"}</small></label>
+            <label className="full">Référence facture ou reçu<input value={values.invoiceRef} onChange={update("invoiceRef")} placeholder="FAC-2026-055 ou reçu prestataire" /></label>
           </div>
         </div>
 
+        {message && <p className="form-feedback error">{message}</p>}
         <div className="action-row compact-row">
-          <Button variant="primary" onClick={onClose}><CheckCircle2 size={17} /> Enregistrer</Button>
-          <Button onClick={onClose}><Archive size={17} /> Enregistrer brouillon</Button>
-          <Button onClick={onClose}><ShieldCheck size={17} /> Valider</Button>
           <Button onClick={onClose}><XCircle size={17} /> Annuler</Button>
+          <Button disabled={!canSave} onClick={() => submit(false)}><CheckCircle2 size={17} /> Enregistrer</Button>
+          <Button variant="primary" disabled={!canSave} onClick={() => submit(true)}><ShieldCheck size={17} /> Enregistrer et valider</Button>
         </div>
       </section>
     </div>
@@ -13303,6 +13653,222 @@ function MissingDocumentModal({ request, onSave, onClose }) {
           <Button onClick={onClose}>Annuler</Button>
           <Button variant="primary" onClick={() => submit(false)}><Send size={17} /> Marquer comme demandé</Button>
           <Button onClick={() => submit(true)}><Upload size={17} /> Importer maintenant</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function PropertyDocumentImportModal({ context = null, propertiesList = properties, contractsList = contracts, chargesList = charges, maintenancesList = maintenances, sequence = 1, onImport, onClose }) {
+  const documentTypes = ["Titre foncier", "Mandat", "Contrat signé", "Facture", "Reçu", "Photo", "Justificatif", "Rapport d’entretien", "Autre"];
+  const importStatuses = ["Actif", "Archivé", "Brouillon"];
+  const propertyOptions = propertiesList.filter((property) => !property.archived);
+  const initialProperty =
+    (context?.property ? propertyOptions.find((property) => property.code === context.property.code || property.name === context.property.name) : null) ??
+    propertyOptions[0] ??
+    properties[0];
+  const [message, setMessage] = useState("");
+  const [fileName, setFileName] = useState("");
+  const [values, setValues] = useState({
+    documentType: "Titre foncier",
+    propertyCode: initialProperty.code,
+    owner: initialProperty.owner,
+    tenant: initialProperty.tenant && !["Libre", "N/A"].includes(initialProperty.tenant) ? initialProperty.tenant : "Non applicable",
+    contract: "Non lié",
+    charge: "Non liée",
+    maintenance: "Non lié",
+    name: `Document ${initialProperty.code}`,
+    date: "2026-06-24",
+    comment: "",
+    status: "Actif",
+  });
+
+  const selectedProperty = propertyOptions.find((property) => property.code === values.propertyCode) ?? initialProperty;
+  const propertyContracts = contractsList.filter((contract) => contract.property === selectedProperty.name);
+  const propertyCharges = chargesList.filter((charge) => charge.property === selectedProperty.name);
+  const propertyMaintenances = maintenancesList.filter((maintenance) => maintenance.property === selectedProperty.name);
+  const canImport = Boolean(selectedProperty?.name && values.name.trim());
+
+  const update = (field) => (event) => {
+    setMessage("");
+    setValues((current) => ({ ...current, [field]: event.target.value }));
+  };
+
+  const updateProperty = (event) => {
+    const nextProperty = propertyOptions.find((property) => property.code === event.target.value) ?? selectedProperty;
+    setMessage("");
+    setValues((current) => ({
+      ...current,
+      propertyCode: nextProperty.code,
+      owner: nextProperty.owner,
+      tenant: nextProperty.tenant && !["Libre", "N/A"].includes(nextProperty.tenant) ? nextProperty.tenant : "Non applicable",
+      name: current.name === `Document ${selectedProperty.code}` ? `Document ${nextProperty.code}` : current.name,
+      contract: "Non lié",
+      charge: "Non liée",
+      maintenance: "Non lié",
+    }));
+  };
+
+  const updateFile = (event) => {
+    setFileName(event.target.files?.[0]?.name ?? "");
+  };
+
+  const submit = (open = false) => {
+    if (!values.name.trim()) {
+      setMessage("Veuillez renseigner le nom du document.");
+      return;
+    }
+
+    const referencePrefix = values.status === "Brouillon" ? "BRO-DOC" : "DOC";
+    const reference = makeDocumentNumber(referencePrefix, 300 + sequence);
+    const title = values.name.trim();
+    const linkedParts = [
+      selectedProperty.name,
+      values.owner,
+      values.tenant !== "Non applicable" ? values.tenant : "",
+      values.contract !== "Non lié" ? values.contract : "",
+    ].filter(Boolean);
+
+    onImport?.({
+      open,
+      document: {
+        id: `property-document-${reference}`,
+        reference,
+        title,
+        linked: linkedParts.join(" · "),
+        date: fromDateInputValue(values.date),
+        status: values.status,
+        owner: values.owner,
+        property: selectedProperty.name,
+        propertyCode: selectedProperty.code,
+        documentType: values.documentType,
+        fileName: fileName || `${title.replace(/\s+/g, "-").toLowerCase()}.pdf`,
+        acceptedFormats: "PDF, JPG, PNG, DOCX",
+        maxSize: "10 Mo",
+        contract: values.contract,
+        charge: values.charge,
+        maintenance: values.maintenance,
+        comment: values.comment,
+        templateKey: getArchiveTemplateKey({ documentType: values.documentType, title }),
+      },
+    });
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal property-document-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Documents du bien</span>
+            <h2>Importer un document</h2>
+            <p>Classer un fichier dans la fiche du bien et le rendre disponible dans Docs → Archives selon son statut.</p>
+          </div>
+          <Badge label={selectedProperty.code} />
+        </div>
+
+        <div className="form-section">
+          <h3>Type de document</h3>
+          <div className="form-grid compact-form">
+            <label>Type<select value={values.documentType} onChange={update("documentType")}>{documentTypes.map((item) => <option key={item}>{item}</option>)}</select></label>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Rattachement</h3>
+          <div className="form-grid compact-form">
+            <label>Bien concerné<select value={values.propertyCode} onChange={updateProperty}>{propertyOptions.map((property) => <option key={property.code} value={property.code}>{property.name}</option>)}</select></label>
+            <label>Propriétaire<input value={values.owner} onChange={update("owner")} /></label>
+            <label>Locataire<input value={values.tenant} onChange={update("tenant")} /></label>
+            <label>Contrat<select value={values.contract} onChange={update("contract")}><option>Non lié</option>{propertyContracts.map((contract) => <option key={contract.number}>{contract.number}</option>)}</select></label>
+            <label>Charge<select value={values.charge} onChange={update("charge")}><option>Non liée</option>{propertyCharges.map((charge) => <option key={charge.id}>{charge.id} · {charge.type}</option>)}</select></label>
+            <label>Entretien<select value={values.maintenance} onChange={update("maintenance")}><option>Non lié</option>{propertyMaintenances.map((maintenance) => <option key={`${maintenance.type}-${maintenance.date}`}>{maintenance.type} · {maintenance.date}</option>)}</select></label>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Fichier</h3>
+          <div className="document-upload-grid">
+            <label className="full">
+              Zone de dépôt
+              <input type="file" accept=".pdf,.jpg,.jpeg,.png,.docx" onChange={updateFile} />
+              <small>{fileName || "Glisser-déposer ou choisir un fichier · PDF, JPG, PNG, DOCX · taille maximale 10 Mo"}</small>
+            </label>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Informations</h3>
+          <div className="form-grid compact-form">
+            <label>Nom du document<input value={values.name} onChange={update("name")} /></label>
+            <label>Date du document<input type="date" value={values.date} onChange={update("date")} /></label>
+            <label>Statut<select value={values.status} onChange={update("status")}>{importStatuses.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <label className="full">Commentaire<textarea value={values.comment} onChange={update("comment")} placeholder="Note interne, contexte d'import ou précision utile." /></label>
+          </div>
+        </div>
+
+        {message && <p className="form-feedback error">{message}</p>}
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button disabled={!canImport} onClick={() => submit(false)}><Upload size={17} /> Importer</Button>
+          <Button variant="primary" disabled={!canImport} onClick={() => submit(true)}><Eye size={17} /> Importer et ouvrir</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ArchivePreviewModal({ record, onClose, onAction }) {
+  if (!record) return null;
+  const draftAvailable = record.status === "Brouillon";
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal archive-preview-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>{record.category}</span>
+            <h2>{record.title}</h2>
+            <p>Aperçu du document archivé avec son rattachement métier et ses informations de classement.</p>
+          </div>
+          <Badge label={record.status} />
+        </div>
+
+        <div className="document-preview-shell archive-document-preview">
+          <div className="digital-document-page">
+            <DigitalDocumentHeader title={record.documentType ?? "Document"} subtitle={record.reference}>
+              <div>
+                <strong>{record.module}</strong>
+                <span>{record.date}</span>
+              </div>
+            </DigitalDocumentHeader>
+            <section className="document-block">
+              <h3>Dossier lié</h3>
+              <p>{record.linked}</p>
+            </section>
+            <section className="document-block">
+              <h3>Informations</h3>
+              <div className="document-info-grid">
+                <p><span>Référence</span><strong>{record.reference}</strong></p>
+                <p><span>Responsable</span><strong>{record.owner}</strong></p>
+                <p><span>Statut</span><strong>{record.status}</strong></p>
+                <p><span>Module</span><strong>{record.module}</strong></p>
+              </div>
+            </section>
+            {record.comment && (
+              <section className="document-block">
+                <h3>Commentaire</h3>
+                <p>{record.comment}</p>
+              </section>
+            )}
+          </div>
+        </div>
+
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Fermer</Button>
+          {draftAvailable && <Button onClick={() => onAction("Reprendre brouillon", { archive: record })}><Pencil size={17} /> Reprendre</Button>}
+          <Button variant="primary" onClick={() => onAction(`Télécharger archive ${record.reference}`)}><Download size={17} /> Télécharger</Button>
         </div>
       </section>
     </div>
