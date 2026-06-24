@@ -2251,6 +2251,7 @@ function App() {
   const [clientDetailRequest, setClientDetailRequest] = useState(null);
   const [recordedPayments, setRecordedPayments] = useState([]);
   const [paymentContext, setPaymentContext] = useState(null);
+  const [rentActionContext, setRentActionContext] = useState(null);
   const [receiptPreviewValues, setReceiptPreviewValues] = useState(null);
   const [scheduledMaintenances, setScheduledMaintenances] = useState([]);
   const [maintenanceCharges, setMaintenanceCharges] = useState([]);
@@ -2417,6 +2418,18 @@ function App() {
         propertyCode: property?.code ?? "EKM-RES-018",
       });
       setModal("Document manquant");
+      return;
+    }
+
+    if (normalizedAction === "detail loyer" && context.row) {
+      setRentActionContext({ row: context.row });
+      setModal("Detail loyer");
+      return;
+    }
+
+    if (normalizedAction === "etat loyer" && context.row) {
+      setRentActionContext({ row: context.row });
+      setModal("Etat loyer");
       return;
     }
 
@@ -2720,7 +2733,10 @@ function App() {
       const rowTenant = context.row?.tenant
         ? allTenants.find((tenant) => tenant.name === context.row.tenant) ?? tenants.find((tenant) => tenant.name === context.row.tenant)
         : null;
-      setTenantActionContext({ tenant: context.tenant ?? rowTenant ?? selectedTenant, property: context.property, contract: context.contract, row: context.row, activeTenantTab: context.activeTenantTab ?? "Impayés & relances" });
+      const rowProperty = context.row?.property
+        ? propertiesWithArchiveState.find((property) => property.name === context.row.property) ?? properties.find((property) => property.name === context.row.property)
+        : null;
+      setTenantActionContext({ tenant: context.tenant ?? rowTenant ?? selectedTenant, property: context.property ?? rowProperty, contract: context.contract, row: context.row, activeTenantTab: context.activeTenantTab ?? "Impayés & relances" });
       setModal("Relance locataire");
       return;
     }
@@ -4750,6 +4766,27 @@ function App() {
           onSave={handleNewTenantSave}
           onClose={() => setModal(null)}
         />
+      ) : modal === "Detail loyer" ? (
+        <RentDetailModal
+          row={rentActionContext?.row ?? allRentRows[0]}
+          paymentsList={allPayments}
+          relancesList={tenantRelances}
+          onAction={openAction}
+          onClose={() => {
+            setRentActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Etat loyer" ? (
+        <RentStatementModal
+          row={rentActionContext?.row ?? allRentRows[0]}
+          paymentsList={allPayments}
+          relancesList={tenantRelances}
+          onClose={() => {
+            setRentActionContext(null);
+            setModal(null);
+          }}
+        />
       ) : modal === "Paiement locataire" ? (
         <TenantPaymentModal
           tenant={tenantActionContext?.tenant ?? selectedTenant}
@@ -4788,6 +4825,7 @@ function App() {
       ) : modal === "Relance locataire" ? (
         <TenantReminderModal
           tenant={tenantActionContext?.tenant ?? selectedTenant}
+          property={tenantActionContext?.property}
           row={tenantActionContext?.row}
           onSave={handleTenantRelanceSave}
           onClose={() => {
@@ -10737,10 +10775,10 @@ function FinancePage({ activeTab, onTab, onAction, paymentsList = paymentRecords
 function RentActions({ row, onAction }) {
   return (
     <div className="table-actions">
-      <Button compact onClick={() => onAction(`Paiement ${row.tenant}`, { row })}><Banknote size={15} /> Paiement</Button>
-      <Button compact onClick={() => onAction(`Détail loyer ${row.tenant}`)}><Eye size={15} /> Détail</Button>
-      <Button compact onClick={() => onAction(`État loyer ${row.tenant}`)}><FileText size={15} /> État</Button>
-      <Button compact onClick={() => onAction(`Relance ${row.tenant}`)}><Bell size={15} /> Relance</Button>
+      <Button compact onClick={() => onAction("Enregistrer paiement", { row })}><Banknote size={15} /> Paiement</Button>
+      <Button compact onClick={() => onAction("Détail loyer", { row })}><Eye size={15} /> Détail</Button>
+      <Button compact onClick={() => onAction("État loyer", { row })}><FileText size={15} /> État</Button>
+      <Button compact onClick={() => onAction("Ajouter relance", { row })}><Bell size={15} /> Relance</Button>
     </div>
   );
 }
@@ -13657,6 +13695,247 @@ function NewTenantFormModal({ sequence = 1, propertiesList = properties, onSave,
   );
 }
 
+function getLinkedRentPayments(row, paymentsList = paymentRecords) {
+  return paymentsList.filter((payment) => (
+    payment.tenant === row.tenant &&
+    payment.property === row.property &&
+    payment.period === row.period
+  ));
+}
+
+function getLinkedRentRelances(row, relancesList = []) {
+  return relancesList.filter((relance) => (
+    (relance.tenant === row.tenant || relance.tenantName === row.tenant) &&
+    (!relance.property || relance.property === row.property)
+  ));
+}
+
+function RentDetailModal({ row, paymentsList = paymentRecords, relancesList = [], onAction, onClose }) {
+  const linkedPayments = getLinkedRentPayments(row, paymentsList);
+  const linkedRelances = getLinkedRentRelances(row, relancesList);
+  const receipt = linkedPayments.find((payment) => payment.receipt && payment.receipt !== "Non généré")?.receipt ?? "Aucun reçu lié";
+  const tenant = tenants.find((item) => item.name === row.tenant);
+  const property = getPropertyByName(row.property);
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal rent-detail-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Finance → Loyers</span>
+            <h2>Détail du loyer</h2>
+            <p>{row.tenant} · {row.property} · {row.period}</p>
+          </div>
+          <Badge label={row.status} />
+        </div>
+
+        <DetailMetrics
+          items={[
+            ["Période", row.period],
+            ["Montant attendu", row.expected],
+            ["Montant payé", row.paid],
+            ["Solde", row.balance],
+          ]}
+        />
+
+        <div className="form-section">
+          <h3>Informations principales</h3>
+          <div className="simple-list">
+            <p><span>Locataire</span><strong>{row.tenant}</strong><small>{tenant?.phone ?? "Téléphone non renseigné"}</small></p>
+            <p><span>Bien</span><strong>{row.property}</strong><small>{property?.address ?? "Adresse non renseignée"}</small></p>
+            <p><span>Propriétaire</span><strong>{row.owner}</strong></p>
+            <p><span>Statut</span><Badge label={row.status} /></p>
+            <p><span>Reçu lié</span><strong>{receipt}</strong></p>
+          </div>
+        </div>
+
+        <div className="owner-statement-layout">
+          <Panel title="Paiements liés">
+            <DataTable
+              columns={["Référence", "Date", "Mode", "Payé", "Solde", "Reçu"]}
+              rows={(linkedPayments.length ? linkedPayments : [{
+                reference: "Aucun paiement",
+                date: "-",
+                mode: "-",
+                paid: "0 FCFA",
+                balance: row.balance,
+                receipt: "Aucun",
+              }]).map((payment) => [
+                payment.reference,
+                payment.date,
+                payment.mode,
+                payment.paid,
+                payment.balance,
+                payment.receipt,
+              ])}
+            />
+          </Panel>
+          <Panel title="Relances liées">
+            <DataTable
+              columns={["Référence", "Canal", "Montant", "Date", "Prochaine action"]}
+              rows={(linkedRelances.length ? linkedRelances : [{
+                reference: "Aucune relance",
+                channel: "-",
+                amount: row.balance,
+                date: "-",
+                nextDate: "À planifier",
+              }]).map((relance) => [
+                relance.reference,
+                relance.channel,
+                relance.amount,
+                relance.date,
+                relance.nextDate,
+              ])}
+            />
+          </Panel>
+        </div>
+
+        <div className="action-row compact-row">
+          <Button variant="primary" onClick={() => onAction("Enregistrer paiement", { row })}><Banknote size={17} /> Enregistrer paiement</Button>
+          <Button onClick={() => onAction("Ajouter relance", { row })}><Bell size={17} /> Ajouter relance</Button>
+          <Button onClick={() => onAction("État loyer", { row })}><FileText size={17} /> Générer état</Button>
+          <Button onClick={onClose}>Fermer</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function RentStatementModal({ row, paymentsList = paymentRecords, relancesList = [], onClose }) {
+  const [values, setValues] = useState({
+    period: row.period,
+    includePayments: "Oui",
+    includeRelances: "Oui",
+    format: "PDF",
+  });
+  const [preview, setPreview] = useState(false);
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+  const generatePdf = () => {
+    setPreview(true);
+    window.setTimeout(() => window.print(), 90);
+  };
+
+  return (
+    <div className="modal-backdrop document-print-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card document-print-modal rent-statement-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="document-print-head">
+          <div>
+            <span>État de loyer</span>
+            <h2>{row.tenant}</h2>
+            <p>{row.property} · {values.period}</p>
+          </div>
+          <div className="document-editor-actions">
+            <Button onClick={() => setPreview(true)}><Eye size={17} /> Prévisualiser</Button>
+            <Button variant="primary" onClick={generatePdf}><Download size={17} /> Générer PDF</Button>
+          </div>
+        </div>
+
+        <div className="owner-statement-layout">
+          <Panel title="Paramètres de l'état">
+            <div className="form-grid compact-form">
+              <label>Période<input value={values.period} onChange={update("period")} /></label>
+              <label>Inclure paiements<select value={values.includePayments} onChange={update("includePayments")}><option>Oui</option><option>Non</option></select></label>
+              <label>Inclure relances<select value={values.includeRelances} onChange={update("includeRelances")}><option>Oui</option><option>Non</option></select></label>
+              <label>Format<select value={values.format} onChange={update("format")}><option>PDF</option><option>Impression</option></select></label>
+            </div>
+            <div className="action-row compact-row">
+              <Button onClick={onClose}>Annuler</Button>
+              <Button onClick={() => setPreview(true)}><Eye size={17} /> Prévisualiser</Button>
+              <Button variant="primary" onClick={generatePdf}><Download size={17} /> Générer PDF</Button>
+            </div>
+          </Panel>
+          {preview ? (
+            <RentStatementDocument
+              row={row}
+              values={values}
+              paymentsList={paymentsList}
+              relancesList={relancesList}
+            />
+          ) : (
+            <Panel className="owner-preview-placeholder">
+              <FileText size={34} />
+              <h3>Aperçu de l'état de loyer</h3>
+              <p>Cliquez sur Prévisualiser pour contrôler le document avant génération.</p>
+            </Panel>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function RentStatementDocument({ row, values, paymentsList = paymentRecords, relancesList = [] }) {
+  const linkedPayments = values.includePayments === "Oui" ? getLinkedRentPayments(row, paymentsList) : [];
+  const linkedRelances = values.includeRelances === "Oui" ? getLinkedRentRelances(row, relancesList) : [];
+
+  return (
+    <div className="digital-document-page">
+      <DigitalDocumentHeader title="État de loyer" subtitle={`${row.tenant} · ${values.period}`}>
+        <div>
+          <strong>{row.property}</strong>
+          <span>{row.owner}</span>
+        </div>
+      </DigitalDocumentHeader>
+
+      <section className="document-block">
+        <h3>Résumé</h3>
+        <div className="document-info-grid">
+          <p><span>Période</span><strong>{values.period}</strong></p>
+          <p><span>Locataire</span><strong>{row.tenant}</strong></p>
+          <p><span>Bien</span><strong>{row.property}</strong></p>
+          <p><span>Propriétaire</span><strong>{row.owner}</strong></p>
+          <p><span>Montant attendu</span><strong>{row.expected}</strong></p>
+          <p><span>Montant payé</span><strong>{row.paid}</strong></p>
+          <p><span>Solde</span><strong>{row.balance}</strong></p>
+          <p><span>Statut</span><strong>{row.status}</strong></p>
+        </div>
+      </section>
+
+      {values.includePayments === "Oui" && (
+        <section className="document-block">
+          <h3>Paiements liés</h3>
+          <table className="document-table">
+            <thead><tr><th>Référence</th><th>Date</th><th>Mode</th><th>Montant</th><th>Reçu</th></tr></thead>
+            <tbody>
+              {(linkedPayments.length ? linkedPayments : [{ reference: "-", date: "-", mode: "-", paid: "0 FCFA", receipt: "Aucun" }]).map((payment) => (
+                <tr key={`${payment.reference}-${payment.date}`}>
+                  <td>{payment.reference}</td>
+                  <td>{payment.date}</td>
+                  <td>{payment.mode}</td>
+                  <td>{payment.paid}</td>
+                  <td>{payment.receipt}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      {values.includeRelances === "Oui" && (
+        <section className="document-block">
+          <h3>Relances liées</h3>
+          <table className="document-table">
+            <thead><tr><th>Référence</th><th>Canal</th><th>Montant</th><th>Date</th><th>Prochaine action</th></tr></thead>
+            <tbody>
+              {(linkedRelances.length ? linkedRelances : [{ reference: "-", channel: "-", amount: row.balance, date: "-", nextDate: "À planifier" }]).map((relance) => (
+                <tr key={`${relance.reference}-${relance.date}`}>
+                  <td>{relance.reference}</td>
+                  <td>{relance.channel}</td>
+                  <td>{relance.amount}</td>
+                  <td>{relance.date}</td>
+                  <td>{relance.nextDate}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+    </div>
+  );
+}
+
 function TenantPaymentModal({ tenant, property, row, payment, paymentsList = paymentRecords, rentRowsList = rentRows, onSave, onClose }) {
   const linkedProperty = property ?? properties.find((item) => item.name === tenant.property) ?? properties[0];
   const initialRow = row
@@ -14248,10 +14527,13 @@ function DashboardRentReminderModal({ rows = [], relancesList = [], onSave, onCl
   );
 }
 
-function TenantReminderModal({ tenant, row, onSave, onClose }) {
+function TenantReminderModal({ tenant, property, row, onSave, onClose }) {
+  const linkedProperty = property ?? properties.find((item) => item.name === row?.property || item.name === tenant.property) ?? properties[0];
   const [values, setValues] = useState({
     reason: "Retard de paiement",
     amount: row?.balance && row.balance !== "0 FCFA" ? row.balance : tenant.rent,
+    property: row?.property ?? linkedProperty.name,
+    period: row?.period ?? "Mai 2026",
     channel: "WhatsApp",
     comment: `Relance amiable pour ${tenant.name}.`,
     promise: "Paiement promis sous 72h",
@@ -14266,7 +14548,8 @@ function TenantReminderModal({ tenant, row, onSave, onClose }) {
         reference: makeDocumentNumber("REL", Math.max(100, parseFCFA(tenant.id) % 900)),
         tenantId: tenant.id,
         tenant: tenant.name,
-        property: tenant.property,
+        property: values.property,
+        period: values.period,
         reason: values.reason,
         amount: values.amount,
         channel: values.channel,
@@ -14286,7 +14569,7 @@ function TenantReminderModal({ tenant, row, onSave, onClose }) {
           <div>
             <span>Suivi impayés</span>
             <h2>Ajouter relance</h2>
-            <p>{tenant.name} · {tenant.property}</p>
+            <p>{tenant.name} · {values.property} · {values.period}</p>
           </div>
           <Badge label={values.amount} />
         </div>
@@ -14294,6 +14577,9 @@ function TenantReminderModal({ tenant, row, onSave, onClose }) {
         <div className="form-section">
           <h3>Détails de la relance</h3>
           <div className="form-grid compact-form">
+            <label>Locataire<input value={tenant.name} readOnly /></label>
+            <label>Bien<input value={values.property} onChange={(event) => update("property", event.target.value)} /></label>
+            <label>Période<input value={values.period} onChange={(event) => update("period", event.target.value)} /></label>
             <label>Motif<select value={values.reason} onChange={(event) => update("reason", event.target.value)}><option>Retard de paiement</option><option>Paiement partiel</option><option>Promesse non tenue</option><option>Contrat à régulariser</option><option>Autre</option></select></label>
             <label>Montant concerné<input value={values.amount} onChange={(event) => update("amount", event.target.value)} /></label>
             <label>Canal<select value={values.channel} onChange={(event) => update("channel", event.target.value)}><option>Appel</option><option>WhatsApp</option><option>SMS</option><option>Email</option><option>Visite</option></select></label>
