@@ -4279,6 +4279,36 @@ function App() {
     setModal(null);
   };
 
+  const handleGeneratedDocumentArchive = ({ archive }) => {
+    const nextDocument = {
+      ...archive,
+      status: "Archivé",
+      module: "Docs",
+      category: archive.category || "Biens et clients",
+    };
+
+    setPropertyDocumentArchives((current) => [
+      nextDocument,
+      ...current.filter((item) => item.reference !== nextDocument.reference),
+    ]);
+
+    if (nextDocument.property) {
+      setPropertyHistoryOverrides((current) => ({
+        ...current,
+        [nextDocument.property]: [
+          [
+            "Document archivé",
+            `${nextDocument.title} conservé dans Docs → Archives.`,
+            nextDocument.date,
+          ],
+          ...(current[nextDocument.property] ?? []),
+        ],
+      }));
+    }
+
+    setContractTab("Archives");
+  };
+
   const handlePropertyArchive = ({ property, reason }) => {
     const target = property ?? archiveContext ?? selectedProperty;
     const cleanReason = reason.trim().replace(/\s+/g, " ");
@@ -4485,6 +4515,8 @@ function App() {
             paymentsList={allPayments}
             documentDraft={documentDraft}
             propertyPdfArchives={allPropertyDocumentArchives}
+            onArchiveDocument={handleGeneratedDocumentArchive}
+            documentArchiveSequence={propertyDocumentArchives.length + propertyPdfArchives.length + 1}
             contractTimelines={contractTimelines}
             contractDeadlines={contractDeadlines}
             detailRequest={contractDetailRequest}
@@ -7756,6 +7788,8 @@ function ContractsPage({
   paymentsList = paymentRecords,
   documentDraft = null,
   propertyPdfArchives = [],
+  onArchiveDocument,
+  documentArchiveSequence = 1,
   contractTimelines = {},
   contractDeadlines = {},
   detailRequest = null,
@@ -7786,7 +7820,7 @@ function ContractsPage({
           onFilterRequestConsumed={onFilterRequestConsumed}
         />
       )}
-      {effectiveTab === "Génération de document" && <DocumentGeneration onAction={onAction} documentDraft={documentDraft} />}
+      {effectiveTab === "Génération de document" && <DocumentGeneration onAction={onAction} documentDraft={documentDraft} onArchiveDocument={onArchiveDocument} documentArchiveSequence={documentArchiveSequence} />}
       {effectiveTab === "Archives" && <ArchivesView onAction={onAction} contractsList={contractsList} paymentsList={paymentsList} propertyPdfArchives={propertyPdfArchives} />}
     </>
   );
@@ -8184,7 +8218,7 @@ function getContractDueLabel(contract) {
   return "En cours";
 }
 
-function DocumentGeneration({ onAction, documentDraft = null }) {
+function DocumentGeneration({ onAction, documentDraft = null, onArchiveDocument, documentArchiveSequence = 1 }) {
   const defaultData = documentDraft?.data ?? {
     invoice: invoices[0],
     payment: paymentRecords[0],
@@ -8203,6 +8237,8 @@ function DocumentGeneration({ onAction, documentDraft = null }) {
       autoOpen={Boolean(documentDraft)}
       title={draftTitle ?? (documentDraft ? `Générer un document - ${documentTemplates.find((item) => item.key === documentDraft.templateKey)?.label ?? "Document"}` : "Atelier de génération documentaire")}
       onAction={onAction}
+      onArchiveDocument={onArchiveDocument}
+      documentArchiveSequence={documentArchiveSequence}
       data={defaultData}
     />
   );
@@ -8652,7 +8688,7 @@ function ArchivesView({ onAction, contractsList = contracts, paymentsList = paym
   );
 }
 
-function DocumentStudio({ initialTemplate = "facture", lockedTemplate, title, data, onAction, autoOpen = false }) {
+function DocumentStudio({ initialTemplate = "facture", lockedTemplate, title, data, onAction, onArchiveDocument, documentArchiveSequence = 1, autoOpen = false }) {
   const [templateKey, setTemplateKey] = useState(lockedTemplate ?? initialTemplate);
   const [editingKey, setEditingKey] = useState(lockedTemplate ?? (autoOpen ? initialTemplate : null));
 
@@ -8704,6 +8740,8 @@ function DocumentStudio({ initialTemplate = "facture", lockedTemplate, title, da
       compact={Boolean(lockedTemplate)}
       data={data}
       onAction={onAction}
+      onArchiveDocument={onArchiveDocument}
+      documentArchiveSequence={documentArchiveSequence}
       onBack={lockedTemplate ? null : () => setEditingKey(null)}
       template={template}
       title={title}
@@ -8711,11 +8749,12 @@ function DocumentStudio({ initialTemplate = "facture", lockedTemplate, title, da
   );
 }
 
-function DocumentEditor({ compact = false, data, onAction, onBack, template, title }) {
+function DocumentEditor({ compact = false, data, onAction, onArchiveDocument, documentArchiveSequence = 1, onBack, template, title }) {
   const relatedFiles = getRelatedDocumentFiles(template.key);
   const defaults = useMemo(() => getDocumentDefaults(template.key, data), [template.key, data]);
   const [values, setValues] = useState(defaults);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
 
   useEffect(() => {
     setValues(defaults);
@@ -8741,7 +8780,7 @@ function DocumentEditor({ compact = false, data, onAction, onBack, template, tit
         <div className="document-editor-actions">
           <Button variant="primary" onClick={() => setPreviewOpen(true)}><Download size={17} /> Générer PDF</Button>
           <Button onClick={() => setPreviewOpen(true)}><Printer size={17} /> Imprimer</Button>
-          <Button onClick={() => onAction(`Archiver ${template.label}`)}><Archive size={17} /> Archiver</Button>
+          <Button onClick={() => setArchiveOpen(true)}><Archive size={17} /> Archiver</Button>
         </div>
       </div>
 
@@ -8767,14 +8806,242 @@ function DocumentEditor({ compact = false, data, onAction, onBack, template, tit
           template={template}
           values={values}
           onChange={updateField}
+          data={data}
+          archiveSequence={documentArchiveSequence}
+          onArchive={onArchiveDocument}
           onClose={() => setPreviewOpen(false)}
+        />
+      )}
+      {archiveOpen && (
+        <DocumentArchiveModal
+          template={template}
+          values={values}
+          data={data}
+          sequence={documentArchiveSequence}
+          onConfirm={(archive) => {
+            onArchiveDocument?.({ archive });
+            setArchiveOpen(false);
+          }}
+          onClose={() => setArchiveOpen(false)}
         />
       )}
     </section>
   );
 }
 
-function DocumentPreviewModal({ template, values, onChange, onClose }) {
+function getDocumentReferenceFromValues(values = {}, template = documentTemplates[0]) {
+  return values.contratNo || values.numero || values.reference || makeDocumentNumber(getDocumentPrefix(template.label), 1);
+}
+
+function getDocumentDateForFile(values = {}) {
+  const rawDate = values.dateSignature || values.souscritLe || values.date || "24/06/2026";
+  const inputDate = toDateInputValue(rawDate, "2026-06-24");
+  return inputDate.replaceAll("-", "-");
+}
+
+function getGeneratedPdfFileName(template, values = {}) {
+  const type = normalizeSearch(template.label)
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(" ")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("");
+  const reference = getDocumentReferenceFromValues(values, template).replace(/[^A-Za-z0-9-]/g, "");
+  return `EKIMMO_${type || "Document"}_${reference}_${getDocumentDateForFile(values)}.pdf`;
+}
+
+function getGeneratedDocumentCategory(template) {
+  if (template.key === "bail") return "Contrats et mandats";
+  if (["facture", "recu", "bordereau"].includes(template.key)) return "Factures, reçus et quittances";
+  return "Biens et clients";
+}
+
+function getGeneratedDocumentMeta(template, values = {}, data = {}, sequence = 1, archiveValues = {}) {
+  const property = data.property ?? properties[0];
+  const owner = data.owner ?? owners.find((item) => item.name === property.owner) ?? owners[0];
+  const tenant = data.tenant ?? tenants.find((item) => item.property === property.name) ?? tenants[0];
+  const reference = getDocumentReferenceFromValues(values, template) || makeDocumentNumber(getDocumentPrefix(template.label), 400 + sequence);
+  const documentName = archiveValues.name?.trim() || `${template.label} - ${property.name}`;
+  const category = archiveValues.category || getGeneratedDocumentCategory(template);
+  const contract = archiveValues.contract?.trim() || values.contratNo || "";
+  const linkedParts = [
+    archiveValues.property?.trim() || property.name,
+    archiveValues.owner?.trim() || owner.name,
+    archiveValues.tenant?.trim() || tenant.name,
+    contract,
+  ].filter(Boolean);
+
+  return {
+    id: `generated-document-${reference}`,
+    category,
+    reference,
+    title: documentName,
+    linked: linkedParts.join(" · "),
+    date: fromDateInputValue(toDateInputValue(values.date || values.souscritLe || values.dateSignature, "2026-06-24")),
+    status: "Archivé",
+    module: "Docs",
+    owner: archiveValues.owner?.trim() || owner.name,
+    property: archiveValues.property?.trim() || property.name,
+    propertyCode: property.code,
+    tenant: archiveValues.tenant?.trim() || tenant.name,
+    contract,
+    documentType: template.label,
+    fileName: getGeneratedPdfFileName(template, values),
+    comment: archiveValues.comment?.trim() || "Document généré puis archivé depuis Docs → Génération de document.",
+    templateKey: template.key,
+    values,
+  };
+}
+
+function getPdfTextLines(template, values = {}) {
+  const lines = [
+    "E.K IMMO",
+    template.label,
+    `Reference: ${getDocumentReferenceFromValues(values, template)}`,
+    `Date: ${values.date || values.souscritLe || values.dateSignature || "24/06/2026"}`,
+    "",
+  ];
+  Object.entries(values)
+    .filter(([, value]) => ["string", "number", "boolean"].includes(typeof value))
+    .slice(0, 32)
+    .forEach(([key, value]) => {
+      lines.push(`${key}: ${String(value).replace(/\n/g, " / ")}`);
+    });
+  return lines;
+}
+
+function escapePdfText(value) {
+  return String(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\x20-\x7E]/g, " ")
+    .replace(/\\/g, "\\\\")
+    .replace(/\(/g, "\\(")
+    .replace(/\)/g, "\\)");
+}
+
+function createSimplePdfBlob(template, values) {
+  const lines = getPdfTextLines(template, values);
+  const content = [
+    "BT",
+    "/F1 18 Tf",
+    "50 790 Td",
+    `(${escapePdfText(lines[0])}) Tj`,
+    "/F1 11 Tf",
+    "0 -26 Td",
+    ...lines.slice(1).map((line) => `(${escapePdfText(line)}) Tj\n0 -16 Td`),
+    "ET",
+  ].join("\n");
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach((offset) => {
+    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  });
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return new Blob([pdf], { type: "application/pdf" });
+}
+
+function downloadGeneratedPdf(template, values, fileName) {
+  const blob = createSimplePdfBlob(template, values);
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1200);
+}
+
+function DocumentArchiveModal({ template, values, data = {}, sequence = 1, onConfirm, onClose }) {
+  const property = data.property ?? properties[0];
+  const owner = data.owner ?? owners.find((item) => item.name === property.owner) ?? owners[0];
+  const tenant = data.tenant ?? tenants.find((item) => item.property === property.name) ?? tenants[0];
+  const defaultCategory = getGeneratedDocumentCategory(template);
+  const [form, setForm] = useState({
+    name: `${template.label} - ${property.name}`,
+    category: defaultCategory,
+    property: property.name,
+    owner: owner.name,
+    tenant: tenant.name,
+    contract: values.contratNo || "",
+    comment: "Archivage du document généré pour conservation dans le dossier.",
+  });
+  const update = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
+  const canArchive = form.name.trim() && form.property.trim();
+
+  return (
+    <div className="modal-backdrop nested-modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal document-archive-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Archivage documentaire</span>
+            <h2>Archiver ce document ?</h2>
+            <p>Le document sera conservé dans les archives et restera consultable ultérieurement.</p>
+          </div>
+          <Badge label="Archivé" />
+        </div>
+
+        <div className="form-section">
+          <h3>Classement</h3>
+          <div className="form-grid compact-form">
+            <label>Nom du document<input value={form.name} onChange={update("name")} /></label>
+            <label>Catégorie<select value={form.category} onChange={update("category")}><option>Contrats et mandats</option><option>Factures, reçus et quittances</option><option>Biens et clients</option><option>Charges et entretiens</option><option>Rapports et exports</option><option>Brouillons</option></select></label>
+            <label>Statut<input value="Archivé" readOnly /></label>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Rattachement</h3>
+          <div className="form-grid compact-form">
+            <label>Bien<input value={form.property} onChange={update("property")} /></label>
+            <label>Propriétaire<input value={form.owner} onChange={update("owner")} /></label>
+            <label>Locataire<input value={form.tenant} onChange={update("tenant")} /></label>
+            <label>Contrat<input value={form.contract} onChange={update("contract")} placeholder="CON-2026-014" /></label>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Observation</h3>
+          <div className="form-grid compact-form">
+            <label className="full">Motif / observation<textarea value={form.comment} onChange={update("comment")} /></label>
+          </div>
+        </div>
+
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" disabled={!canArchive} onClick={() => onConfirm(getGeneratedDocumentMeta(template, values, data, sequence, form))}>
+            <Archive size={17} /> Confirmer l’archivage
+          </Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function DocumentPreviewModal({ template, values, onChange, data = {}, archiveSequence = 1, onArchive, onClose }) {
+  const fileName = getGeneratedPdfFileName(template, values);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+
+  const archiveDocument = (archive) => {
+    onArchive?.({ archive });
+    setArchiveOpen(false);
+  };
+
   return (
     <div className="modal-backdrop document-print-backdrop" role="presentation" onMouseDown={onClose}>
       <section className="modal-card document-print-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
@@ -8786,11 +9053,24 @@ function DocumentPreviewModal({ template, values, onChange, onClose }) {
             <p>Le PDF sera généré depuis cette version remplie. Les champs modifiés remplacent uniquement les zones variables du modèle source.</p>
           </div>
           <div className="document-editor-actions">
+            <Button variant="primary" onClick={() => downloadGeneratedPdf(template, values, fileName)}><Download size={17} /> Télécharger PDF</Button>
             <Button onClick={() => window.print()}><Printer size={17} /> Imprimer</Button>
-            <Button variant="primary" onClick={onClose}><Download size={17} /> Valider la sortie PDF</Button>
+            <Button onClick={() => setArchiveOpen(true)}><Archive size={17} /> Archiver</Button>
+            <Button onClick={onClose}><Pencil size={17} /> Retour modifier</Button>
           </div>
         </div>
+        <p className="generated-file-name">Fichier généré : <strong>{fileName}</strong></p>
         <FillableDocument template={template} values={values} onChange={onChange} readOnly preview />
+        {archiveOpen && (
+          <DocumentArchiveModal
+            template={template}
+            values={values}
+            data={data}
+            sequence={archiveSequence}
+            onConfirm={archiveDocument}
+            onClose={() => setArchiveOpen(false)}
+          />
+        )}
       </section>
     </div>
   );
