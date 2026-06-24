@@ -8753,7 +8753,7 @@ function DocumentEditor({ compact = false, data, onAction, onArchiveDocument, do
   const relatedFiles = getRelatedDocumentFiles(template.key);
   const defaults = useMemo(() => getDocumentDefaults(template.key, data), [template.key, data]);
   const [values, setValues] = useState(defaults);
-  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewIntent, setPreviewIntent] = useState(null);
   const [archiveOpen, setArchiveOpen] = useState(false);
 
   useEffect(() => {
@@ -8778,8 +8778,8 @@ function DocumentEditor({ compact = false, data, onAction, onArchiveDocument, do
           <p>{template.source}</p>
         </div>
         <div className="document-editor-actions">
-          <Button variant="primary" onClick={() => setPreviewOpen(true)}><Download size={17} /> Générer PDF</Button>
-          <Button onClick={() => setPreviewOpen(true)}><Printer size={17} /> Imprimer</Button>
+          <Button variant="primary" onClick={() => setPreviewIntent("pdf")}><Download size={17} /> Générer PDF</Button>
+          <Button onClick={() => setPreviewIntent("print")}><Printer size={17} /> Imprimer</Button>
           <Button onClick={() => setArchiveOpen(true)}><Archive size={17} /> Archiver</Button>
         </div>
       </div>
@@ -8801,7 +8801,7 @@ function DocumentEditor({ compact = false, data, onAction, onArchiveDocument, do
           </a>
         ))}
       </div>
-      {previewOpen && (
+      {previewIntent && (
         <DocumentPreviewModal
           template={template}
           values={values}
@@ -8809,7 +8809,8 @@ function DocumentEditor({ compact = false, data, onAction, onArchiveDocument, do
           data={data}
           archiveSequence={documentArchiveSequence}
           onArchive={onArchiveDocument}
-          onClose={() => setPreviewOpen(false)}
+          intent={previewIntent}
+          onClose={() => setPreviewIntent(null)}
         />
       )}
       {archiveOpen && (
@@ -9033,13 +9034,18 @@ function DocumentArchiveModal({ template, values, data = {}, sequence = 1, onCon
   );
 }
 
-function DocumentPreviewModal({ template, values, onChange, data = {}, archiveSequence = 1, onArchive, onClose }) {
+function DocumentPreviewModal({ template, values, onChange, data = {}, archiveSequence = 1, onArchive, intent = "pdf", onClose }) {
   const fileName = getGeneratedPdfFileName(template, values);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const isPrintIntent = intent === "print";
 
   const archiveDocument = (archive) => {
     onArchive?.({ archive });
     setArchiveOpen(false);
+  };
+
+  const printDocument = () => {
+    window.print();
   };
 
   return (
@@ -9048,13 +9054,13 @@ function DocumentPreviewModal({ template, values, onChange, data = {}, archiveSe
         <button className="modal-close" onClick={onClose}>×</button>
         <div className="document-print-head">
           <div>
-            <span>Aperçu avant impression</span>
+            <span>{isPrintIntent ? "Aperçu avant impression" : "Aperçu avant export PDF"}</span>
             <h2>{template.label}</h2>
-            <p>Le PDF sera généré depuis cette version remplie. Les champs modifiés remplacent uniquement les zones variables du modèle source.</p>
+            <p>{isPrintIntent ? "Contrôlez la mise en page, puis lancez l'impression depuis le bouton Imprimer." : "Le PDF sera généré depuis cette version remplie. Les champs modifiés remplacent uniquement les zones variables du modèle source."}</p>
           </div>
           <div className="document-editor-actions">
             <Button variant="primary" onClick={() => downloadGeneratedPdf(template, values, fileName)}><Download size={17} /> Télécharger PDF</Button>
-            <Button onClick={() => window.print()}><Printer size={17} /> Imprimer</Button>
+            <Button variant={isPrintIntent ? "primary" : "secondary"} onClick={printDocument}><Printer size={17} /> Imprimer</Button>
             <Button onClick={() => setArchiveOpen(true)}><Archive size={17} /> Archiver</Button>
             <Button onClick={onClose}><Pencil size={17} /> Retour modifier</Button>
           </div>
