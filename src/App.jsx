@@ -24,6 +24,7 @@ import {
   Home,
   KeyRound,
   Landmark,
+  Link as LinkIcon,
   LockKeyhole,
   Mail,
   MapPin,
@@ -1068,31 +1069,64 @@ const invoices = [
 
 const commissions = [
   {
+    id: "COM-2026-051",
     operation: "Location Villa Koulouba",
     property: "Villa Koulouba",
     owner: "Mamadou Keita",
+    client: "Awa Traoré",
+    period: "Mai 2026",
+    date: "05/05/2026",
     collected: "2 750 000 FCFA",
     mode: "Pourcentage",
+    rate: "5%",
+    fixedAmount: "",
+    calculationBase: "Loyer encaissé",
     commission: "137 500 FCFA",
     ownerNet: "2 612 500 FCFA",
+    status: "Intégrée",
+    contractNumber: "CON-2026-014",
+    paymentReference: "PAY-2026-051",
+    integratedInOwnerStatement: true,
   },
   {
+    id: "COM-2026-077",
     operation: "Vente parcelle Titibougou",
     property: "Parcelle Titibougou",
     owner: "Youssouf Konaté",
+    client: "Boubacar Samaké",
+    period: "Juin 2026",
+    date: "12/06/2026",
     collected: "38 000 000 FCFA",
     mode: "3%",
+    rate: "3%",
+    fixedAmount: "",
+    calculationBase: "Prix de vente",
     commission: "1 140 000 FCFA",
     ownerNet: "36 860 000 FCFA",
+    status: "À associer",
+    contractNumber: "CON-2024-112",
+    paymentReference: "",
+    integratedInOwnerStatement: false,
   },
   {
+    id: "COM-2026-088",
     operation: "Mandat résidence ACI",
     property: "Résidence ACI Baobab",
     owner: "Sira Coulibaly",
+    client: "Oumar Sidibé",
+    period: "Mai 2026",
+    date: "28/05/2026",
     collected: "850 000 FCFA",
     mode: "50% du loyer",
+    rate: "50%",
+    fixedAmount: "",
+    calculationBase: "Loyer encaissé partiel",
     commission: "425 000 FCFA",
     ownerNet: "425 000 FCFA",
+    status: "Suivi",
+    contractNumber: "CON-2026-023",
+    paymentReference: "PAY-2026-088",
+    integratedInOwnerStatement: true,
   },
 ];
 
@@ -1686,6 +1720,10 @@ function getPaymentKey(item) {
   return `${item.period}|${item.tenant}|${item.property}`;
 }
 
+function getArrearsKey(row) {
+  return `${row.period}|${row.tenant}|${row.property}`;
+}
+
 function getPaymentStatus(expected, paid) {
   const expectedAmount = parseFCFA(expected);
   const paidAmount = parseFCFA(paid);
@@ -1831,6 +1869,26 @@ function getPaymentReceiptValues(payment) {
     lieu: "Bamako",
     agent: "Aïssata Diarra",
   };
+}
+
+function getLinkedCommissionPayment(commission, paymentsList = paymentRecords) {
+  return paymentsList.find((payment) => payment.reference === commission.paymentReference)
+    ?? paymentsList.find((payment) => (
+      payment.property === commission.property &&
+      payment.owner === commission.owner &&
+      (!commission.client || payment.tenant === commission.client)
+    ))
+    ?? null;
+}
+
+function getLinkedCommissionContract(commission, contractsList = contracts) {
+  return contractsList.find((contract) => contract.number === commission.contractNumber)
+    ?? contractsList.find((contract) => (
+      contract.property === commission.property &&
+      contract.owner === commission.owner &&
+      (!commission.client || contract.client === commission.client || contract.client === "E.K immo")
+    ))
+    ?? null;
 }
 
 function getDocumentDataForProperty(property, paymentsList = paymentRecords) {
@@ -2078,6 +2136,14 @@ function getContractKey(contract) {
   return contract?.number ?? normalizeSearch(`${contract?.property ?? "bien"}-${contract?.client ?? "client"}`);
 }
 
+function getCommissionKey(commission) {
+  return commission?.id ?? normalizeSearch(`${commission?.operation ?? "commission"}-${commission?.property ?? "bien"}-${commission?.owner ?? "proprietaire"}`);
+}
+
+function getChargeKey(charge) {
+  return charge?.id ?? normalizeSearch(`${charge?.property ?? "bien"}-${charge?.type ?? "charge"}-${charge?.date ?? "date"}`);
+}
+
 function getProspectObjective(prospect) {
   return prospect?.objective ?? (prospect?.need?.includes("Bureau") ? "Location pro" : "Location");
 }
@@ -2251,12 +2317,24 @@ function App() {
   const [clientDetailRequest, setClientDetailRequest] = useState(null);
   const [recordedPayments, setRecordedPayments] = useState([]);
   const [paymentContext, setPaymentContext] = useState(null);
+  const [paymentActionContext, setPaymentActionContext] = useState(null);
+  const [paymentDetailRequest, setPaymentDetailRequest] = useState(null);
+  const [paymentHistories, setPaymentHistories] = useState({});
+  const [paymentProofs, setPaymentProofs] = useState({});
   const [rentActionContext, setRentActionContext] = useState(null);
+  const [arrearsActionContext, setArrearsActionContext] = useState(null);
+  const [arrearsStatusOverrides, setArrearsStatusOverrides] = useState({});
+  const [arrearsPromises, setArrearsPromises] = useState({});
+  const [arrearsHistories, setArrearsHistories] = useState({});
+  const [commissionActionContext, setCommissionActionContext] = useState(null);
+  const [commissionOverrides, setCommissionOverrides] = useState({});
   const [receiptPreviewValues, setReceiptPreviewValues] = useState(null);
   const [scheduledMaintenances, setScheduledMaintenances] = useState([]);
   const [maintenanceCharges, setMaintenanceCharges] = useState([]);
   const [maintenanceContext, setMaintenanceContext] = useState(null);
   const [chargeContext, setChargeContext] = useState(null);
+  const [chargeActionContext, setChargeActionContext] = useState(null);
+  const [chargeOverrides, setChargeOverrides] = useState({});
   const [propertyHistoryOverrides, setPropertyHistoryOverrides] = useState({});
   const [documentContext, setDocumentContext] = useState(null);
   const [propertyDocumentImportContext, setPropertyDocumentImportContext] = useState(null);
@@ -2278,13 +2356,25 @@ function App() {
     const applyOverride = (contract) => ({ ...contract, ...(contractOverrides[getContractKey(contract)] ?? {}) });
     return [...generatedContracts.map(applyOverride), ...contracts.map(applyOverride)];
   }, [generatedContracts, contractOverrides]);
-  const allPayments = useMemo(() => mergePaymentRecords(paymentRecords, recordedPayments), [recordedPayments]);
+  const allPayments = useMemo(() => mergePaymentRecords(paymentRecords, recordedPayments).map((payment) => ({
+    ...payment,
+    ...(paymentProofs[payment.reference] ? { proof: paymentProofs[payment.reference] } : {}),
+    history: paymentHistories[payment.reference] ?? payment.history ?? [],
+  })), [paymentHistories, paymentProofs, recordedPayments]);
+  const allCommissions = useMemo(() => commissions.map((commission) => ({
+    ...commission,
+    ...(commissionOverrides[getCommissionKey(commission)] ?? {}),
+  })), [commissionOverrides]);
   const allRentRows = useMemo(() => mergeRentRowsWithPayments(rentRows, recordedPayments), [recordedPayments]);
   const allMaintenances = useMemo(() => [...scheduledMaintenances, ...maintenances], [scheduledMaintenances]);
   const allCharges = useMemo(() => {
     const dynamicChargeIds = new Set(maintenanceCharges.map((charge) => charge.id));
-    return [...maintenanceCharges, ...charges.filter((charge) => !dynamicChargeIds.has(charge.id))];
-  }, [maintenanceCharges]);
+    return [...maintenanceCharges, ...charges.filter((charge) => !dynamicChargeIds.has(charge.id))].map((charge) => ({
+      ...charge,
+      ...(chargeOverrides[getChargeKey(charge)] ?? {}),
+      history: chargeOverrides[getChargeKey(charge)]?.history ?? charge.history ?? [],
+    }));
+  }, [chargeOverrides, maintenanceCharges]);
   const allPropertyDocumentArchives = useMemo(
     () => [...propertyDocumentArchives, ...propertyPdfArchives],
     [propertyDocumentArchives, propertyPdfArchives]
@@ -2430,6 +2520,205 @@ function App() {
     if (normalizedAction === "etat loyer" && context.row) {
       setRentActionContext({ row: context.row });
       setModal("Etat loyer");
+      return;
+    }
+
+    if ([
+      "annuler paiement",
+      "voir historique paiement",
+      "justificatif paiement",
+      "generer recu paiement",
+      "imprimer recu paiement",
+    ].includes(normalizedAction)) {
+      setPaymentActionContext({
+        payment: context.payment ?? allPayments[0] ?? paymentRecords[0],
+        row: context.row ?? null,
+        printOnOpen: normalizedAction === "imprimer recu paiement",
+      });
+      const modalByAction = {
+        "annuler paiement": "Annuler paiement",
+        "voir historique paiement": "Historique paiement",
+        "justificatif paiement": "Justificatif paiement",
+        "generer recu paiement": "Recu paiement finance",
+        "imprimer recu paiement": "Recu paiement finance",
+      };
+      setModal(modalByAction[normalizedAction]);
+      return;
+    }
+
+    if (["promesse de paiement", "changer statut relance", "etat impaye", "historique relance"].includes(normalizedAction) && context.row) {
+      setArrearsActionContext({ row: context.row });
+      const modalByAction = {
+        "promesse de paiement": "Promesse impaye",
+        "changer statut relance": "Statut impaye",
+        "etat impaye": "Etat impaye",
+        "historique relance": "Historique impaye",
+      };
+      setModal(modalByAction[normalizedAction]);
+      return;
+    }
+
+    if (normalizedAction === "marquer regularise" && context.row) {
+      const completePayment = allPayments.some((payment) => (
+        payment.tenant === context.row.tenant &&
+        payment.property === context.row.property &&
+        payment.period === context.row.period &&
+        parseFCFA(payment.balance) === 0 &&
+        ["Payé", "Régularisé"].includes(payment.status)
+      ));
+
+      if (!completePayment) {
+        setPaymentContext({ row: context.row, property: propertiesWithArchiveState.find((property) => property.name === context.row.property) ?? null });
+        setModal("Enregistrer paiement");
+        return;
+      }
+
+      setArrearsActionContext({ row: context.row });
+      setModal("Regulariser impaye");
+      return;
+    }
+
+    if (normalizedAction === "detail commission" && context.commission) {
+      setCommissionActionContext({ commission: context.commission });
+      setModal("Detail commission");
+      return;
+    }
+
+    if (normalizedAction === "modifier commission" && context.commission) {
+      setCommissionActionContext({ commission: context.commission });
+      setModal("Modifier commission");
+      return;
+    }
+
+    if (normalizedAction === "paiement commission" && context.commission) {
+      const linkedPayment = getLinkedCommissionPayment(context.commission, allPayments);
+      if (!linkedPayment) {
+        setCommissionActionContext({ commission: context.commission });
+        setModal("Paiement commission absent");
+        return;
+      }
+      setPaymentDetailRequest({
+        reference: linkedPayment.reference,
+        commissionKey: getCommissionKey(context.commission),
+        nonce: Date.now(),
+      });
+      setFinanceTab("Paiements");
+      setActivePage("Finance");
+      return;
+    }
+
+    if (normalizedAction === "contrat commission" && context.commission) {
+      const linkedContract = getLinkedCommissionContract(context.commission, allContracts);
+      if (linkedContract) {
+        setContractDetailRequest({
+          contractKey: getContractKey(linkedContract),
+          contractNumber: linkedContract.number,
+          returnTo: {
+            page: "Finance",
+            tab: "Commissions",
+            commissionKey: getCommissionKey(context.commission),
+          },
+          nonce: Date.now(),
+        });
+        setContractTab("Contrats");
+        setActivePage("Contrats");
+        return;
+      }
+      setCommissionActionContext({ commission: context.commission });
+      setModal("Contrat commission absent");
+      return;
+    }
+
+    if (normalizedAction === "situation commission" && context.commission) {
+      const owner = allOwners.find((item) => item.name === context.commission.owner) ?? owners.find((item) => item.name === context.commission.owner);
+      if (owner) {
+        setSelectedOwner(owner);
+        setClientTab("Propriétaires");
+        setClientDetailRequest({
+          type: "owner",
+          key: owner.id,
+          initialTab: "Situation financière",
+          situationPeriod: context.commission.period,
+          nonce: Date.now(),
+        });
+        setActivePage("Clients");
+        return;
+      }
+    }
+
+    if (normalizedAction === "exporter commission" && context.commission) {
+      setCommissionActionContext({ commission: context.commission });
+      setModal("Exporter commission");
+      return;
+    }
+
+    if (normalizedAction === "valider charge" && context.charge) {
+      setChargeActionContext({ charge: context.charge });
+      setModal("Valider charge");
+      return;
+    }
+
+    if (normalizedAction === "annuler charge" && context.charge) {
+      setChargeActionContext({ charge: context.charge });
+      setModal("Annuler charge");
+      return;
+    }
+
+    if (normalizedAction === "justificatif charge" && context.charge) {
+      setChargeActionContext({ charge: context.charge });
+      setModal("Justificatif charge");
+      return;
+    }
+
+    if (normalizedAction === "lier charge bien" && context.charge) {
+      setChargeActionContext({ charge: context.charge });
+      setModal("Lier charge bien");
+      return;
+    }
+
+    if (normalizedAction === "proprietaire charge" && context.charge) {
+      const owner = allOwners.find((item) => item.name === context.charge.owner);
+      if (owner) {
+        setSelectedOwner(owner);
+        setClientTab("Propriétaires");
+        setClientDetailRequest({ type: "owner", key: owner.id, nonce: Date.now() });
+        setActivePage("Clients");
+        return;
+      }
+      setChargeActionContext({ charge: context.charge, linkType: "owner" });
+      setModal("Lier charge personne");
+      return;
+    }
+
+    if (normalizedAction === "locataire charge" && context.charge) {
+      const tenant = allTenants.find((item) => item.name === context.charge.tenant);
+      if (tenant) {
+        setSelectedTenant(tenant);
+        setClientTab("Locataires");
+        setClientDetailRequest({ type: "tenant", key: tenant.id, nonce: Date.now() });
+        setActivePage("Clients");
+        return;
+      }
+      setChargeActionContext({ charge: context.charge, linkType: "tenant" });
+      setModal("Lier charge personne");
+      return;
+    }
+
+    if (normalizedAction === "entretien charge" && context.charge) {
+      setChargeActionContext({ charge: context.charge });
+      setModal("Entretien charge");
+      return;
+    }
+
+    if (normalizedAction === "historique charge" && context.charge) {
+      setChargeActionContext({ charge: context.charge });
+      setModal("Historique charge");
+      return;
+    }
+
+    if (normalizedAction === "modifier charge" && context.charge) {
+      setChargeContext({ charge: context.charge });
+      setModal(`Modifier charge ${context.charge.id}`);
       return;
     }
 
@@ -2900,6 +3189,11 @@ function App() {
 
   const handleContractDetailReturn = (request) => {
     const returnTo = request?.returnTo;
+    if (returnTo?.page === "Finance") {
+      setFinanceTab(returnTo.tab ?? "Commissions");
+      setActivePage("Finance");
+      return;
+    }
     if (returnTo?.page !== "Biens") return;
     const property =
       propertiesWithArchiveState.find((item) => item.code === returnTo.propertyCode) ??
@@ -4157,6 +4451,335 @@ function App() {
     }
   };
 
+  const appendPaymentHistory = (payment, entry) => {
+    setPaymentHistories((current) => ({
+      ...current,
+      [payment.reference]: [
+        entry,
+        ...(current[payment.reference] ?? payment.history ?? [
+          { action: "Paiement créé", user: "Aïssata Diarra", date: payment.date, detail: `${payment.paid} enregistré pour ${payment.period}.` },
+          ...(payment.receipt && payment.receipt !== "Non généré" ? [{ action: "Reçu généré", user: "Aïssata Diarra", date: payment.date, detail: payment.receipt }] : []),
+        ]),
+      ],
+    }));
+  };
+
+  const handlePaymentCancellation = ({ payment, values }) => {
+    const canceledPayment = {
+      ...payment,
+      paid: "0 FCFA",
+      amountNow: "0 FCFA",
+      balance: payment.due ?? payment.expected ?? payment.balance,
+      status: "Annulé",
+      receipt: values.keepReceipt === "Oui" && payment.receipt && payment.receipt !== "Non généré" ? `${payment.receipt} (annulé)` : "Non généré",
+      cancellationReason: values.reason,
+      cancellationComment: values.comment,
+      note: `${payment.note ?? ""} Paiement annulé : ${values.reason}. ${values.comment}`.trim(),
+    };
+
+    setRecordedPayments((current) => {
+      const existingIndex = current.findIndex((item) => getPaymentKey(item) === getPaymentKey(payment));
+      if (existingIndex >= 0) {
+        return current.map((item, index) => (index === existingIndex ? canceledPayment : item));
+      }
+      return [canceledPayment, ...current];
+    });
+    appendPaymentHistory(payment, {
+      action: "Annulation",
+      user: "Aïssata Diarra",
+      date: "24/06/2026 10:35",
+      detail: `Motif : ${values.reason}. Reçu ${values.keepReceipt === "Oui" ? "conservé en historique et annulé" : "retiré"}.`,
+      oldValue: payment.status,
+      newValue: "Annulé",
+    });
+
+    const paymentTenant = allTenants.find((tenant) => tenant.name === payment.tenant);
+    if (paymentTenant) {
+      setTenantOverrides((current) => ({
+        ...current,
+        [paymentTenant.id]: {
+          ...(current[paymentTenant.id] ?? {}),
+          paymentStatus: "En retard",
+          lastReceipt: canceledPayment.receipt,
+        },
+      }));
+    }
+
+    setPaymentActionContext(null);
+    setModal(null);
+  };
+
+  const handlePaymentProofSave = ({ payment, proof }) => {
+    if (!proof) {
+      setPaymentProofs((current) => {
+        const next = { ...current };
+        delete next[payment.reference];
+        return next;
+      });
+      appendPaymentHistory(payment, {
+        action: "Justificatif supprimé",
+        user: "Aïssata Diarra",
+        date: "24/06/2026 10:42",
+        detail: "Justificatif retiré du paiement.",
+        oldValue: payment.proof?.fileName ?? "Justificatif",
+        newValue: "Aucun justificatif",
+      });
+      setPaymentActionContext((current) => current ? { ...current, payment: { ...payment, proof: null } } : null);
+      return;
+    }
+
+    setPaymentProofs((current) => ({
+      ...current,
+      [payment.reference]: proof,
+    }));
+    appendPaymentHistory(payment, {
+      action: proof.actionLabel ?? "Justificatif mis à jour",
+      user: "Aïssata Diarra",
+      date: "24/06/2026 10:42",
+      detail: `${proof.fileName} · ${proof.reference}. ${proof.comment}`,
+      oldValue: payment.proof?.fileName ?? "Aucun justificatif",
+      newValue: proof.fileName,
+    });
+    setPaymentActionContext((current) => current ? { ...current, payment: { ...payment, proof } } : null);
+  };
+
+  const handleFinanceReceiptAction = ({ payment, values, action }) => {
+    const tenant = allTenants.find((item) => item.name === payment.tenant) ?? tenants[0];
+    const property = propertiesWithArchiveState.find((item) => item.name === payment.property) ?? properties.find((item) => item.name === payment.property) ?? properties[0];
+    const receiptNumber = values.numero || payment.receipt || makeDocumentNumber("REC", allPayments.length + 140);
+
+    if (action === "archive-tenant") {
+      setTenantReceiptArchives((current) => [
+        { ...values, numero: receiptNumber, tenantId: tenant.id, tenant: tenant.name, archivedAt: "24/06/2026", source: payment.reference },
+        ...current.filter((item) => item.numero !== receiptNumber),
+      ]);
+    }
+
+    if (action === "archive-property") {
+      setPropertyDocumentArchives((current) => [
+        {
+          id: `receipt-${receiptNumber}-${property.code}`,
+          category: "Factures, reçus et quittances",
+          reference: receiptNumber,
+          title: `Reçu ${payment.period} - ${payment.tenant}`,
+          linked: `${property.name} · ${tenant.name} · ${payment.reference}`,
+          date: payment.date,
+          status: "Archivé",
+          module: "Finance",
+          owner: payment.owner,
+          property: property.name,
+          propertyCode: property.code,
+          tenant: tenant.name,
+          documentType: "Reçu d'encaissement",
+          fileName: `EKIMMO_Recu_${receiptNumber}_2026-06-24.pdf`,
+          comment: "Reçu archivé depuis Finance → Paiements.",
+          templateKey: "recu",
+          values,
+        },
+        ...current.filter((item) => item.reference !== receiptNumber),
+      ]);
+      setPropertyHistoryOverrides((current) => ({
+        ...current,
+        [property.name]: [
+          ["Reçu archivé", `${receiptNumber} lié au paiement ${payment.reference}.`, "24/06/2026"],
+          ...(current[property.name] ?? []),
+        ],
+      }));
+    }
+
+    if (action === "link") {
+      const linkedPayment = { ...payment, receipt: receiptNumber };
+      setRecordedPayments((current) => {
+        const existingIndex = current.findIndex((item) => getPaymentKey(item) === getPaymentKey(payment));
+        if (existingIndex >= 0) return current.map((item, index) => (index === existingIndex ? linkedPayment : item));
+        return [linkedPayment, ...current];
+      });
+    }
+
+    appendPaymentHistory(payment, {
+      action: action === "archive-tenant" ? "Reçu archivé locataire" : action === "archive-property" ? "Reçu archivé bien" : "Reçu lié au paiement",
+      user: "Aïssata Diarra",
+      date: "24/06/2026 10:48",
+      detail: receiptNumber,
+    });
+  };
+
+  const appendArrearsHistory = (row, entry) => {
+    const key = getArrearsKey(row);
+    setArrearsHistories((current) => ({
+      ...current,
+      [key]: [
+        entry,
+        ...(current[key] ?? []),
+      ],
+    }));
+  };
+
+  const handleArrearsPromiseSave = ({ row, values }) => {
+    const key = getArrearsKey(row);
+    const isOverdue = new Date(values.promisedDate) < new Date("2026-06-24");
+    setArrearsPromises((current) => ({
+      ...current,
+      [key]: { ...values, status: isOverdue ? "Promesse dépassée" : "Promesse active" },
+    }));
+    setArrearsStatusOverrides((current) => ({ ...current, [key]: "Promesse de paiement" }));
+    appendArrearsHistory(row, {
+      date: "24/06/2026 10:55",
+      channel: "Promesse",
+      comment: `${values.amount} promis le ${fromDateInputValue(values.promisedDate)} par ${values.paymentMode}. ${values.comment}`,
+      user: "Aïssata Diarra",
+      nextAction: values.nextReminder,
+      status: isOverdue ? "Alerte date dépassée" : "Promesse de paiement",
+    });
+    setArrearsActionContext(null);
+    setModal(null);
+  };
+
+  const handleArrearsStatusSave = ({ row, values }) => {
+    const key = getArrearsKey(row);
+    setArrearsStatusOverrides((current) => ({ ...current, [key]: values.status }));
+    appendArrearsHistory(row, {
+      date: "24/06/2026 11:02",
+      channel: "Statut",
+      comment: values.status === "Litige" ? values.comment : `Statut changé en ${values.status}. ${values.comment}`,
+      user: "Aïssata Diarra",
+      nextAction: values.status === "Régularisé" ? "Clôturer le suivi" : "Suivi dossier",
+      status: values.status,
+    });
+    setArrearsActionContext(null);
+    setModal(null);
+  };
+
+  const handleArrearsRegularizedConfirm = (row) => {
+    const key = getArrearsKey(row);
+    setArrearsStatusOverrides((current) => ({ ...current, [key]: "Régularisé" }));
+    appendArrearsHistory(row, {
+      date: "24/06/2026 11:08",
+      channel: "Validation",
+      comment: "Impayé confirmé comme régularisé.",
+      user: "Aïssata Diarra",
+      nextAction: "Aucune",
+      status: "Régularisé",
+    });
+    setArrearsActionContext(null);
+    setModal(null);
+  };
+
+  const handleArrearsStatementArchive = ({ row, values }) => {
+    const property = propertiesWithArchiveState.find((item) => item.name === row.property) ?? properties[0];
+    const reference = makeDocumentNumber("IMP", 500 + Object.keys(arrearsHistories).length + 1);
+    setPropertyDocumentArchives((current) => [
+      {
+        id: `arrears-statement-${reference}`,
+        category: "Rapports et exports",
+        reference,
+        title: `État impayé - ${row.tenant}`,
+        linked: `${row.property} · ${row.tenant} · ${row.period}`,
+        date: "24/06/2026",
+        status: "Archivé",
+        module: "Finance",
+        owner: row.owner,
+        property: row.property,
+        propertyCode: property.code,
+        tenant: row.tenant,
+        documentType: "État impayé",
+        fileName: `EKIMMO_EtatImpaye_${reference}_2026-06-24.pdf`,
+        comment: values.observations || "État d'impayé archivé depuis Finance → Impayés.",
+        templateKey: "rapport",
+        values,
+      },
+      ...current.filter((item) => item.reference !== reference),
+    ]);
+    appendArrearsHistory(row, {
+      date: "24/06/2026 11:12",
+      channel: "Archive",
+      comment: `État impayé ${reference} archivé.`,
+      user: "Aïssata Diarra",
+      nextAction: "Disponible dans Archives",
+      status: "Archivé",
+    });
+  };
+
+  const handleCommissionSave = ({ commission, values }) => {
+    const baseAmount = parseFCFA(values.calculationBaseAmount || commission.collected);
+    const rateAmount = values.mode === "Montant fixe"
+      ? parseFCFA(values.fixedAmount)
+      : Math.round(baseAmount * (parseFloat(String(values.rate).replace(",", ".")) || 0) / 100);
+    const nextCommission = {
+      ...commission,
+      mode: values.mode,
+      rate: values.rate,
+      fixedAmount: values.fixedAmount,
+      calculationBase: values.calculationBase,
+      collected: values.calculationBaseAmount || commission.collected,
+      commission: formatFCFA(rateAmount || parseFCFA(commission.commission)),
+      ownerNet: formatFCFA(Math.max(baseAmount - (rateAmount || parseFCFA(commission.commission)), 0)),
+      modificationReason: values.reason,
+      modificationComment: values.comment,
+      status: commission.integratedInOwnerStatement ? "Modifiée" : commission.status,
+    };
+
+    setCommissionOverrides((current) => ({
+      ...current,
+      [getCommissionKey(commission)]: nextCommission,
+    }));
+    setCommissionActionContext({ commission: nextCommission });
+    setModal(null);
+  };
+
+  const handleCommissionPaymentAssociation = ({ commission, paymentReference }) => {
+    const linkedPayment = allPayments.find((payment) => payment.reference === paymentReference) ?? allPayments[0];
+    const nextCommission = {
+      ...commission,
+      paymentReference: linkedPayment.reference,
+      client: linkedPayment.tenant,
+      collected: linkedPayment.paid,
+      status: "Associée",
+    };
+    setCommissionOverrides((current) => ({
+      ...current,
+      [getCommissionKey(commission)]: nextCommission,
+    }));
+    setPaymentDetailRequest({
+      reference: linkedPayment.reference,
+      commissionKey: getCommissionKey(commission),
+      nonce: Date.now(),
+    });
+    setCommissionActionContext(null);
+    setModal(null);
+    setFinanceTab("Paiements");
+    setActivePage("Finance");
+  };
+
+  const handleCommissionArchive = ({ commission, values }) => {
+    const reference = makeDocumentNumber("COM", 700 + Object.keys(commissionOverrides).length + propertyDocumentArchives.length + 1);
+    setPropertyDocumentArchives((current) => [
+      {
+        id: `commission-export-${reference}`,
+        category: "Rapports et exports",
+        reference,
+        title: `État commission - ${commission.operation}`,
+        linked: `${commission.property} · ${commission.owner} · ${commission.period}`,
+        date: "24/06/2026",
+        status: "Archivé",
+        module: "Finance",
+        owner: commission.owner,
+        property: commission.property,
+        tenant: commission.client,
+        documentType: "État de commission",
+        fileName: `EKIMMO_Commission_${commission.id}_2026-06-24.pdf`,
+        comment: values.observation || "État de commission archivé depuis Finance → Commissions.",
+        templateKey: "rapport",
+        values,
+      },
+      ...current.filter((item) => item.reference !== reference),
+    ]);
+    setCommissionOverrides((current) => ({
+      ...current,
+      [getCommissionKey(commission)]: { ...commission, status: "Archivée" },
+    }));
+  };
+
   const handleMaintenanceSchedule = ({ maintenance, createCharge }) => {
     const sequence = scheduledMaintenances.length + 1;
     const nextMaintenance = {
@@ -4227,6 +4850,131 @@ function App() {
     setFinanceTab("Charges");
     setChargeContext(null);
     setModal(null);
+  };
+
+  const updateChargeRecord = (charge, patch, historyEntry) => {
+    const nextHistory = [
+      ...(charge.history ?? []),
+      ...(historyEntry ? [historyEntry] : []),
+    ];
+    const nextCharge = {
+      ...charge,
+      ...patch,
+      history: nextHistory,
+    };
+
+    setChargeOverrides((current) => ({
+      ...current,
+      [getChargeKey(charge)]: nextCharge,
+    }));
+
+    if (nextCharge.property) {
+      setPropertyHistoryOverrides((current) => ({
+        ...current,
+        [nextCharge.property]: [
+          [
+            historyEntry?.split(" : ")?.[0] ?? "Charge mise à jour",
+            `${nextCharge.id} · ${nextCharge.amount} · ${nextCharge.status}.`,
+            "25/06/2026",
+          ],
+          ...(current[nextCharge.property] ?? []),
+        ],
+      }));
+    }
+
+    return nextCharge;
+  };
+
+  const handleChargeValidation = ({ charge, values }) => {
+    updateChargeRecord(charge, {
+      status: "Validée",
+      validatedBy: "Aïssata Diarra",
+      validationDate: "25/06/2026",
+      validationComment: values.comment,
+      impact: getChargeImpactForPayer(charge.payer),
+    }, `Validation : ${values.comment || "Charge validée après contrôle."}`);
+    setChargeActionContext(null);
+    setModal(null);
+  };
+
+  const handleChargeCancellation = ({ charge, values }) => {
+    updateChargeRecord(charge, {
+      status: "Annulée",
+      cancellationReason: values.reason,
+      cancellationComment: values.comment,
+      proofStatus: values.keepProof === "Oui" ? charge.proofStatus : "Supprimé",
+      proof: values.keepProof === "Oui" ? charge.proof : "Justificatif retiré",
+      impact: "Aucun impact sur reversement ou refacturation",
+    }, `Annulation : ${values.reason}. ${values.comment}`);
+    setChargeActionContext(null);
+    setModal(null);
+  };
+
+  const handleChargeProofSave = ({ charge, proof }) => {
+    const patch = proof
+      ? {
+          proof: proof.fileName,
+          proofStatus: "Présent",
+          paymentRef: proof.reference || charge.paymentRef,
+          proofComment: proof.comment,
+        }
+      : {
+          proof: "Justificatif à joindre",
+          proofStatus: "Manquant",
+          proofComment: "",
+        };
+    updateChargeRecord(charge, patch, proof ? `Justificatif ajouté : ${proof.fileName}` : "Justificatif supprimé");
+    setChargeActionContext((current) => current ? { ...current, charge: { ...charge, ...patch } } : null);
+  };
+
+  const handleChargePropertyLink = ({ charge, propertyCode }) => {
+    const property = propertiesWithArchiveState.find((item) => item.code === propertyCode) ?? propertiesWithArchiveState[0];
+    const patch = {
+      property: property.name,
+      owner: property.owner,
+      tenant: property.tenant && !["Libre", "N/A", "Non applicable"].includes(property.tenant) ? property.tenant : "Non applicable",
+      ownerCollection: isMaintenanceOnlyProperty(property),
+    };
+    updateChargeRecord(charge, patch, `Rattachement modifié : charge liée à ${property.name}`);
+    setChargeActionContext(null);
+    setModal(null);
+  };
+
+  const handleChargePersonLink = ({ charge, type, selectedName }) => {
+    const patch = type === "owner"
+      ? { owner: selectedName }
+      : { tenant: selectedName };
+    updateChargeRecord(charge, patch, `Rattachement modifié : ${type === "owner" ? "propriétaire" : "locataire"} ${selectedName}`);
+    setChargeActionContext(null);
+    setModal(null);
+  };
+
+  const handleChargeMaintenanceLink = ({ charge, maintenanceLabel }) => {
+    updateChargeRecord(charge, {
+      linkedMaintenance: maintenanceLabel,
+      category: "Entretien",
+    }, `Rattachement entretien : ${maintenanceLabel}`);
+    setChargeActionContext(null);
+    setModal(null);
+  };
+
+  const handleChargeMaintenanceCreate = (charge) => {
+    const property = propertiesWithArchiveState.find((item) => item.name === charge.property) ?? selectedProperty;
+    setMaintenanceContext({
+      property,
+      maintenance: {
+        type: charge.type,
+        priority: charge.status === "À valider" ? "Urgente" : "Normale",
+        description: charge.description,
+        date: "26/06/2026",
+        manager: charge.agent,
+        provider: "Prestataire à confirmer",
+        cost: charge.amount,
+        payer: charge.payer,
+      },
+    });
+    setChargeActionContext(null);
+    setModal("Ajouter un entretien");
   };
 
   const handleDocumentTemplateSelection = (templateKey) => {
@@ -4542,7 +5290,7 @@ function App() {
             onFilterRequestConsumed={() => setContractFilterRequest(null)}
           />
         )}
-        {activePage === "Finance" && <FinancePage activeTab={financeTab} onTab={setFinanceTab} onAction={openAction} paymentsList={allPayments} rentRowsList={allRentRows} chargesList={allCharges} maintenancesList={allMaintenances} reversalsList={allReversals} relancesList={tenantRelances} />}
+        {activePage === "Finance" && <FinancePage activeTab={financeTab} onTab={setFinanceTab} onAction={openAction} paymentsList={allPayments} paymentRequest={paymentDetailRequest} rentRowsList={allRentRows} commissionsList={allCommissions} chargesList={allCharges} maintenancesList={allMaintenances} reversalsList={allReversals} relancesList={tenantRelances} arrearsStatuses={arrearsStatusOverrides} arrearsPromises={arrearsPromises} arrearsHistories={arrearsHistories} />}
         {activePage === "Rapports" && (
           <ReportsPage selected={reportType} onSelect={setReportType} onAction={openAction} />
         )}
@@ -4571,6 +5319,74 @@ function App() {
           onSave={handleChargeSave}
           onClose={() => {
             setChargeContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Valider charge" ? (
+        <ChargeValidationModal
+          charge={chargeActionContext?.charge ?? allCharges[0]}
+          onConfirm={handleChargeValidation}
+          onClose={() => {
+            setChargeActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Annuler charge" ? (
+        <ChargeCancellationModal
+          charge={chargeActionContext?.charge ?? allCharges[0]}
+          onConfirm={handleChargeCancellation}
+          onClose={() => {
+            setChargeActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Justificatif charge" ? (
+        <ChargeProofModal
+          charge={chargeActionContext?.charge ?? allCharges[0]}
+          onSave={handleChargeProofSave}
+          onClose={() => {
+            setChargeActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Lier charge bien" ? (
+        <ChargeLinkPropertyModal
+          charge={chargeActionContext?.charge ?? allCharges[0]}
+          propertiesList={propertiesWithArchiveState}
+          onLink={handleChargePropertyLink}
+          onClose={() => {
+            setChargeActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Lier charge personne" ? (
+        <ChargeLinkPersonModal
+          charge={chargeActionContext?.charge ?? allCharges[0]}
+          type={chargeActionContext?.linkType ?? "owner"}
+          ownersList={allOwners}
+          tenantsList={allTenants}
+          onLink={handleChargePersonLink}
+          onClose={() => {
+            setChargeActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Entretien charge" ? (
+        <ChargeMaintenanceModal
+          charge={chargeActionContext?.charge ?? allCharges[0]}
+          maintenancesList={allMaintenances}
+          onLink={handleChargeMaintenanceLink}
+          onCreate={handleChargeMaintenanceCreate}
+          onClose={() => {
+            setChargeActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Historique charge" ? (
+        <ChargeHistoryModal
+          charge={chargeActionContext?.charge ?? allCharges[0]}
+          onClose={() => {
+            setChargeActionContext(null);
             setModal(null);
           }}
         />
@@ -4784,6 +5600,143 @@ function App() {
           relancesList={tenantRelances}
           onClose={() => {
             setRentActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Annuler paiement" ? (
+        <PaymentCancelModal
+          payment={paymentActionContext?.payment ?? allPayments[0]}
+          onConfirm={handlePaymentCancellation}
+          onClose={() => {
+            setPaymentActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Historique paiement" ? (
+        <PaymentHistoryModal
+          payment={paymentActionContext?.payment ?? allPayments[0]}
+          onClose={() => {
+            setPaymentActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Justificatif paiement" ? (
+        <PaymentProofModal
+          payment={paymentActionContext?.payment ?? allPayments[0]}
+          onSave={handlePaymentProofSave}
+          onClose={() => {
+            setPaymentActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Recu paiement finance" ? (
+        <FinanceReceiptModal
+          payment={paymentActionContext?.payment ?? allPayments[0]}
+          printOnOpen={paymentActionContext?.printOnOpen}
+          onReceiptAction={handleFinanceReceiptAction}
+          onClose={() => {
+            setPaymentActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Detail commission" ? (
+        <CommissionDetailModal
+          commission={commissionActionContext?.commission ?? allCommissions[0]}
+          payment={getLinkedCommissionPayment(commissionActionContext?.commission ?? allCommissions[0], allPayments)}
+          contract={getLinkedCommissionContract(commissionActionContext?.commission ?? allCommissions[0], allContracts)}
+          onClose={() => {
+            setCommissionActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Modifier commission" ? (
+        <CommissionEditModal
+          commission={commissionActionContext?.commission ?? allCommissions[0]}
+          onSave={handleCommissionSave}
+          onClose={() => {
+            setCommissionActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Paiement commission absent" ? (
+        <CommissionMissingPaymentModal
+          commission={commissionActionContext?.commission ?? allCommissions[0]}
+          paymentsList={allPayments}
+          onAssociate={handleCommissionPaymentAssociation}
+          onClose={() => {
+            setCommissionActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Contrat commission absent" ? (
+        <InfoModal
+          title="Aucun contrat lié"
+          subtitle={commissionActionContext?.commission?.operation ?? "Commission"}
+          message="Aucun contrat n'est rattaché à cette commission. Vous pouvez ouvrir Docs → Contrats pour créer ou associer un contrat."
+          onClose={() => {
+            setCommissionActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Exporter commission" ? (
+        <CommissionExportModal
+          commission={commissionActionContext?.commission ?? allCommissions[0]}
+          payment={getLinkedCommissionPayment(commissionActionContext?.commission ?? allCommissions[0], allPayments)}
+          contract={getLinkedCommissionContract(commissionActionContext?.commission ?? allCommissions[0], allContracts)}
+          onArchive={handleCommissionArchive}
+          onClose={() => {
+            setCommissionActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Promesse impaye" ? (
+        <ArrearsPromiseModal
+          row={arrearsActionContext?.row ?? allRentRows.find((row) => parseFCFA(row.balance) > 0) ?? allRentRows[0]}
+          onSave={handleArrearsPromiseSave}
+          onClose={() => {
+            setArrearsActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Statut impaye" ? (
+        <ArrearsStatusModal
+          row={arrearsActionContext?.row ?? allRentRows.find((row) => parseFCFA(row.balance) > 0) ?? allRentRows[0]}
+          currentStatus={arrearsStatusOverrides[getArrearsKey(arrearsActionContext?.row ?? allRentRows[0])] ?? "En retard"}
+          onSave={handleArrearsStatusSave}
+          onClose={() => {
+            setArrearsActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Etat impaye" ? (
+        <ArrearsStatementModal
+          row={arrearsActionContext?.row ?? allRentRows.find((row) => parseFCFA(row.balance) > 0) ?? allRentRows[0]}
+          relancesList={tenantRelances}
+          promise={arrearsPromises[getArrearsKey(arrearsActionContext?.row ?? allRentRows[0])]}
+          history={arrearsHistories[getArrearsKey(arrearsActionContext?.row ?? allRentRows[0])] ?? []}
+          onArchive={handleArrearsStatementArchive}
+          onClose={() => {
+            setArrearsActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Regulariser impaye" ? (
+        <ArrearsRegularizedModal
+          row={arrearsActionContext?.row ?? allRentRows.find((row) => parseFCFA(row.balance) > 0) ?? allRentRows[0]}
+          onConfirm={handleArrearsRegularizedConfirm}
+          onClose={() => {
+            setArrearsActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Historique impaye" ? (
+        <ArrearsHistoryModal
+          row={arrearsActionContext?.row ?? allRentRows.find((row) => parseFCFA(row.balance) > 0) ?? allRentRows[0]}
+          relancesList={tenantRelances}
+          promise={arrearsPromises[getArrearsKey(arrearsActionContext?.row ?? allRentRows[0])]}
+          history={arrearsHistories[getArrearsKey(arrearsActionContext?.row ?? allRentRows[0])] ?? []}
+          onClose={() => {
+            setArrearsActionContext(null);
             setModal(null);
           }}
         />
@@ -6330,6 +7283,7 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
   const [clientFilterOpen, setClientFilterOpen] = useState(false);
   const [clientExportOpen, setClientExportOpen] = useState(false);
   const [ownerInitialTab, setOwnerInitialTab] = useState("Résumé");
+  const [ownerSituationPeriod, setOwnerSituationPeriod] = useState(null);
   const [clientFilters, setClientFilters] = useState({
     ownerStatus: "Tous statuts",
     ownerType: "Tous types",
@@ -6365,6 +7319,7 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
       const owner = ownersList.find((item) => item.id === detailRequest.key) ?? selectedOwner;
       onOwner(owner);
       setOwnerInitialTab(detailRequest.initialTab ?? "Résumé");
+      setOwnerSituationPeriod(detailRequest.situationPeriod ?? null);
       setDetailView("owner");
     }
     if (detailRequest.type === "tenant") {
@@ -6468,6 +7423,7 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
     if (type === "owner") {
       onOwner(item);
       setOwnerInitialTab("Résumé");
+      setOwnerSituationPeriod(null);
     }
     if (type === "tenant") onTenant(item);
     if (type === "prospect") setSelectedProspect(item);
@@ -6484,7 +7440,7 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
 
   const detailContent = detailView === "owner" ? (
     <DetailPageShell title="Fiche propriétaire" subtitle={selectedOwner.name} onBack={closeDetail}>
-      <OwnerProfilePanel owner={selectedOwner} initialTab={ownerInitialTab} onAction={onAction} contractsList={contractsList} paymentsList={paymentsList} chargesList={chargesList} reversalsList={reversalsList} />
+      <OwnerProfilePanel owner={selectedOwner} initialTab={ownerInitialTab} situationPeriod={ownerSituationPeriod} onAction={onAction} contractsList={contractsList} paymentsList={paymentsList} chargesList={chargesList} reversalsList={reversalsList} />
     </DetailPageShell>
   ) : detailView === "tenant" ? (
     <DetailPageShell title="Fiche locataire" subtitle={selectedTenant.name} onBack={closeDetail}>
@@ -7093,7 +8049,7 @@ function OwnersView({ ownersList = owners, selected, onOpenDetail }) {
   );
 }
 
-function OwnerProfilePanel({ owner, initialTab = "Résumé", onAction, contractsList = contracts, paymentsList = paymentRecords, chargesList = charges, reversalsList = reversals }) {
+function OwnerProfilePanel({ owner, initialTab = "Résumé", situationPeriod = null, onAction, contractsList = contracts, paymentsList = paymentRecords, chargesList = charges, reversalsList = reversals }) {
   const [tab, setTab] = useState(initialTab);
   const ownedProperties = properties.filter((property) => property.owner === owner.name);
   const ownerCharges = chargesList.filter((charge) => charge.owner === owner.name && (charge.payer === "Propriétaire" || charge.impact?.includes("propriétaire")));
@@ -7167,6 +8123,7 @@ function OwnerProfilePanel({ owner, initialTab = "Résumé", onAction, contracts
       )}
       {tab === "Situation financière" && (
         <div className="simple-list">
+          {situationPeriod && <p><span>Période préremplie</span><strong>{situationPeriod}</strong></p>}
           <p><span>Loyers encaissés pour son compte</span><strong>{ownerPayments.length ? formatFCFA(collectedForOwner) : owner.rent}</strong></p>
           <p><span>Commissions retenues</span><strong>{owner.commission}</strong></p>
           <p><span>Charges déduites</span><strong>{ownerChargeTotal ? formatFCFA(ownerChargeTotal) : owner.charges}</strong></p>
@@ -10743,7 +11700,7 @@ function InvoiceActions({ invoice, onAction }) {
   );
 }
 
-function FinancePage({ activeTab, onTab, onAction, paymentsList = paymentRecords, rentRowsList = rentRows, chargesList = charges, maintenancesList = maintenances, reversalsList = reversals, relancesList = [] }) {
+function FinancePage({ activeTab, onTab, onAction, paymentsList = paymentRecords, paymentRequest = null, rentRowsList = rentRows, commissionsList = commissions, chargesList = charges, maintenancesList = maintenances, reversalsList = reversals, relancesList = [], arrearsStatuses = {}, arrearsPromises = {}, arrearsHistories = {} }) {
   const tabs = ["Loyers", "Paiements", "Impayés", "Commissions", "Charges", "Entretiens", "Reversements"];
   const effectiveTab = tabs.includes(activeTab) ? activeTab : "Loyers";
   const agencyRentRows = rentRowsList.filter((row) => isAgencyCollectedProperty(row.property));
@@ -10762,9 +11719,9 @@ function FinancePage({ activeTab, onTab, onAction, paymentsList = paymentRecords
       />
       <Tabs tabs={tabs} active={effectiveTab} onChange={onTab} demo="finance-tabs" />
       {effectiveTab === "Loyers" && <FinanceTable title="Loyers attendus par E.K immo" onAction={onAction} rows={agencyRentRows.map((row) => [row.period, row.tenant, row.property, row.owner, row.expected, row.paid, row.balance, <Badge label={row.status} />, <RentActions row={row} onAction={onAction} />])} columns={["Période", "Locataire", "Bien", "Propriétaire", "Attendu", "Payé", "Solde", "Statut", "Actions"]} />}
-      {effectiveTab === "Paiements" && <PaymentForm onAction={onAction} paymentsList={paymentsList} rentRowsList={rentRowsList} />}
-      {effectiveTab === "Impayés" && <ArrearsView onAction={onAction} rentRowsList={rentRowsList} relancesList={relancesList} />}
-      {effectiveTab === "Commissions" && <CommissionsView onAction={onAction} />}
+      {effectiveTab === "Paiements" && <PaymentForm onAction={onAction} paymentsList={paymentsList} rentRowsList={rentRowsList} paymentRequest={paymentRequest} />}
+      {effectiveTab === "Impayés" && <ArrearsView onAction={onAction} rentRowsList={rentRowsList} relancesList={relancesList} arrearsStatuses={arrearsStatuses} arrearsPromises={arrearsPromises} arrearsHistories={arrearsHistories} />}
+      {effectiveTab === "Commissions" && <CommissionsView onAction={onAction} commissionsList={commissionsList} />}
       {effectiveTab === "Charges" && <ChargesView onAction={onAction} chargesList={chargesList} />}
       {effectiveTab === "Entretiens" && <MaintenancesView onAction={onAction} maintenancesList={maintenancesList} />}
       {effectiveTab === "Reversements" && <ReversalsView onAction={onAction} reversalsList={reversalsList} />}
@@ -10872,9 +11829,10 @@ function FinanceTable({ title, columns, rows, onAction }) {
   );
 }
 
-function CommissionsView({ onAction }) {
-  const [selected, setSelected] = useState(commissions[0]);
+function CommissionsView({ onAction, commissionsList = commissions }) {
+  const [selected, setSelected] = useState(commissionsList[0] ?? commissions[0]);
   const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
+  const currentSelected = commissionsList.find((commission) => getCommissionKey(commission) === getCommissionKey(selected)) ?? selected;
 
   const openCommission = (row) => {
     setSelected(row);
@@ -10883,8 +11841,8 @@ function CommissionsView({ onAction }) {
 
   if (detailOpen) {
     return (
-      <DetailPageShell title="Fiche commission" subtitle={selected.operation} onBack={closeDetail}>
-        <CommissionProfilePanel commission={selected} onAction={onAction} />
+      <DetailPageShell title="Fiche commission" subtitle={currentSelected.operation} onBack={closeDetail}>
+        <CommissionProfilePanel commission={currentSelected} onAction={onAction} />
       </DetailPageShell>
     );
   }
@@ -10899,7 +11857,7 @@ function CommissionsView({ onAction }) {
         </div>
         <Panel title="Commissions agence">
           <DataTable
-            rows={commissions.map((row) => [
+            rows={commissionsList.map((row) => [
               row.operation,
               row.property,
               row.owner,
@@ -10907,7 +11865,7 @@ function CommissionsView({ onAction }) {
               row.mode,
               row.commission,
               row.ownerNet,
-              <Badge label="Généré" />,
+              <Badge label={row.status ?? "Généré"} />,
               <Button compact onClick={() => openCommission(row)}><Eye size={16} /> Fiche</Button>,
             ])}
             columns={["Opération", "Bien", "Propriétaire", "Montant encaissé", "Mode", "Commission", "Net propriétaire", "Statut", "Action"]}
@@ -10939,17 +11897,279 @@ function CommissionProfilePanel({ commission, onAction }) {
         <p><span>Taux ou montant fixe</span><strong>{commission.mode}</strong></p>
         <p><span>Commission calculée</span><strong>{commission.commission}</strong></p>
         <p><span>Montant net à reverser</span><strong>{commission.ownerNet}</strong></p>
-        <p><span>Statut</span><Badge label="Généré" /></p>
+        <p><span>Date</span><strong>{commission.date}</strong></p>
+        <p><span>Client / locataire</span><strong>{commission.client}</strong></p>
+        <p><span>Statut</span><Badge label={commission.status ?? "Généré"} /></p>
       </div>
       <div className="stack-actions">
-        <Button variant="primary" onClick={() => onAction(`Détail commission ${commission.operation}`)}><Eye size={17} /> Détail</Button>
-        <Button onClick={() => onAction(`Modifier commission ${commission.operation}`)}><Pencil size={17} /> Modifier</Button>
-        <Button onClick={() => onAction(`Rattacher paiement ${commission.operation}`)}><Banknote size={17} /> Paiement</Button>
-        <Button onClick={() => onAction(`Rattacher contrat ${commission.operation}`)}><FileText size={17} /> Contrat</Button>
-        <Button onClick={() => onAction(`Situation propriétaire ${commission.owner}`)}><HandCoins size={17} /> Situation</Button>
-        <Button onClick={() => onAction(`Exporter commission ${commission.operation}`)}><Download size={17} /> Exporter</Button>
+        <Button variant="primary" onClick={() => onAction("Détail commission", { commission })}><Eye size={17} /> Détail</Button>
+        <Button onClick={() => onAction("Modifier commission", { commission })}><Pencil size={17} /> Modifier</Button>
+        <Button onClick={() => onAction("Paiement commission", { commission })}><Banknote size={17} /> Paiement</Button>
+        <Button onClick={() => onAction("Contrat commission", { commission })}><FileText size={17} /> Contrat</Button>
+        <Button onClick={() => onAction("Situation commission", { commission })}><HandCoins size={17} /> Situation</Button>
+        <Button onClick={() => onAction("Exporter commission", { commission })}><Download size={17} /> Exporter</Button>
       </div>
     </Panel>
+  );
+}
+
+function InfoModal({ title, subtitle, message, onClose }) {
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>{subtitle}</span>
+            <h2>{title}</h2>
+            <p>{message}</p>
+          </div>
+          <Badge label="Information" />
+        </div>
+        <div className="action-row compact-row">
+          <Button variant="primary" onClick={onClose}>Fermer</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function CommissionDetailModal({ commission, payment, contract, onClose }) {
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal commission-detail-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Détail de la commission</span>
+            <h2>{commission.operation}</h2>
+            <p>{commission.property} · {commission.owner}</p>
+          </div>
+          <Badge label={commission.status ?? "Généré"} />
+        </div>
+        <div className="simple-list">
+          <p><span>Opération liée</span><strong>{commission.operation}</strong></p>
+          <p><span>Bien</span><strong>{commission.property}</strong></p>
+          <p><span>Propriétaire</span><strong>{commission.owner}</strong></p>
+          <p><span>Locataire / client</span><strong>{commission.client}</strong></p>
+          <p><span>Montant encaissé</span><strong>{commission.collected}</strong></p>
+          <p><span>Mode de calcul</span><strong>{commission.mode}</strong></p>
+          <p><span>Taux ou montant fixe</span><strong>{commission.rate || commission.fixedAmount || commission.mode}</strong></p>
+          <p><span>Commission calculée</span><strong>{commission.commission}</strong></p>
+          <p><span>Montant net propriétaire</span><strong>{commission.ownerNet}</strong></p>
+          <p><span>Date</span><strong>{commission.date}</strong></p>
+          <p><span>Statut</span><Badge label={commission.status ?? "Généré"} /></p>
+          <p><span>Paiement lié</span><strong>{payment ? payment.reference : "Aucun paiement lié"}</strong></p>
+          <p><span>Contrat lié</span><strong>{contract ? contract.number : "Aucun contrat lié"}</strong></p>
+        </div>
+        <div className="action-row compact-row">
+          <Button variant="primary" onClick={onClose}>Fermer</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function CommissionEditModal({ commission, onSave, onClose }) {
+  const [values, setValues] = useState({
+    mode: commission.mode === "Pourcentage" || commission.mode?.includes("%") ? "Pourcentage" : "Montant fixe",
+    rate: commission.rate ?? (String(commission.mode).includes("%") ? commission.mode : "5%"),
+    fixedAmount: commission.fixedAmount ?? "",
+    calculationBase: commission.calculationBase ?? "Loyer encaissé",
+    calculationBaseAmount: commission.collected,
+    comment: commission.modificationComment ?? "",
+    reason: commission.modificationReason ?? "",
+    confirmation: "Non",
+  });
+  const [error, setError] = useState("");
+  const update = (field) => (event) => {
+    setError("");
+    setValues((current) => ({ ...current, [field]: event.target.value }));
+  };
+  const submit = () => {
+    if (!values.reason.trim()) {
+      setError("Le motif de modification est obligatoire.");
+      return;
+    }
+    if (commission.integratedInOwnerStatement && values.confirmation !== "Oui") {
+      setError("Confirmez l'impact sur la situation propriétaire avant d'enregistrer.");
+      return;
+    }
+    onSave({ commission, values });
+  };
+  const estimatedCommission = values.mode === "Montant fixe"
+    ? normalizeChargeAmount(values.fixedAmount)
+    : formatFCFA(Math.round(parseFCFA(values.calculationBaseAmount) * (parseFloat(String(values.rate).replace(",", ".")) || 0) / 100));
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal commission-edit-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Modifier commission</span>
+            <h2>{commission.operation}</h2>
+            <p>{commission.commission} actuellement · {commission.ownerNet} net propriétaire</p>
+          </div>
+          <Badge label={commission.integratedInOwnerStatement ? "Situation propriétaire intégrée" : "Non intégrée"} />
+        </div>
+        <div className="form-grid compact-form">
+          <label>Mode de calcul<select value={values.mode} onChange={update("mode")}><option>Pourcentage</option><option>Montant fixe</option></select></label>
+          <label>Taux<input value={values.rate} onChange={update("rate")} placeholder="5%" /></label>
+          <label>Montant fixe<input value={values.fixedAmount} onChange={update("fixedAmount")} placeholder="150 000 FCFA" /></label>
+          <label>Base de calcul<select value={values.calculationBase} onChange={update("calculationBase")}><option>Loyer encaissé</option><option>Prix de vente</option><option>Mandat de gestion</option><option>Montant manuel</option></select></label>
+          <label>Montant de base<input value={values.calculationBaseAmount} onChange={update("calculationBaseAmount")} /></label>
+          <label>Commission estimée<input value={estimatedCommission} readOnly /></label>
+          <label className="full">Commentaire<textarea value={values.comment} onChange={update("comment")} /></label>
+          <label className="full">Motif de modification<input value={values.reason} onChange={update("reason")} placeholder="Correction taux, accord propriétaire..." /></label>
+          {commission.integratedInOwnerStatement && (
+            <label>Confirmation d'impact<select value={values.confirmation} onChange={update("confirmation")}><option>Non</option><option>Oui</option></select><small>Obligatoire : cette commission est déjà intégrée à une situation propriétaire.</small></label>
+          )}
+        </div>
+        {commission.integratedInOwnerStatement && <p className="form-alert">Cette modification peut impacter une situation propriétaire déjà générée. Confirmez avant enregistrement.</p>}
+        {error && <p className="form-alert">{error}</p>}
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={submit}><CheckCircle2 size={17} /> Enregistrer les modifications</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function CommissionMissingPaymentModal({ commission, paymentsList = paymentRecords, onAssociate, onClose }) {
+  const suggestedPayment = paymentsList.find((payment) => payment.property === commission.property || payment.owner === commission.owner) ?? paymentsList[0];
+  const [paymentReference, setPaymentReference] = useState(suggestedPayment?.reference ?? "");
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal commission-payment-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Paiement lié</span>
+            <h2>Aucun paiement lié à cette commission.</h2>
+            <p>{commission.operation} · {commission.property}</p>
+          </div>
+          <Badge label="À associer" />
+        </div>
+        <div className="notice">Associez cette commission à un paiement existant pour ouvrir ensuite sa fiche de paiement.</div>
+        <div className="form-grid compact-form">
+          <label className="full">Associer à un paiement<select value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)}>{paymentsList.map((payment) => <option key={payment.reference} value={payment.reference}>{payment.reference} · {payment.tenant} · {payment.property} · {payment.paid}</option>)}</select></label>
+        </div>
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" disabled={!paymentReference} onClick={() => onAssociate({ commission, paymentReference })}><LinkIcon size={17} /> Associer à un paiement</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function CommissionExportModal({ commission, payment, contract, onArchive, onClose }) {
+  const [preview, setPreview] = useState(true);
+  const [archived, setArchived] = useState(false);
+  const [values, setValues] = useState({
+    reference: commission.id,
+    operation: commission.operation,
+    property: commission.property,
+    owner: commission.owner,
+    client: commission.client,
+    period: commission.period,
+    collected: commission.collected,
+    mode: commission.mode,
+    rate: commission.rate || commission.mode,
+    commission: commission.commission,
+    ownerNet: commission.ownerNet,
+    date: commission.date,
+    status: commission.status ?? "Généré",
+    paymentReference: payment?.reference ?? "Aucun paiement lié",
+    contractNumber: contract?.number ?? "Aucun contrat lié",
+    observation: "État de commission préparé pour contrôle et archivage.",
+  });
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+  const fileName = `EKIMMO_Commission_${commission.id}_2026-06-24.pdf`;
+  const archive = () => {
+    onArchive({ commission, values });
+    setArchived(true);
+  };
+
+  return (
+    <div className="modal-backdrop document-print-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card document-print-modal commission-export-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="document-print-head">
+          <div>
+            <span>Exporter commission</span>
+            <h2>{commission.operation}</h2>
+            <p>{commission.commission} · {commission.owner}</p>
+          </div>
+          <div className="document-editor-actions">
+            <Button onClick={() => setPreview(true)}><Eye size={17} /> Aperçu</Button>
+            <Button variant="primary" onClick={() => downloadGeneratedPdf({ label: "État commission" }, values, fileName)}><Download size={17} /> Télécharger PDF</Button>
+            <Button onClick={() => window.print()}><Printer size={17} /> Imprimer</Button>
+            <Button onClick={archive} disabled={archived}><Archive size={17} /> {archived ? "Archivé" : "Archiver"}</Button>
+          </div>
+        </div>
+        <div className="owner-statement-layout">
+          <Panel title="Paramètres d'export">
+            <div className="form-grid compact-form">
+              <label>Référence<input value={values.reference} onChange={update("reference")} /></label>
+              <label>Période<input value={values.period} onChange={update("period")} /></label>
+              <label>Statut<input value={values.status} onChange={update("status")} /></label>
+              <label className="full">Observation<textarea value={values.observation} onChange={update("observation")} /></label>
+            </div>
+          </Panel>
+          {preview ? (
+            <CommissionExportDocument values={values} />
+          ) : (
+            <Panel className="owner-preview-placeholder">
+              <FileText size={34} />
+              <h3>Aperçu de l'état de commission</h3>
+              <p>Cliquez sur Aperçu pour contrôler le document avant export.</p>
+            </Panel>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function CommissionExportDocument({ values }) {
+  return (
+    <div className="digital-document-page">
+      <DigitalDocumentHeader title="État de commission" subtitle={`${values.reference} · ${values.period}`}>
+        <div>
+          <strong>E.K immo SAS</strong>
+          <span>Finance métier</span>
+        </div>
+      </DigitalDocumentHeader>
+      <section className="document-block">
+        <h3>Opération liée</h3>
+        <div className="document-info-grid">
+          <p><span>Opération</span><strong>{values.operation}</strong></p>
+          <p><span>Bien</span><strong>{values.property}</strong></p>
+          <p><span>Propriétaire</span><strong>{values.owner}</strong></p>
+          <p><span>Locataire / client</span><strong>{values.client}</strong></p>
+          <p><span>Date</span><strong>{values.date}</strong></p>
+          <p><span>Statut</span><strong>{values.status}</strong></p>
+        </div>
+      </section>
+      <section className="document-block">
+        <h3>Calcul de commission</h3>
+        <table className="document-table">
+          <thead><tr><th>Montant encaissé</th><th>Mode de calcul</th><th>Taux / fixe</th><th>Commission E.K immo</th><th>Net propriétaire</th></tr></thead>
+          <tbody><tr><td>{values.collected}</td><td>{values.mode}</td><td>{values.rate}</td><td>{values.commission}</td><td>{values.ownerNet}</td></tr></tbody>
+        </table>
+      </section>
+      <section className="document-block">
+        <h3>Rattachements</h3>
+        <div className="document-info-grid">
+          <p><span>Paiement lié</span><strong>{values.paymentReference}</strong></p>
+          <p><span>Contrat lié</span><strong>{values.contractNumber}</strong></p>
+          <p><span>Observation</span><strong>{values.observation}</strong></p>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -11008,6 +12228,164 @@ function getChargeImpactLabel(charge) {
   if (charge.payer === "Propriétaire") return "À déduire du propriétaire";
   if (charge.payer.includes("Locataire")) return "À refacturer au locataire";
   return "Suivi interne uniquement";
+}
+
+function buildChargeExportPayload(chargesList, filters) {
+  const totalCharges = chargesList.reduce((sum, charge) => sum + parseFCFA(charge.amount), 0);
+  const agencyCharges = chargesList.filter((charge) => charge.payer === "Agence").reduce((sum, charge) => sum + parseFCFA(charge.amount), 0);
+  const ownerCharges = chargesList.filter((charge) => charge.payer === "Propriétaire").reduce((sum, charge) => sum + parseFCFA(charge.amount), 0);
+  const tenantCharges = chargesList.filter((charge) => charge.payer.includes("Locataire")).reduce((sum, charge) => sum + parseFCFA(charge.amount), 0);
+  const rows = chargesList.map((charge) => [
+    charge.date,
+    charge.type,
+    charge.description,
+    charge.property,
+    charge.owner,
+    charge.tenant,
+    charge.amount,
+    charge.payer,
+    charge.status,
+    charge.proof,
+  ]);
+  const filterList = Object.entries(filters)
+    .filter(([, value]) => !String(value).startsWith("Tous") && !String(value).startsWith("Toutes"))
+    .map(([key, value]) => `${key} : ${value}`);
+
+  return {
+    title: "État des charges",
+    filename: `EKIMMO_Charges_${new Date().toISOString().slice(0, 10)}`,
+    exportedAtLabel: "25/06/2026",
+    user: "Aïssata Diarra",
+    filters: filterList.length ? filterList : ["Aucun filtre spécifique"],
+    columns: ["Date", "Type", "Description", "Bien", "Propriétaire", "Locataire", "Montant", "Prise en charge", "Statut", "Justificatif"],
+    rows,
+    summary: {
+      period: filters.period === "Toutes périodes" ? "Toutes périodes filtrées" : filters.period,
+      totalCharges: formatFCFA(totalCharges),
+      agencyCharges: formatFCFA(agencyCharges),
+      ownerCharges: formatFCFA(ownerCharges),
+      tenantCharges: formatFCFA(tenantCharges),
+    },
+    byProperty: groupChargeAmounts(chargesList, "property"),
+    byOwner: groupChargeAmounts(chargesList, "owner"),
+  };
+}
+
+function groupChargeAmounts(chargesList, field) {
+  return Object.values(chargesList.reduce((acc, charge) => {
+    const key = charge[field] || "Non renseigné";
+    const current = acc[key] ?? { label: key, count: 0, amount: 0 };
+    current.count += 1;
+    current.amount += parseFCFA(charge.amount);
+    acc[key] = current;
+    return acc;
+  }, {})).map((item) => ({ ...item, amountLabel: formatFCFA(item.amount) }));
+}
+
+function exportChargesAsXlsx(payload) {
+  const workbookRows = [
+    [payload.title],
+    [`Période : ${payload.summary.period}`],
+    [`Date d'export : ${payload.exportedAtLabel}`],
+    [`Généré par : ${payload.user}`],
+    [`Filtres appliqués : ${payload.filters.join(" | ")}`],
+    [],
+    ["Total charges", payload.summary.totalCharges],
+    ["Charges agence", payload.summary.agencyCharges],
+    ["Charges propriétaire", payload.summary.ownerCharges],
+    ["Charges refacturables", payload.summary.tenantCharges],
+    [],
+    payload.columns,
+    ...payload.rows,
+    [],
+    ["Détail par bien"],
+    ["Bien", "Nombre", "Montant"],
+    ...payload.byProperty.map((item) => [item.label, String(item.count), item.amountLabel]),
+    [],
+    ["Détail par propriétaire"],
+    ["Propriétaire", "Nombre", "Montant"],
+    ...payload.byOwner.map((item) => [item.label, String(item.count), item.amountLabel]),
+  ];
+  downloadBlob(createXlsxBlob(workbookRows, "Charges"), `${payload.filename}.xlsx`);
+}
+
+function openChargeReportPrintView(payload, mode = "pdf") {
+  const reportWindow = window.open("", "_blank", "width=1180,height=820");
+  if (!reportWindow) return;
+  reportWindow.document.open();
+  reportWindow.document.write(buildChargeReportHtml(payload, mode));
+  reportWindow.document.close();
+  reportWindow.focus();
+  reportWindow.setTimeout(() => reportWindow.print(), 250);
+}
+
+function buildChargeReportHtml(payload, mode) {
+  const filterList = payload.filters.map((filter) => `<span>${escapeHtml(filter)}</span>`).join("");
+  const summary = [
+    ["Période", payload.summary.period],
+    ["Total charges", payload.summary.totalCharges],
+    ["Charges agence", payload.summary.agencyCharges],
+    ["Charges propriétaire", payload.summary.ownerCharges],
+    ["Charges refacturables", payload.summary.tenantCharges],
+  ].map(([label, value]) => `<article><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>`).join("");
+  const detailRows = payload.rows.length
+    ? payload.rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")
+    : `<tr><td colspan="${payload.columns.length}">Aucune charge pour les filtres appliqués.</td></tr>`;
+  const headerCells = payload.columns.map((column) => `<th>${escapeHtml(column)}</th>`).join("");
+  const propertyRows = payload.byProperty.map((item) => `<tr><td>${escapeHtml(item.label)}</td><td>${item.count}</td><td>${escapeHtml(item.amountLabel)}</td></tr>`).join("");
+  const ownerRows = payload.byOwner.map((item) => `<tr><td>${escapeHtml(item.label)}</td><td>${item.count}</td><td>${escapeHtml(item.amountLabel)}</td></tr>`).join("");
+
+  return `<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(payload.title)}</title>
+  <style>
+    :root { color: #071b3d; font-family: Arial, sans-serif; }
+    body { margin: 0; padding: 28px; background: #fff; }
+    header { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; border-bottom: 3px solid #c9a227; padding-bottom: 18px; margin-bottom: 22px; }
+    h1 { margin: 0 0 8px; font-size: 25px; }
+    h2 { margin: 24px 0 10px; font-size: 18px; }
+    p { margin: 4px 0; color: #46536a; }
+    .brand { font-weight: 900; font-size: 22px; color: #06366f; white-space: nowrap; }
+    .filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 20px; }
+    .filters span { border: 1px solid #d7e2ef; border-radius: 999px; padding: 6px 10px; background: #f3f8fd; font-weight: 700; }
+    .summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 18px; }
+    .summary article { border: 1px solid #d7e2ef; border-radius: 10px; padding: 12px; background: #f8fbfe; }
+    .summary span { display:block; color:#53627a; font-size:12px; font-weight:700; }
+    .summary strong { display:block; margin-top:6px; font-size:17px; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 16px; }
+    th { text-align: left; background: #eef4fa; color: #071b3d; font-size: 11px; text-transform: uppercase; padding: 9px 7px; border: 1px solid #cbd9e8; }
+    td { padding: 8px 7px; border: 1px solid #dce7f2; vertical-align: top; word-break: break-word; }
+    tr:nth-child(even) td { background: #f8fbfe; }
+    footer { margin-top: 22px; color: #62708a; font-size: 12px; }
+    .screen-actions { position: sticky; top: 0; display: flex; justify-content: flex-end; gap: 10px; padding: 0 0 14px; background: #fff; }
+    button { border: 1px solid #cbd9e8; border-radius: 9px; background: #06366f; color: #fff; font-weight: 800; padding: 10px 14px; cursor: pointer; }
+    @media print { body { padding: 16px; } .screen-actions { display: none; } .summary { grid-template-columns: repeat(3, 1fr); } table { font-size: 10px; } tr { break-inside: avoid; } }
+  </style>
+</head>
+<body>
+  <div class="screen-actions"><button onclick="window.print()">${mode === "pdf" ? "Enregistrer en PDF" : "Imprimer"}</button></div>
+  <header>
+    <div>
+      <h1>${escapeHtml(payload.title)}</h1>
+      <p>État des charges · ${payload.rows.length} ligne(s)</p>
+      <p>Date d'export : ${escapeHtml(payload.exportedAtLabel)}</p>
+      <p>Généré par : ${escapeHtml(payload.user)}</p>
+    </div>
+    <div class="brand">E.K IMMO</div>
+  </header>
+  <section class="filters">${filterList}</section>
+  <section class="summary">${summary}</section>
+  <h2>Détail des charges</h2>
+  <table><thead><tr>${headerCells}</tr></thead><tbody>${detailRows}</tbody></table>
+  <h2>Détail par bien</h2>
+  <table><thead><tr><th>Bien</th><th>Nombre</th><th>Montant</th></tr></thead><tbody>${propertyRows}</tbody></table>
+  <h2>Détail par propriétaire</h2>
+  <table><thead><tr><th>Propriétaire</th><th>Nombre</th><th>Montant</th></tr></thead><tbody>${ownerRows}</tbody></table>
+  <footer>© 2026 E.K immo · Rapport généré depuis Finance → Charges.</footer>
+</body>
+</html>`;
 }
 
 function ChargesView({ onAction, chargesList = charges }) {
@@ -11069,6 +12447,20 @@ function ChargesView({ onAction, chargesList = charges }) {
     ];
   }, [chargesList]);
 
+  const chargeExportPayload = useMemo(() => buildChargeExportPayload(filteredCharges, {
+    recherche: query || "Aucune",
+    period,
+    type,
+    property,
+    owner,
+    tenant,
+    payer,
+    status,
+    amountRange,
+    agent,
+    quickFilter,
+  }), [agent, amountRange, filteredCharges, owner, payer, period, property, query, quickFilter, status, tenant, type]);
+
   const openCharge = (charge) => {
     setSelected(charge);
     openDetail();
@@ -11122,8 +12514,8 @@ function ChargesView({ onAction, chargesList = charges }) {
             setAgent("Tous agents");
             setQuickFilter("Toutes les charges");
           }}><RefreshCw size={17} /> Réinitialiser</Button>
-          <Button onClick={() => onAction("Exporter charges Excel")}><Download size={17} /> Excel</Button>
-          <Button onClick={() => onAction("Exporter état charges PDF")}><FileText size={17} /> PDF</Button>
+          <Button onClick={() => exportChargesAsXlsx(chargeExportPayload)}><Download size={17} /> Excel</Button>
+          <Button onClick={() => openChargeReportPrintView(chargeExportPayload, "pdf")}><FileText size={17} /> PDF</Button>
         </div>
         <div className="quick-filter-row" role="group" aria-label="Filtres rapides charges">
           {chargeQuickFilters.map((item) => (
@@ -11180,7 +12572,7 @@ function ChargeActions({ charge, selected, onSelect, onAction }) {
   return (
     <div className="table-actions">
       <Button compact onClick={() => onSelect(charge)}><Eye size={15} /> Fiche</Button>
-      <Button compact onClick={() => onAction(`Modifier charge ${charge.id}`)}><Pencil size={15} /> Modifier</Button>
+      <Button compact onClick={() => onAction("Modifier charge", { charge })}><Pencil size={15} /> Modifier</Button>
       {selected.id === charge.id && <Badge label="Ouverte" />}
     </div>
   );
@@ -11275,15 +12667,15 @@ function ChargeProfilePanel({ charge, onAction }) {
       </div>
 
       <div className="stack-actions">
-        <Button variant="primary" onClick={() => onAction(`Modifier charge ${charge.id}`)}><Pencil size={17} /> Modifier</Button>
-        <Button onClick={() => onAction(`Valider charge ${charge.id}`)}><CheckCircle2 size={17} /> Valider</Button>
-        <Button onClick={() => onAction(`Annuler charge ${charge.id}`)}><XCircle size={17} /> Annuler</Button>
-        <Button onClick={() => onAction(`Ajouter justificatif ${charge.id}`)}><Upload size={17} /> Justificatif</Button>
-        <Button onClick={() => onAction(`Lier charge à un bien`)}><Home size={17} /> Lier bien</Button>
-        <Button onClick={() => onAction(`Lier charge à un propriétaire`)}><UserRound size={17} /> Propriétaire</Button>
-        <Button onClick={() => onAction(`Lier charge à un locataire`)}><UsersRound size={17} /> Locataire</Button>
-        <Button onClick={() => onAction(`Lier charge à entretien`)}><Wrench size={17} /> Entretien</Button>
-        <Button onClick={() => onAction(`Historique charge ${charge.id}`)}><History size={17} /> Historique</Button>
+        <Button variant="primary" onClick={() => onAction("Modifier charge", { charge })}><Pencil size={17} /> Modifier</Button>
+        <Button onClick={() => onAction("Valider charge", { charge })}><CheckCircle2 size={17} /> Valider</Button>
+        <Button onClick={() => onAction("Annuler charge", { charge })}><XCircle size={17} /> Annuler</Button>
+        <Button onClick={() => onAction("Justificatif charge", { charge })}><Upload size={17} /> Justificatif</Button>
+        <Button onClick={() => onAction("Lier charge bien", { charge })}><Home size={17} /> Lier bien</Button>
+        <Button onClick={() => onAction("Propriétaire charge", { charge })}><UserRound size={17} /> Propriétaire</Button>
+        <Button onClick={() => onAction("Locataire charge", { charge })}><UsersRound size={17} /> Locataire</Button>
+        <Button onClick={() => onAction("Entretien charge", { charge })}><Wrench size={17} /> Entretien</Button>
+        <Button onClick={() => onAction("Historique charge", { charge })}><History size={17} /> Historique</Button>
       </div>
     </Panel>
   );
@@ -11452,16 +12844,25 @@ function ReversalProfilePanel({ reversal, onAction }) {
   );
 }
 
-function PaymentForm({ onAction, paymentsList = paymentRecords, rentRowsList = rentRows }) {
-  const agencyProperties = properties.filter((property) => isAgencyCollectedProperty(property.name));
-  const paymentRows = paymentsList.filter((payment) => isAgencyCollectedProperty(payment.property));
+function PaymentForm({ onAction, paymentsList = paymentRecords, rentRowsList = rentRows, paymentRequest = null }) {
+  const agencyProperties = useMemo(() => properties.filter((property) => isAgencyCollectedProperty(property.name)), []);
+  const paymentRows = useMemo(() => paymentsList.filter((payment) => isAgencyCollectedProperty(payment.property)), [paymentsList]);
   const [selected, setSelected] = useState(paymentRows[0] ?? paymentsList[0] ?? paymentRecords[0]);
-  const [receiptNumber, setReceiptNumber] = useState(selected.receipt);
-  const modes = paymentModes.includes(selected.mode) ? paymentModes : [selected.mode, ...paymentModes];
+  const activePayment = paymentRows.find((payment) => payment.reference === selected.reference) ?? selected;
+  const activeRow = rentRowsList.find((row) => row.tenant === activePayment.tenant && row.property === activePayment.property && row.period === activePayment.period)
+    ?? rentRowsList.find((row) => row.tenant === activePayment.tenant && row.property === activePayment.property);
+  const [receiptNumber, setReceiptNumber] = useState(activePayment.receipt);
+  const modes = paymentModes.includes(activePayment.mode) ? paymentModes : [activePayment.mode, ...paymentModes];
 
   useEffect(() => {
-    setReceiptNumber(selected.receipt === "Non généré" ? makeDocumentNumber("REC", 92) : selected.receipt);
-  }, [selected]);
+    setReceiptNumber(activePayment.receipt === "Non généré" ? makeDocumentNumber("REC", 92) : activePayment.receipt);
+  }, [activePayment]);
+
+  useEffect(() => {
+    if (!paymentRequest?.reference) return;
+    const requestedPayment = paymentRows.find((payment) => payment.reference === paymentRequest.reference);
+    if (requestedPayment) setSelected(requestedPayment);
+  }, [paymentRequest?.nonce, paymentRows]);
 
   const selectPayment = (reference) => {
     setSelected(paymentRows.find((payment) => payment.reference === reference) ?? selected);
@@ -11478,46 +12879,47 @@ function PaymentForm({ onAction, paymentsList = paymentRecords, rentRowsList = r
   return (
     <section className="payment-layout" data-demo="payment-workspace">
       <Panel title="Enregistrer un paiement">
-        <div className="form-grid" key={selected.reference}>
-          <label>Locataire<select value={selected.reference} onChange={(event) => selectPayment(event.target.value)}>{paymentRows.map((payment) => <option key={payment.reference} value={payment.reference}>{payment.tenant}</option>)}</select></label>
-          <label>Bien<select value={selected.property} onChange={(event) => selectByProperty(event.target.value)}>{agencyProperties.map((property) => <option key={property.code}>{property.name}</option>)}</select></label>
-          <label>Propriétaire<select value={selected.owner} onChange={(event) => selectByOwner(event.target.value)}>{owners.map((owner) => <option key={owner.id}>{owner.name}</option>)}</select></label>
-          <label>Période<input defaultValue={selected.period} /></label>
-          <label>Montant dû<input defaultValue={selected.due} /></label>
-          <label>Montant payé<input defaultValue={selected.paid} /></label>
-          <label>Solde automatique<input defaultValue={selected.balance} readOnly /></label>
-          <label>Mode de paiement<select defaultValue={selected.mode}>{modes.map((mode) => <option key={mode}>{mode}</option>)}</select></label>
-          <label>Référence paiement<input defaultValue={selected.paymentRef} /></label>
+        <div className="form-grid" key={activePayment.reference}>
+          <label>Locataire<select value={activePayment.reference} onChange={(event) => selectPayment(event.target.value)}>{paymentRows.map((payment) => <option key={payment.reference} value={payment.reference}>{payment.tenant}</option>)}</select></label>
+          <label>Bien<select value={activePayment.property} onChange={(event) => selectByProperty(event.target.value)}>{agencyProperties.map((property) => <option key={property.code}>{property.name}</option>)}</select></label>
+          <label>Propriétaire<select value={activePayment.owner} onChange={(event) => selectByOwner(event.target.value)}>{owners.map((owner) => <option key={owner.id}>{owner.name}</option>)}</select></label>
+          <label>Période<input defaultValue={activePayment.period} /></label>
+          <label>Montant dû<input defaultValue={activePayment.due} /></label>
+          <label>Montant payé<input defaultValue={activePayment.paid} /></label>
+          <label>Solde automatique<input defaultValue={activePayment.balance} readOnly /></label>
+          <label>Mode de paiement<select defaultValue={activePayment.mode}>{modes.map((mode) => <option key={mode}>{mode}</option>)}</select></label>
+          <label>Référence paiement<input defaultValue={activePayment.paymentRef} /></label>
           <label>Numéro reçu automatique<input value={receiptNumber} onChange={(event) => setReceiptNumber(event.target.value)} /><small>Modifiable si le client impose une référence interne.</small></label>
-          <label>Date paiement<input defaultValue={selected.date} /></label>
-          <label className="full">Observations<textarea defaultValue={selected.note} /></label>
+          <label>Date paiement<input defaultValue={activePayment.date} /></label>
+          <label className="full">Observations<textarea defaultValue={activePayment.note} /></label>
         </div>
         <div className="action-row compact-row">
-          <Button variant="primary" onClick={() => onAction("Enregistrer paiement", { payment: selected, row: rentRowsList.find((row) => row.tenant === selected.tenant && row.property === selected.property) })}><CheckCircle2 size={17} /> Enregistrer paiement</Button>
-          <Button onClick={() => onAction("Générer reçu")}><ReceiptText size={17} /> Générer reçu</Button>
-          <Button onClick={() => onAction("Imprimer reçu")}><Printer size={17} /> Imprimer reçu</Button>
-          <Button onClick={() => onAction("Annuler paiement")}><XCircle size={17} /> Annuler</Button>
-          <Button onClick={() => onAction("Voir historique")}><History size={17} /> Voir historique</Button>
-          <Button onClick={() => onAction("Rattacher justificatif paiement")}><Upload size={17} /> Justificatif</Button>
+          <Button variant="primary" onClick={() => onAction("Enregistrer paiement", { payment: activePayment, row: activeRow })}><CheckCircle2 size={17} /> Enregistrer paiement</Button>
+          <Button onClick={() => onAction("Générer reçu paiement", { payment: { ...activePayment, receipt: receiptNumber }, row: activeRow })}><ReceiptText size={17} /> Générer reçu</Button>
+          <Button onClick={() => onAction("Imprimer reçu paiement", { payment: { ...activePayment, receipt: receiptNumber }, row: activeRow })}><Printer size={17} /> Imprimer reçu</Button>
+          <Button onClick={() => onAction("Annuler paiement", { payment: activePayment, row: activeRow })}><XCircle size={17} /> Annuler</Button>
+          <Button onClick={() => onAction("Voir historique paiement", { payment: activePayment, row: activeRow })}><History size={17} /> Voir historique</Button>
+          <Button onClick={() => onAction("Justificatif paiement", { payment: activePayment, row: activeRow })}><Upload size={17} /> Justificatif</Button>
         </div>
       </Panel>
       <Panel title="Fiche paiement" className="profile-panel">
-        <ProfileHeader person={{ name: selected.tenant, id: selected.reference }} />
+        <ProfileHeader person={{ name: activePayment.tenant, id: activePayment.reference }} />
         <div className="simple-list">
-          <p><span>Période</span><strong>{selected.period}</strong></p>
-          <p><span>Bien</span><strong>{selected.property}</strong></p>
-          <p><span>Propriétaire</span><strong>{selected.owner}</strong></p>
-          <p><span>Montant dû</span><strong>{selected.due}</strong></p>
-          <p><span>Montant payé</span><strong>{selected.paid}</strong></p>
-          <p><span>Solde restant</span><strong>{selected.balance}</strong></p>
-          <p><span>Mode de paiement</span><strong>{selected.mode}</strong></p>
-          <p><span>Référence paiement</span><strong>{selected.paymentRef}</strong></p>
-          <p><span>Reçu</span><strong>{selected.receipt}</strong></p>
-          <p><span>Statut</span><Badge label={selected.status} /></p>
+          <p><span>Période</span><strong>{activePayment.period}</strong></p>
+          <p><span>Bien</span><strong>{activePayment.property}</strong></p>
+          <p><span>Propriétaire</span><strong>{activePayment.owner}</strong></p>
+          <p><span>Montant dû</span><strong>{activePayment.due}</strong></p>
+          <p><span>Montant payé</span><strong>{activePayment.paid}</strong></p>
+          <p><span>Solde restant</span><strong>{activePayment.balance}</strong></p>
+          <p><span>Mode de paiement</span><strong>{activePayment.mode}</strong></p>
+          <p><span>Référence paiement</span><strong>{activePayment.paymentRef}</strong></p>
+          <p><span>Reçu</span><strong>{activePayment.receipt}</strong></p>
+          <p><span>Justificatif</span><strong>{activePayment.proof?.fileName ?? "Aucun justificatif"}</strong></p>
+          <p><span>Statut</span><Badge label={activePayment.status} /></p>
         </div>
         <div className="timeline compact-timeline">
-          <p><strong>Observation</strong><span>{selected.note}</span></p>
-          <p><strong>Date paiement</strong><span>{selected.date}</span></p>
+          <p><strong>Observation</strong><span>{activePayment.note}</span></p>
+          <p><strong>Date paiement</strong><span>{activePayment.date}</span></p>
         </div>
         <div className="profile-section">
           <h3>Historique récent</h3>
@@ -11535,7 +12937,7 @@ function PaymentForm({ onAction, paymentsList = paymentRecords, rentRowsList = r
   );
 }
 
-function ArrearsView({ onAction, rentRowsList = rentRows, relancesList = [] }) {
+function ArrearsView({ onAction, rentRowsList = rentRows, relancesList = [], arrearsStatuses = {}, arrearsPromises = {}, arrearsHistories = {} }) {
   const rows = rentRowsList
     .filter((row) => isAgencyCollectedProperty(row.property))
     .filter((row) => parseFCFA(row.balance) > 0 && row.status !== "Payé");
@@ -11550,7 +12952,7 @@ function ArrearsView({ onAction, rentRowsList = rentRows, relancesList = [] }) {
   if (detailOpen) {
     return (
       <DetailPageShell title="Fiche relance" subtitle={selected.tenant} onBack={closeDetail}>
-        <ArrearsProfilePanel row={selected} onAction={onAction} />
+        <ArrearsProfilePanel row={selected} onAction={onAction} status={arrearsStatuses[getArrearsKey(selected)]} promise={arrearsPromises[getArrearsKey(selected)]} history={arrearsHistories[getArrearsKey(selected)] ?? []} />
       </DetailPageShell>
     );
   }
@@ -11562,6 +12964,7 @@ function ArrearsView({ onAction, rentRowsList = rentRows, relancesList = [] }) {
           columns={["Locataire", "Bien", "Propriétaire", "Montant dû", "Ancienneté", "Dernière relance", "Prochaine action", "Statut", "Actions"]}
           rows={rows.map((row, index) => {
             const relance = getLatestRelanceForTenant(relancesList, row.tenant);
+            const status = arrearsStatuses[getArrearsKey(row)] ?? relance?.status ?? (row.status === "Partiel" ? "Relancé" : "En retard");
             return [
               row.tenant,
               row.property,
@@ -11569,8 +12972,8 @@ function ArrearsView({ onAction, rentRowsList = rentRows, relancesList = [] }) {
               row.balance,
               relance ? "Relance récente" : index === 0 ? "12 jours" : "28 jours",
               relance ? `${relance.channel} le ${relance.date}` : index === 0 ? "SMS le 22/05" : "Appel le 24/05",
-              relance?.nextDate ?? (index === 0 ? "Encaisser solde" : "Lettre de relance"),
-              <Badge label={relance?.status ?? (row.status === "Partiel" ? "Relancé" : "En retard")} />,
+              arrearsPromises[getArrearsKey(row)]?.nextReminder ?? relance?.nextDate ?? (index === 0 ? "Encaisser solde" : "Lettre de relance"),
+              <Badge label={status} />,
               <div className="table-actions"><Button compact onClick={() => openArrear(row)}><Eye size={15} /> Fiche</Button><Button compact onClick={() => onAction("Ajouter relance", { row })}>Relancer</Button></div>,
             ];
           })}
@@ -11580,7 +12983,8 @@ function ArrearsView({ onAction, rentRowsList = rentRows, relancesList = [] }) {
   );
 }
 
-function ArrearsProfilePanel({ row, onAction }) {
+function ArrearsProfilePanel({ row, onAction, status, promise, history = [] }) {
+  const effectiveStatus = status ?? (row.status === "Partiel" ? "Promesse de paiement" : "En retard");
   return (
     <Panel title="Fiche relance" className="profile-panel">
       <ProfileHeader person={{ name: row.tenant, id: row.property }} />
@@ -11590,18 +12994,19 @@ function ArrearsProfilePanel({ row, onAction }) {
         <p><span>Date de relance</span><strong>24/05/2026</strong></p>
         <p><span>Canal de relance</span><strong>SMS + appel</strong></p>
         <p><span>Commentaire</span><strong>Solde en attente de règlement</strong></p>
-        <p><span>Engagement du locataire</span><strong>{row.status === "Partiel" ? "Solde annoncé" : "À confirmer"}</strong></p>
-        <p><span>Prochaine action</span><strong>{row.status === "Partiel" ? "Encaisser solde" : "Lettre de relance"}</strong></p>
-        <p><span>Statut</span><Badge label={row.status === "Partiel" ? "Promesse de paiement" : "En retard"} /></p>
+        <p><span>Engagement du locataire</span><strong>{promise ? `${promise.amount} le ${fromDateInputValue(promise.promisedDate)}` : row.status === "Partiel" ? "Solde annoncé" : "À confirmer"}</strong></p>
+        <p><span>Prochaine action</span><strong>{promise?.nextReminder ?? (row.status === "Partiel" ? "Encaisser solde" : "Lettre de relance")}</strong></p>
+        <p><span>Dernier historique</span><strong>{history[0]?.comment ?? "Aucune action récente enregistrée"}</strong></p>
+        <p><span>Statut</span><Badge label={effectiveStatus} /></p>
       </div>
       <div className="stack-actions">
-        <Button variant="primary" onClick={() => onAction("Ajouter relance")}><Bell size={17} /> Ajouter relance</Button>
-        <Button onClick={() => onAction("Promesse de paiement")}><FileText size={17} /> Promesse</Button>
-        <Button onClick={() => onAction("Changer statut relance")}><RefreshCw size={17} /> Changer statut</Button>
+        <Button variant="primary" onClick={() => onAction("Ajouter relance", { row })}><Bell size={17} /> Ajouter relance</Button>
+        <Button onClick={() => onAction("Promesse de paiement", { row })}><FileText size={17} /> Promesse</Button>
+        <Button onClick={() => onAction("Changer statut relance", { row })}><RefreshCw size={17} /> Changer statut</Button>
         <Button onClick={() => onAction("Enregistrer paiement", { row })}><Banknote size={17} /> Paiement</Button>
-        <Button onClick={() => onAction("État impayé")}><FileText size={17} /> État impayé</Button>
-        <Button onClick={() => onAction("Marquer régularisé")}><CheckCircle2 size={17} /> Régularisé</Button>
-        <Button onClick={() => onAction("Historique relance")}><History size={17} /> Historique</Button>
+        <Button onClick={() => onAction("État impayé", { row })}><FileText size={17} /> État impayé</Button>
+        <Button onClick={() => onAction("Marquer régularisé", { row })}><CheckCircle2 size={17} /> Régularisé</Button>
+        <Button onClick={() => onAction("Historique relance", { row })}><History size={17} /> Historique</Button>
       </div>
     </Panel>
   );
@@ -12389,11 +13794,11 @@ function Badge({ label }) {
 }
 
 function statusTone(label) {
-  if (["Disponible", "Actif", "À jour", "Payé", "Payée", "Validée", "Déduite", "Conclu", "Archivé", "Imprimé", "Généré", "Réalisée", "Présent", "Justificatif joint", "Importé"].includes(label)) return "success";
+  if (["Disponible", "Actif", "À jour", "Payé", "Payée", "Validée", "Déduite", "Conclu", "Archivé", "Imprimé", "Généré", "Réalisée", "Présent", "Justificatif joint", "Importé", "Régularisé"].includes(label)) return "success";
   if (["Loué", "Visite prévue", "Prévue", "Contacté", "Réservé", "Planifié", "À payer", "À reverser", "Refacturable", "Ouverte", "Entretien seul"].includes(label)) return "purple";
-  if (["En travaux", "Partiel", "À valider", "À échéance", "Échéance proche", "À déduire", "En attente", "En cours", "Reportée", "Relancé", "Client intéressé", "Brouillon", "Encaissement propriétaire", "Gestion multi-lots", "Suivi", "Demandé"].includes(label)) return "warning";
-  if (["Expiré", "Document signé manquant", "Impayé", "En retard", "Litige", "Perdu", "Suspendu", "Annulée", "Justificatif manquant"].includes(label)) return "danger";
-  if (["Inactif", "Indisponible", "Vendu", "Manquant"].includes(label)) return "muted";
+  if (["En travaux", "Partiel", "À valider", "À échéance", "Échéance proche", "À déduire", "En attente", "En cours", "Reportée", "Relancé", "Promesse de paiement", "Promesse active", "Client intéressé", "Brouillon", "Encaissement propriétaire", "Gestion multi-lots", "Suivi", "Demandé"].includes(label)) return "warning";
+  if (["Expiré", "Document signé manquant", "Impayé", "En retard", "Litige", "Perdu", "Suspendu", "Annulé", "Annulée", "Promesse dépassée", "Alerte date dépassée", "Justificatif manquant"].includes(label)) return "danger";
+  if (["Inactif", "Indisponible", "Vendu", "Manquant", "Abandonné / annulé"].includes(label)) return "muted";
   return "default";
 }
 
@@ -13276,6 +14681,307 @@ function OwnerFormModal({ sequence = owners.length + 1, owner = null, mode = "cr
   );
 }
 
+function ChargeValidationModal({ charge, onConfirm, onClose }) {
+  const [comment, setComment] = useState("Controle effectue, charge conforme.");
+  const impact = getChargeImpactForPayer(charge.payer);
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal charge-action-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>x</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Validation de charge</span>
+            <h2>Valider la charge</h2>
+            <p>{charge.id} - {charge.property}</p>
+          </div>
+          <Badge label={charge.status} />
+        </div>
+        <div className="simple-list">
+          <p><span>Resume</span><strong>{charge.type} - {charge.description}</strong></p>
+          <p><span>Montant</span><strong>{charge.amount}</strong></p>
+          <p><span>Prise en charge</span><strong>{charge.payer}</strong></p>
+          <p><span>Impact</span><strong>{impact}</strong></p>
+        </div>
+        <div className="form-grid compact-form">
+          <label className="full">Commentaire de validation<textarea value={comment} onChange={(event) => setComment(event.target.value)} /></label>
+        </div>
+        <div className="notice">Apres validation, la charge sera disponible pour deduction proprietaire ou refacturation locataire selon sa prise en charge.</div>
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => onConfirm({ charge, values: { comment } })}><CheckCircle2 size={17} /> Confirmer la validation</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ChargeCancellationModal({ charge, onConfirm, onClose }) {
+  const [values, setValues] = useState({
+    reason: "",
+    comment: "",
+    keepProof: "Oui",
+  });
+  const [error, setError] = useState("");
+  const update = (field) => (event) => {
+    setError("");
+    setValues((current) => ({ ...current, [field]: event.target.value }));
+  };
+  const submit = () => {
+    if (!values.reason.trim()) {
+      setError("Le motif d'annulation est obligatoire.");
+      return;
+    }
+    onConfirm({ charge, values });
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal charge-action-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>x</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Annulation de charge</span>
+            <h2>Annuler cette charge ?</h2>
+            <p>{charge.id} - {charge.amount} - {charge.property}</p>
+          </div>
+          <Badge label="Aucun impact financier" />
+        </div>
+        <div className="notice">La charge passera au statut Annulee et ne sera plus prise en compte dans les reversements ou refacturations.</div>
+        <div className="form-grid compact-form">
+          <label>Motif obligatoire<input value={values.reason} onChange={update("reason")} placeholder="Erreur de saisie, doublon, depense refusee..." /></label>
+          <label>Conserver justificatif<select value={values.keepProof} onChange={update("keepProof")}><option>Oui</option><option>Non</option></select></label>
+          <label className="full">Commentaire<textarea value={values.comment} onChange={update("comment")} /></label>
+        </div>
+        {error && <p className="form-alert">{error}</p>}
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={submit}><XCircle size={17} /> Confirmer l'annulation</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ChargeProofModal({ charge, onSave, onClose }) {
+  const proofStatusKey = normalizeSearch(charge.proofStatus);
+  const proofKey = normalizeSearch(charge.proof);
+  const hasProof = Boolean(charge.proofStatus)
+    && !["manquant", "supprime"].includes(proofStatusKey)
+    && !(proofKey.includes("justificatif") && proofKey.includes("joindre"));
+  const [fileName, setFileName] = useState(hasProof ? charge.proof : "");
+  const [reference, setReference] = useState(charge.paymentRef && charge.paymentRef !== "A completer" ? charge.paymentRef : "");
+  const [comment, setComment] = useState(charge.proofComment ?? "");
+  const [message, setMessage] = useState("");
+
+  const submit = () => {
+    if (!fileName.trim()) {
+      setMessage("Veuillez importer un PDF ou une image.");
+      return;
+    }
+    onSave({
+      charge,
+      proof: {
+        fileName,
+        reference,
+        comment,
+        importedAt: "25/06/2026",
+      },
+    });
+    setMessage("Justificatif enregistre.");
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal charge-action-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>x</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Justificatif de charge</span>
+            <h2>{charge.id}</h2>
+            <p>{charge.type} - {charge.amount}</p>
+          </div>
+          <Badge label={hasProof ? "Justificatif joint" : "A importer"} />
+        </div>
+        {hasProof ? (
+          <div className="simple-list">
+            <p><span>Fichier</span><strong>{charge.proof}</strong></p>
+            <p><span>Reference</span><strong>{charge.paymentRef}</strong></p>
+            <p><span>Statut</span><strong>{charge.proofStatus}</strong></p>
+          </div>
+        ) : (
+          <div className="notice">Aucun justificatif exploitable n'est encore rattache a cette charge.</div>
+        )}
+        <div className="form-section">
+          <h3>{hasProof ? "Remplacer le justificatif" : "Importer un justificatif"}</h3>
+          <div className="form-grid compact-form">
+            <label>Importer PDF / image<input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(event) => setFileName(event.target.files?.[0]?.name ?? fileName)} /><small>{fileName || "Aucun fichier selectionne"}</small></label>
+            <label>Reference facture ou recu<input value={reference} onChange={(event) => setReference(event.target.value)} /></label>
+            <label className="full">Commentaire<textarea value={comment} onChange={(event) => setComment(event.target.value)} /></label>
+          </div>
+        </div>
+        {message && <p className="form-feedback">{message}</p>}
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Fermer</Button>
+          {hasProof && <Button onClick={() => window.print()}><Eye size={17} /> Previsualiser</Button>}
+          {hasProof && <Button onClick={() => downloadGeneratedPdf({ label: "Justificatif charge" }, { id: charge.id, fileName, reference }, `EKIMMO_JustificatifCharge_${charge.id}_2026-06-25.pdf`)}><Download size={17} /> Telecharger</Button>}
+          <Button variant="primary" onClick={submit}><Upload size={17} /> Enregistrer</Button>
+          {hasProof && <Button onClick={() => onSave({ charge, proof: null })}><Trash2 size={17} /> Supprimer</Button>}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ChargeLinkPropertyModal({ charge, propertiesList = properties, onLink, onClose }) {
+  const currentProperty = propertiesList.find((property) => property.name === charge.property) ?? propertiesList[0];
+  const [propertyCode, setPropertyCode] = useState(currentProperty?.code ?? "");
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal charge-action-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>x</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Rattachement bien</span>
+            <h2>Lier la charge a un bien</h2>
+            <p>{charge.id} - {charge.amount}</p>
+          </div>
+          <Badge label={charge.property} />
+        </div>
+        <div className="form-grid compact-form">
+          <label className="full">Rechercher / selectionner un bien<select value={propertyCode} onChange={(event) => setPropertyCode(event.target.value)}>
+            {propertiesList.map((property) => <option key={property.code} value={property.code}>{property.code} - {property.name}</option>)}
+          </select></label>
+        </div>
+        <div className="notice">Apres validation, cette charge apparaitra dans la fiche du bien selectionne.</div>
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => onLink({ charge, propertyCode })}><LinkIcon size={17} /> Confirmer</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ChargeLinkPersonModal({ charge, type = "owner", ownersList = owners, tenantsList = tenants, onLink, onClose }) {
+  const options = type === "owner" ? ownersList.map((owner) => owner.name) : tenantsList.map((tenant) => tenant.name);
+  const currentName = type === "owner" ? charge.owner : charge.tenant;
+  const [selectedName, setSelectedName] = useState(options.includes(currentName) ? currentName : options[0] ?? "");
+  const title = type === "owner" ? "Selectionner un proprietaire" : "Selectionner un locataire";
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal charge-action-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>x</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Rattachement</span>
+            <h2>{title}</h2>
+            <p>{charge.id} - {charge.property}</p>
+          </div>
+          <Badge label={currentName || "Non lie"} />
+        </div>
+        <div className="form-grid compact-form">
+          <label className="full">{type === "owner" ? "Proprietaire" : "Locataire"}<select value={selectedName} onChange={(event) => setSelectedName(event.target.value)}>
+            {options.map((name) => <option key={name}>{name}</option>)}
+          </select></label>
+        </div>
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => onLink({ charge, type, selectedName })}><LinkIcon size={17} /> Confirmer</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ChargeMaintenanceModal({ charge, maintenancesList = maintenances, onLink, onCreate, onClose }) {
+  const linkedMaintenance = maintenancesList.find((maintenance) => charge.linkedMaintenance && charge.linkedMaintenance !== "Non lie" && (
+    charge.linkedMaintenance === maintenance.id ||
+    charge.linkedMaintenance.includes(maintenance.type) ||
+    charge.linkedMaintenance.includes(maintenance.property)
+  ));
+  const propertyMaintenances = maintenancesList.filter((maintenance) => maintenance.property === charge.property);
+  const maintenanceOptions = (propertyMaintenances.length ? propertyMaintenances : maintenancesList).map((maintenance) => ({
+    value: maintenance.id ?? `${maintenance.type}-${maintenance.property}-${maintenance.date}`,
+    label: `${maintenance.type} - ${maintenance.property} - ${maintenance.date}`,
+  }));
+  const [maintenanceLabel, setMaintenanceLabel] = useState(linkedMaintenance?.id ?? maintenanceOptions[0]?.label ?? "");
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal charge-action-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>x</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Entretien lie</span>
+            <h2>{linkedMaintenance ? "Entretien rattache" : "Lier ou creer un entretien"}</h2>
+            <p>{charge.id} - {charge.property}</p>
+          </div>
+          <Badge label={linkedMaintenance ? linkedMaintenance.status : "Non lie"} />
+        </div>
+        {linkedMaintenance ? (
+          <div className="simple-list">
+            <p><span>Type</span><strong>{linkedMaintenance.type}</strong></p>
+            <p><span>Date prevue</span><strong>{linkedMaintenance.date}</strong></p>
+            <p><span>Responsable</span><strong>{linkedMaintenance.manager}</strong></p>
+            <p><span>Prestataire</span><strong>{linkedMaintenance.provider}</strong></p>
+            <p><span>Cout estime</span><strong>{linkedMaintenance.cost}</strong></p>
+          </div>
+        ) : (
+          <>
+            <div className="notice">Aucun entretien n'est encore rattache a cette charge. Vous pouvez lier un entretien existant ou en creer un nouveau.</div>
+            <div className="form-grid compact-form">
+              <label className="full">Lier a un entretien existant<select value={maintenanceLabel} onChange={(event) => setMaintenanceLabel(event.target.value)}>
+                {maintenanceOptions.map((maintenance) => <option key={maintenance.value} value={maintenance.label}>{maintenance.label}</option>)}
+              </select></label>
+            </div>
+          </>
+        )}
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Fermer</Button>
+          {!linkedMaintenance && <Button onClick={() => onLink({ charge, maintenanceLabel })}><LinkIcon size={17} /> Lier entretien</Button>}
+          <Button variant="primary" onClick={() => onCreate(charge)}><Plus size={17} /> Creer un entretien</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ChargeHistoryModal({ charge, onClose }) {
+  const entries = [
+    { date: charge.date, user: charge.createdBy ?? "Aissata Diarra", action: "Creation", comment: charge.description },
+    { date: "24/06/2026", user: charge.modifiedBy ?? "Aissata Diarra", action: "Modification", comment: "Mise a jour des informations de suivi." },
+    ...(charge.validatedBy && charge.validationDate ? [{ date: charge.validationDate, user: charge.validatedBy, action: "Validation", comment: charge.validationComment ?? "Charge validee." }] : []),
+    ...(charge.proofStatus && charge.proofStatus !== "Manquant" ? [{ date: "25/06/2026", user: "Aissata Diarra", action: "Justificatif ajoute", comment: charge.proof }] : []),
+    ...(charge.history ?? []).map((item) => ({ date: "25/06/2026", user: "Aissata Diarra", action: item.split(" : ")[0] || "Suivi", comment: item })),
+  ];
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal charge-action-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>x</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Historique de charge</span>
+            <h2>{charge.id}</h2>
+            <p>{charge.property} - {charge.amount}</p>
+          </div>
+          <Badge label={charge.status} />
+        </div>
+        <DataTable
+          columns={["Date", "Utilisateur", "Action", "Commentaire"]}
+          rows={entries.map((entry) => [entry.date, entry.user, entry.action, entry.comment])}
+        />
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Fermer</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function ChargeFormModal({ title, context = null, propertiesList = properties, maintenancesList = maintenances, chargesList = charges, onSave, onClose }) {
   const chargeCreationTypes = ["Nettoyage", "Réparation", "Plomberie", "Électricité", "Peinture", "Publicité", "Entretien", "Autre"];
   const modalChargeId = title.match(/CHG-\d{4}-\d{3}/)?.[0];
@@ -13689,6 +15395,497 @@ function NewTenantFormModal({ sequence = 1, propertiesList = properties, onSave,
           <Button onClick={onClose}>Annuler</Button>
           <Button variant="primary" disabled={!canSave} onClick={() => submit(false)}><CheckCircle2 size={17} /> Enregistrer</Button>
           <Button disabled={!canSave} onClick={() => submit(true)}><FileText size={17} /> Enregistrer et créer contrat</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function PaymentCancelModal({ payment, onConfirm, onClose }) {
+  const [values, setValues] = useState({
+    reason: "",
+    comment: "",
+    keepReceipt: "Oui",
+  });
+  const [error, setError] = useState("");
+  const update = (field) => (event) => {
+    setError("");
+    setValues((current) => ({ ...current, [field]: event.target.value }));
+  };
+  const submit = () => {
+    if (!values.reason.trim()) {
+      setError("Le motif d'annulation est obligatoire.");
+      return;
+    }
+    onConfirm({ payment, values });
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal payment-cancel-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>{payment.reference}</span>
+            <h2>Annuler ce paiement ?</h2>
+            <p>Cette action annulera le paiement et pourra impacter le solde du locataire et la situation du propriétaire.</p>
+          </div>
+          <Badge label={payment.status} />
+        </div>
+        <div className="form-grid compact-form">
+          <label>Motif d'annulation<input value={values.reason} onChange={update("reason")} placeholder="Erreur de saisie, paiement rejeté..." /></label>
+          <label>Conserver le reçu en historique<select value={values.keepReceipt} onChange={update("keepReceipt")}><option>Oui</option><option>Non</option></select></label>
+          <label className="full">Commentaire<textarea value={values.comment} onChange={update("comment")} placeholder="Contexte, validation responsable, suite à donner." /></label>
+        </div>
+        {error && <p className="form-alert">{error}</p>}
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={submit}><XCircle size={17} /> Confirmer l'annulation</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function getPaymentHistoryEntries(payment) {
+  const baseEntries = [
+    { action: "Paiement créé", user: "Aïssata Diarra", date: payment.date, detail: `${payment.paid} enregistré pour ${payment.period}.`, oldValue: "-", newValue: payment.status },
+    ...(payment.receipt && payment.receipt !== "Non généré" ? [{ action: "Reçu généré", user: "Aïssata Diarra", date: payment.date, detail: payment.receipt, oldValue: "Aucun reçu", newValue: payment.receipt }] : []),
+  ];
+  const customEntries = Array.isArray(payment.history) ? payment.history : [];
+  return [...customEntries, ...baseEntries].map((entry, index) => (
+    typeof entry === "string"
+      ? { action: entry, user: "Système", date: payment.date, detail: entry, oldValue: "-", newValue: "-", id: index }
+      : { ...entry, id: index }
+  ));
+}
+
+function PaymentHistoryModal({ payment, onClose }) {
+  const entries = getPaymentHistoryEntries(payment);
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal payment-history-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Historique du paiement</span>
+            <h2>{payment.reference}</h2>
+            <p>{payment.tenant} · {payment.property}</p>
+          </div>
+          <Badge label={payment.status} />
+        </div>
+        <DataTable
+          columns={["Date et heure", "Utilisateur", "Action", "Détail", "Ancienne valeur", "Nouvelle valeur"]}
+          rows={entries.map((entry) => [
+            entry.date,
+            entry.user,
+            entry.action,
+            entry.detail,
+            entry.oldValue ?? "-",
+            entry.newValue ?? "-",
+          ])}
+        />
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Fermer</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function PaymentProofModal({ payment, onSave, onClose }) {
+  const existingProof = payment.proof;
+  const [fileName, setFileName] = useState(existingProof?.fileName ?? "");
+  const [reference, setReference] = useState(existingProof?.reference ?? payment.paymentRef ?? "");
+  const [comment, setComment] = useState(existingProof?.comment ?? "");
+  const [message, setMessage] = useState("");
+  const updateFile = (event) => {
+    setMessage("");
+    setFileName(event.target.files?.[0]?.name ?? fileName);
+  };
+  const submit = (actionLabel = existingProof ? "Justificatif remplacé" : "Justificatif ajouté") => {
+    if (!fileName.trim()) {
+      setMessage("Veuillez importer un PDF ou une image.");
+      return;
+    }
+    onSave({
+      payment,
+      proof: {
+        fileName,
+        reference,
+        comment,
+        actionLabel,
+        type: fileName.toLowerCase().endsWith(".pdf") ? "PDF" : "Image",
+        importedAt: "24/06/2026",
+      },
+    });
+    setMessage("Justificatif enregistré.");
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal payment-proof-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Justificatif de paiement</span>
+            <h2>{payment.reference}</h2>
+            <p>{payment.tenant} · {payment.paid}</p>
+          </div>
+          <Badge label={existingProof ? "Justificatif joint" : "À importer"} />
+        </div>
+        {existingProof ? (
+          <div className="simple-list">
+            <p><span>Fichier</span><strong>{existingProof.fileName}</strong></p>
+            <p><span>Référence</span><strong>{existingProof.reference}</strong></p>
+            <p><span>Commentaire</span><strong>{existingProof.comment || "Aucun commentaire"}</strong></p>
+            <p><span>Importé le</span><strong>{existingProof.importedAt}</strong></p>
+          </div>
+        ) : (
+          <div className="notice">Aucun justificatif n'est rattaché à ce paiement.</div>
+        )}
+        <div className="form-section">
+          <h3>{existingProof ? "Remplacer le justificatif" : "Importer un justificatif"}</h3>
+          <div className="form-grid compact-form">
+            <label>Importer PDF / image<input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={updateFile} /><small>{fileName || "Aucun fichier sélectionné"}</small></label>
+            <label>Référence<input value={reference} onChange={(event) => setReference(event.target.value)} /></label>
+            <label className="full">Commentaire<textarea value={comment} onChange={(event) => setComment(event.target.value)} /></label>
+          </div>
+        </div>
+        {message && <p className="form-feedback">{message}</p>}
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Fermer</Button>
+          {existingProof && <Button onClick={() => window.print()}><Eye size={17} /> Prévisualiser</Button>}
+          {existingProof && <Button onClick={() => downloadGeneratedPdf({ label: "Justificatif paiement" }, { reference, fileName, payment: payment.reference }, `EKIMMO_Justificatif_${payment.reference}_2026-06-24.pdf`)}><Download size={17} /> Télécharger</Button>}
+          <Button variant="primary" onClick={() => submit()}><Upload size={17} /> Enregistrer</Button>
+          {existingProof && <Button onClick={() => onSave({ payment, proof: null })}><XCircle size={17} /> Supprimer</Button>}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function FinanceReceiptModal({ payment, printOnOpen = false, onReceiptAction, onClose }) {
+  const receiptValues = getPaymentReceiptValues({
+    ...payment,
+    receipt: payment.receipt && payment.receipt !== "Non généré" ? payment.receipt : makeDocumentNumber("REC", 145),
+  });
+  const [values, setValues] = useState(receiptValues);
+  const [notice, setNotice] = useState("");
+  const receiptTemplate = documentTemplates.find((item) => item.key === "recu") ?? documentTemplates[1];
+  const fileName = `EKIMMO_Recu_${values.numero}_2026-06-24.pdf`;
+  const update = (name, value) => setValues((current) => ({ ...current, [name]: value }));
+
+  useEffect(() => {
+    if (printOnOpen) {
+      const timer = window.setTimeout(() => window.print(), 140);
+      return () => window.clearTimeout(timer);
+    }
+    return undefined;
+  }, [printOnOpen]);
+
+  const runReceiptAction = (action, label) => {
+    onReceiptAction({ payment, values, action });
+    setNotice(label);
+  };
+
+  return (
+    <div className="modal-backdrop document-print-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card document-print-modal finance-receipt-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="document-print-head">
+          <div>
+            <span>{printOnOpen ? "Aperçu avant impression" : "Génération de reçu"}</span>
+            <h2>{payment.tenant}</h2>
+            <p>{payment.reference} · {payment.property}</p>
+          </div>
+          <div className="document-editor-actions">
+            <Button variant="primary" onClick={() => downloadGeneratedPdf(receiptTemplate, values, fileName)}><Download size={17} /> Télécharger PDF</Button>
+            <Button onClick={() => window.print()}><Printer size={17} /> Imprimer</Button>
+            <Button onClick={() => runReceiptAction("archive-tenant", "Reçu archivé dans la fiche locataire.")}><Archive size={17} /> Archiver locataire</Button>
+            <Button onClick={() => runReceiptAction("archive-property", "Reçu archivé dans la fiche du bien.")}><Archive size={17} /> Archiver bien</Button>
+            <Button onClick={() => runReceiptAction("link", "Reçu lié au paiement.")}><LinkIcon size={17} /> Lier au paiement</Button>
+          </div>
+        </div>
+        {notice && <p className="form-feedback">{notice}</p>}
+        <div className="owner-statement-layout">
+          <Panel title="Champs du reçu">
+            <div className="form-grid compact-form">
+              <label>Numéro<input value={values.numero} onChange={(event) => update("numero", event.target.value)} /></label>
+              <label>Date<input value={values.date} onChange={(event) => update("date", event.target.value)} /></label>
+              <label>Nom<input value={values.nom} onChange={(event) => update("nom", event.target.value)} /></label>
+              <label>Montant<input value={values.montantChiffres} onChange={(event) => update("montantChiffres", event.target.value)} /></label>
+              <label className="full">Objet<textarea value={values.objet} onChange={(event) => update("objet", event.target.value)} /></label>
+            </div>
+          </Panel>
+          <OriginalReceiptDocument values={values} />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ArrearsPromiseModal({ row, onSave, onClose }) {
+  const [values, setValues] = useState({
+    amount: row.balance,
+    promisedDate: "2026-06-30",
+    paymentMode: "Orange Money",
+    comment: "Le locataire s'engage à régulariser le solde.",
+    nextReminder: "Relance automatique la veille de la date promise",
+  });
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal arrears-promise-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Promesse de paiement</span>
+            <h2>{row.tenant}</h2>
+            <p>{row.property} · {row.period}</p>
+          </div>
+          <Badge label={row.balance} />
+        </div>
+        <div className="form-grid compact-form">
+          <label>Montant promis<input value={values.amount} onChange={update("amount")} /></label>
+          <label>Date promise<input type="date" value={values.promisedDate} onChange={update("promisedDate")} /></label>
+          <label>Mode probable de paiement<select value={values.paymentMode} onChange={update("paymentMode")}>{paymentModes.map((mode) => <option key={mode}>{mode}</option>)}</select></label>
+          <label>Prochaine relance automatique<input value={values.nextReminder} onChange={update("nextReminder")} /></label>
+          <label className="full">Commentaire<textarea value={values.comment} onChange={update("comment")} /></label>
+        </div>
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => onSave({ row, values })}><CheckCircle2 size={17} /> Enregistrer promesse</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ArrearsStatusModal({ row, currentStatus, onSave, onClose }) {
+  const [values, setValues] = useState({
+    status: currentStatus,
+    comment: "",
+  });
+  const [error, setError] = useState("");
+  const update = (field) => (event) => {
+    setError("");
+    setValues((current) => ({ ...current, [field]: event.target.value }));
+  };
+  const submit = () => {
+    if (values.status === "Litige" && !values.comment.trim()) {
+      setError("Un commentaire est obligatoire pour passer le dossier en litige.");
+      return;
+    }
+    onSave({ row, values });
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal arrears-status-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Changer statut</span>
+            <h2>{row.tenant}</h2>
+            <p>{row.balance} · {row.property}</p>
+          </div>
+          <Badge label={values.status} />
+        </div>
+        <div className="form-grid compact-form">
+          <label>Statut<select value={values.status} onChange={update("status")}><option>En retard</option><option>Relancé</option><option>Promesse de paiement</option><option>Litige</option><option>Régularisé</option><option>Abandonné / annulé</option></select></label>
+          <label className="full">Commentaire<textarea value={values.comment} onChange={update("comment")} placeholder={values.status === "Litige" ? "Expliquez le motif du litige." : "Commentaire optionnel."} /></label>
+        </div>
+        {error && <p className="form-alert">{error}</p>}
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={submit}><RefreshCw size={17} /> Enregistrer statut</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ArrearsStatementModal({ row, relancesList = [], promise, history = [], onArchive, onClose }) {
+  const linkedRelances = getLinkedRentRelances(row, relancesList);
+  const [values, setValues] = useState({
+    period: row.period,
+    observations: "État préparé pour suivi interne et relance du locataire.",
+  });
+  const [preview, setPreview] = useState(false);
+  const [archived, setArchived] = useState(false);
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+  const pdfValues = {
+    reference: makeDocumentNumber("IMP", 501),
+    date: "24/06/2026",
+    locataire: row.tenant,
+    bien: row.property,
+    proprietaire: row.owner,
+    periode: values.period,
+    montant: row.balance,
+    observations: values.observations,
+  };
+
+  const archive = () => {
+    onArchive({ row, values: pdfValues });
+    setArchived(true);
+  };
+
+  return (
+    <div className="modal-backdrop document-print-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card document-print-modal arrears-statement-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="document-print-head">
+          <div>
+            <span>État impayé</span>
+            <h2>{row.tenant}</h2>
+            <p>{row.property} · {row.balance}</p>
+          </div>
+          <div className="document-editor-actions">
+            <Button onClick={() => setPreview(true)}><Eye size={17} /> Aperçu</Button>
+            <Button variant="primary" onClick={() => downloadGeneratedPdf({ label: "État impayé" }, pdfValues, `EKIMMO_EtatImpaye_${row.tenant.replace(/\s+/g, "")}_2026-06-24.pdf`)}><Download size={17} /> PDF</Button>
+            <Button onClick={() => window.print()}><Printer size={17} /> Impression</Button>
+            <Button onClick={archive} disabled={archived}><Archive size={17} /> {archived ? "Archivé" : "Archiver"}</Button>
+          </div>
+        </div>
+        <div className="owner-statement-layout">
+          <Panel title="Paramètres">
+            <div className="form-grid compact-form">
+              <label>Période<input value={values.period} onChange={update("period")} /></label>
+              <label className="full">Observations<textarea value={values.observations} onChange={update("observations")} /></label>
+            </div>
+          </Panel>
+          {preview ? (
+            <ArrearsStatementDocument row={row} relances={linkedRelances} promise={promise} history={history} observations={values.observations} />
+          ) : (
+            <Panel className="owner-preview-placeholder">
+              <FileText size={34} />
+              <h3>Aperçu de l'état impayé</h3>
+              <p>Cliquez sur Aperçu pour contrôler le document avant PDF, impression ou archivage.</p>
+            </Panel>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ArrearsStatementDocument({ row, relances = [], promise, history = [], observations }) {
+  return (
+    <div className="digital-document-page">
+      <DigitalDocumentHeader title="État d'impayé" subtitle={`${row.tenant} · ${row.period}`}>
+        <div>
+          <strong>{row.property}</strong>
+          <span>{row.owner}</span>
+        </div>
+      </DigitalDocumentHeader>
+      <section className="document-block">
+        <h3>Situation</h3>
+        <div className="document-info-grid">
+          <p><span>Locataire</span><strong>{row.tenant}</strong></p>
+          <p><span>Bien</span><strong>{row.property}</strong></p>
+          <p><span>Propriétaire</span><strong>{row.owner}</strong></p>
+          <p><span>Périodes impayées</span><strong>{row.period}</strong></p>
+          <p><span>Montant dû</span><strong>{row.balance}</strong></p>
+          <p><span>Statut</span><strong>{promise ? "Promesse de paiement" : row.status}</strong></p>
+        </div>
+      </section>
+      <section className="document-block">
+        <h3>Relances effectuées</h3>
+        <table className="document-table">
+          <thead><tr><th>Date</th><th>Canal</th><th>Commentaire</th><th>Prochaine action</th></tr></thead>
+          <tbody>
+            {[
+              ...history,
+              ...relances.map((relance) => ({ date: relance.date, channel: relance.channel, comment: relance.comment, nextAction: relance.nextDate })),
+            ].slice(0, 6).map((item, index) => (
+              <tr key={`${item.date}-${index}`}><td>{item.date}</td><td>{item.channel}</td><td>{item.comment}</td><td>{item.nextAction}</td></tr>
+            ))}
+            {!history.length && !relances.length && <tr><td>24/05/2026</td><td>SMS + appel</td><td>Solde en attente de règlement.</td><td>Lettre de relance</td></tr>}
+          </tbody>
+        </table>
+      </section>
+      <section className="document-block">
+        <h3>Promesses et observations</h3>
+        <p>{promise ? `${promise.amount} promis le ${fromDateInputValue(promise.promisedDate)} par ${promise.paymentMode}. ${promise.comment}` : "Aucune promesse active enregistrée."}</p>
+        <p>{observations}</p>
+      </section>
+    </div>
+  );
+}
+
+function ArrearsRegularizedModal({ row, onConfirm, onClose }) {
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal arrears-regularized-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Régularisation</span>
+            <h2>Confirmer que cet impayé est régularisé ?</h2>
+            <p>{row.tenant} · {row.property} · {row.balance}</p>
+          </div>
+          <Badge label="Régularisé" />
+        </div>
+        <div className="notice">Le statut de suivi passera à Régularisé et l'action sera ajoutée à l'historique des relances.</div>
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => onConfirm(row)}><CheckCircle2 size={17} /> Confirmer</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ArrearsHistoryModal({ row, relancesList = [], promise, history = [], onClose }) {
+  const linkedRelances = getLinkedRentRelances(row, relancesList);
+  const rows = [
+    ...history,
+    ...linkedRelances.map((relance) => ({
+      date: relance.date,
+      channel: relance.channel,
+      comment: relance.comment,
+      user: "Aïssata Diarra",
+      nextAction: relance.nextDate,
+      status: relance.status ?? "Relancé",
+    })),
+    ...(promise ? [{
+      date: "24/06/2026",
+      channel: "Promesse",
+      comment: `${promise.amount} promis le ${fromDateInputValue(promise.promisedDate)}.`,
+      user: "Aïssata Diarra",
+      nextAction: promise.nextReminder,
+      status: promise.status,
+    }] : []),
+  ];
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal arrears-history-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Historique des relances</span>
+            <h2>{row.tenant}</h2>
+            <p>{row.property} · {row.period}</p>
+          </div>
+          <Badge label={row.balance} />
+        </div>
+        <DataTable
+          columns={["Date", "Canal", "Commentaire", "Utilisateur", "Prochaine action", "Statut"]}
+          rows={(rows.length ? rows : [{ date: "24/05/2026", channel: "SMS + appel", comment: "Solde en attente de règlement.", user: "Aïssata Diarra", nextAction: "Lettre de relance", status: "En retard" }]).map((item) => [
+            item.date,
+            item.channel,
+            item.comment,
+            item.user,
+            item.nextAction,
+            <Badge label={item.status} />,
+          ])}
+        />
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Fermer</Button>
         </div>
       </section>
     </div>
