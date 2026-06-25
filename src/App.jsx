@@ -1407,29 +1407,37 @@ const reports = [
 
 const users = [
   {
+    id: "USR-2026-001",
     name: "Aïssata Diarra",
     email: "admin@ekimmo.ml",
+    phone: "+223 76 12 45 89",
     role: "Administrateur",
     status: "Actif",
     lastLogin: "28/05/2026 07:42",
   },
   {
+    id: "USR-2026-002",
     name: "Mariam Traoré",
     email: "mariam.traore@ekimmo.ml",
+    phone: "+223 74 15 33 90",
     role: "Agent immobilier",
     status: "Actif",
     lastLogin: "27/05/2026 18:20",
   },
   {
+    id: "USR-2026-003",
     name: "Issa Maïga",
     email: "issa.maiga@ekimmo.ml",
-    role: "Manager",
+    phone: "+223 66 44 17 21",
+    role: "Directeur / Manager",
     status: "Actif",
     lastLogin: "27/05/2026 16:01",
   },
   {
+    id: "USR-2026-004",
     name: "Néné Coulibaly",
     email: "caisse@ekimmo.ml",
+    phone: "+223 70 24 18 66",
     role: "Caisse / Encaissement",
     status: "Suspendu",
     lastLogin: "18/05/2026 11:44",
@@ -1457,6 +1465,33 @@ const roleProfiles = [
   "Caisse / Encaissement",
   "Assistant administratif",
 ];
+
+function getUserKey(user) {
+  return user?.id ?? user?.email ?? user?.name ?? "utilisateur";
+}
+
+function getDefaultUserHistory(user) {
+  return [
+    {
+      date: user?.lastLogin ?? "28/05/2026 07:42",
+      type: "Connexion",
+      detail: `Connexion réussie pour ${user?.name ?? "l'utilisateur"}`,
+      by: user?.name ?? "Système",
+    },
+    {
+      date: "27/05/2026 17:10",
+      type: "Action réalisée",
+      detail: user?.role === "Caisse / Encaissement" ? "Enregistrement et contrôle de reçus" : "Consultation des dossiers clients",
+      by: user?.name ?? "Système",
+    },
+    {
+      date: "25/05/2026 09:18",
+      type: "Modification",
+      detail: `Profil ${user?.status === "Suspendu" ? "suspendu" : "actif"} vérifié`,
+      by: "Admin E.K immo",
+    },
+  ];
+}
 
 const periodOptions = ["Jour", "Semaine", "Mois", "Année", "Période personnalisée"];
 
@@ -2392,6 +2427,10 @@ function App() {
   const [archivedProperties, setArchivedProperties] = useState({});
   const [financeTab, setFinanceTab] = useState("Loyers");
   const [adminTab, setAdminTab] = useState("Utilisateurs");
+  const [createdUsers, setCreatedUsers] = useState([]);
+  const [userOverrides, setUserOverrides] = useState({});
+  const [userHistories, setUserHistories] = useState({});
+  const [userActionContext, setUserActionContext] = useState(null);
   const [reportType, setReportType] = useState(reports[0][0]);
   const demoStep = demoSteps[demoIndex];
   const allContracts = useMemo(() => {
@@ -2460,6 +2499,10 @@ function App() {
     ...(reversalOverrides[getReversalKey(reversal)] ?? {}),
     history: reversalOverrides[getReversalKey(reversal)]?.history ?? reversal.history ?? [],
   })), [ownerReversements, reversalOverrides]);
+  const allUsers = useMemo(() => {
+    const applyOverride = (user) => ({ ...user, ...(userOverrides[getUserKey(user)] ?? {}) });
+    return [...createdUsers.map(applyOverride), ...users.map(applyOverride)];
+  }, [createdUsers, userOverrides]);
   const propertiesWithArchiveState = useMemo(() => properties.map((property) => {
     const propertyWithOverride = { ...property, ...(propertyOverrides[property.code] ?? {}) };
     const archive = archivedProperties[property.code];
@@ -2488,6 +2531,42 @@ function App() {
 
     if (normalizedAction === "changer mot de passe") {
       setModal("Changer mot de passe");
+      return;
+    }
+
+    if (normalizedAction === "ajouter utilisateur") {
+      setUserActionContext(null);
+      setModal("Ajouter utilisateur");
+      return;
+    }
+
+    if (normalizedAction === "modifier utilisateur" && context.user) {
+      setUserActionContext({ user: context.user });
+      setModal("Modifier utilisateur");
+      return;
+    }
+
+    if (["desactiver utilisateur", "reactiver utilisateur"].includes(normalizedAction) && context.user) {
+      setUserActionContext({ user: context.user, nextStatus: normalizedAction === "reactiver utilisateur" ? "Actif" : "Suspendu" });
+      setModal(normalizedAction === "reactiver utilisateur" ? "Réactiver utilisateur" : "Désactiver utilisateur");
+      return;
+    }
+
+    if (normalizedAction === "changer role utilisateur" && context.user) {
+      setUserActionContext({ user: context.user });
+      setModal("Changer rôle utilisateur");
+      return;
+    }
+
+    if (["reinitialiser mot de passe", "mot de passe utilisateur"].includes(normalizedAction) && context.user) {
+      setUserActionContext({ user: context.user });
+      setModal("Mot de passe utilisateur");
+      return;
+    }
+
+    if (normalizedAction === "historique utilisateur" && context.user) {
+      setUserActionContext({ user: context.user });
+      setModal("Historique utilisateur");
       return;
     }
 
@@ -3394,6 +3473,118 @@ function App() {
     setDemoActive(false);
     setDemoRect(null);
     window.history.replaceState({ ekimmoSession: "logged-out" }, "", window.location.href);
+  };
+
+  const appendUserHistory = (user, event) => {
+    const key = getUserKey(user);
+    setUserHistories((current) => ({
+      ...current,
+      [key]: [
+        {
+          date: "25/06/2026 10:30",
+          by: "Aïssata Diarra",
+          ...event,
+        },
+        ...(current[key] ?? getDefaultUserHistory(user)),
+      ],
+    }));
+  };
+
+  const handleUserCreate = ({ user, sendInvitation = false }) => {
+    setCreatedUsers((current) => [user, ...current.filter((item) => getUserKey(item) !== getUserKey(user))]);
+    setUserHistories((current) => ({
+      ...current,
+      [getUserKey(user)]: [
+        {
+          date: "25/06/2026 10:30",
+          type: "Création",
+          detail: sendInvitation ? "Utilisateur créé et invitation envoyée par email" : "Utilisateur créé avec mot de passe temporaire",
+          by: "Aïssata Diarra",
+        },
+        {
+          date: "25/06/2026 10:30",
+          type: "Connexion",
+          detail: "Aucune connexion enregistrée pour ce nouvel utilisateur",
+          by: "Système",
+        },
+        {
+          date: "25/06/2026 10:30",
+          type: "Action réalisée",
+          detail: sendInvitation ? "Invitation email préparée" : "Accès initial préparé",
+          by: "Aïssata Diarra",
+        },
+      ],
+    }));
+    setUserActionContext(null);
+    setModal(null);
+  };
+
+  const handleUserUpdate = ({ user, values }) => {
+    const nextUser = { ...user, ...values };
+    const key = getUserKey(user);
+    const isCreatedUser = createdUsers.some((item) => getUserKey(item) === key);
+
+    if (isCreatedUser) {
+      setCreatedUsers((current) => current.map((item) => (getUserKey(item) === key ? nextUser : item)));
+    } else {
+      setUserOverrides((current) => ({ ...current, [key]: { ...(current[key] ?? {}), ...values } }));
+    }
+
+    appendUserHistory(nextUser, {
+      type: "Modification",
+      detail: "Nom, contact, rôle ou statut mis à jour depuis l'administration",
+    });
+    setUserActionContext(null);
+    setModal(null);
+  };
+
+  const handleUserStatusChange = ({ user, nextStatus }) => {
+    const key = getUserKey(user);
+    const nextUser = { ...user, status: nextStatus };
+    const isCreatedUser = createdUsers.some((item) => getUserKey(item) === key);
+
+    if (isCreatedUser) {
+      setCreatedUsers((current) => current.map((item) => (getUserKey(item) === key ? nextUser : item)));
+    } else {
+      setUserOverrides((current) => ({ ...current, [key]: { ...(current[key] ?? {}), status: nextStatus } }));
+    }
+
+    appendUserHistory(nextUser, {
+      type: nextStatus === "Suspendu" ? "Désactivation" : "Réactivation",
+      detail: nextStatus === "Suspendu" ? "Accès application désactivé" : "Accès application réactivé",
+    });
+    setUserActionContext(null);
+    setModal(null);
+  };
+
+  const handleUserRoleChange = ({ user, values }) => {
+    const key = getUserKey(user);
+    const nextUser = { ...user, role: values.role };
+    const isCreatedUser = createdUsers.some((item) => getUserKey(item) === key);
+
+    if (isCreatedUser) {
+      setCreatedUsers((current) => current.map((item) => (getUserKey(item) === key ? nextUser : item)));
+    } else {
+      setUserOverrides((current) => ({ ...current, [key]: { ...(current[key] ?? {}), role: values.role } }));
+    }
+
+    appendUserHistory(nextUser, {
+      type: "Changement de rôle",
+      detail: `Rôle modifié de ${user.role} vers ${values.role}${values.comment ? ` · ${values.comment}` : ""}`,
+    });
+    setUserActionContext(null);
+    setModal(null);
+  };
+
+  const handleUserPasswordAction = ({ user, action, values }) => {
+    appendUserHistory(user, {
+      type: "Mot de passe",
+      detail: action === "temporary"
+        ? `Mot de passe temporaire généré${values.sendByEmail ? " et envoyé par email" : ""}`
+        : "Lien de réinitialisation envoyé par email",
+    });
+    setUserActionContext(null);
+    setModal(null);
   };
 
   const showPropertyDetail = (property) => {
@@ -5911,7 +6102,7 @@ function App() {
             reversalsList={allReversals}
           />
         )}
-        {activePage === "Plus" && <AdminPage activeTab={adminTab} onTab={setAdminTab} onAction={openAction} />}
+        {activePage === "Plus" && <AdminPage activeTab={adminTab} onTab={setAdminTab} onAction={openAction} usersList={allUsers} userHistories={userHistories} />}
       </main>
 
       <Footer />
@@ -6542,6 +6733,62 @@ function App() {
           onImport={handlePropertyDocumentImport}
           onClose={() => {
             setPropertyDocumentImportContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Ajouter utilisateur" ? (
+        <UserFormAdminModal
+          sequence={users.length + createdUsers.length + 1}
+          onCreate={handleUserCreate}
+          onClose={() => {
+            setUserActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Modifier utilisateur" ? (
+        <UserFormAdminModal
+          mode="edit"
+          user={userActionContext?.user ?? allUsers[0]}
+          onUpdate={handleUserUpdate}
+          onClose={() => {
+            setUserActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Désactiver utilisateur" || modal === "Réactiver utilisateur" ? (
+        <UserStatusModal
+          user={userActionContext?.user ?? allUsers[0]}
+          nextStatus={userActionContext?.nextStatus ?? (modal === "Réactiver utilisateur" ? "Actif" : "Suspendu")}
+          onConfirm={handleUserStatusChange}
+          onClose={() => {
+            setUserActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Changer rôle utilisateur" ? (
+        <UserRoleModal
+          user={userActionContext?.user ?? allUsers[0]}
+          onSave={handleUserRoleChange}
+          onClose={() => {
+            setUserActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Mot de passe utilisateur" ? (
+        <UserPasswordAdminModal
+          user={userActionContext?.user ?? allUsers[0]}
+          onSave={handleUserPasswordAction}
+          onClose={() => {
+            setUserActionContext(null);
+            setModal(null);
+          }}
+        />
+      ) : modal === "Historique utilisateur" ? (
+        <UserHistoryModal
+          user={userActionContext?.user ?? allUsers[0]}
+          history={userHistories[getUserKey(userActionContext?.user ?? allUsers[0])] ?? getDefaultUserHistory(userActionContext?.user ?? allUsers[0])}
+          onClose={() => {
+            setUserActionContext(null);
             setModal(null);
           }}
         />
@@ -14523,20 +14770,22 @@ function ReportsPage({
   );
 }
 
-function AdminPage({ activeTab, onTab, onAction }) {
+function AdminPage({ activeTab, onTab, onAction, usersList = users, userHistories = {} }) {
   const tabs = ["Utilisateurs", "Rôles & permissions", "Paramètres", "Modèles documents", "Historique"];
   return (
     <>
       <PageIntro
         title="Plus / Administration"
         actions={
-          <Button variant="primary" onClick={() => onAction("Ajouter utilisateur")}>
-            <Plus size={18} /> Ajouter utilisateur
-          </Button>
+          activeTab === "Utilisateurs" ? (
+            <Button variant="primary" onClick={() => onAction("Ajouter utilisateur")}>
+              <Plus size={18} /> Ajouter utilisateur
+            </Button>
+          ) : null
         }
       />
       <Tabs tabs={tabs} active={activeTab} onChange={onTab} demo="admin-tabs" />
-      {activeTab === "Utilisateurs" && <UsersAdmin onAction={onAction} />}
+      {activeTab === "Utilisateurs" && <UsersAdmin onAction={onAction} usersList={usersList} userHistories={userHistories} />}
       {activeTab === "Rôles & permissions" && <RolesAdmin onAction={onAction} />}
       {activeTab === "Paramètres" && <SettingsAdmin />}
       {activeTab === "Modèles documents" && <TemplatesAdmin onAction={onAction} />}
@@ -14545,19 +14794,24 @@ function AdminPage({ activeTab, onTab, onAction }) {
   );
 }
 
-function UsersAdmin({ onAction }) {
-  const [selected, setSelected] = useState(users[0]);
+function UsersAdmin({ onAction, usersList = users, userHistories = {} }) {
+  const [selectedKey, setSelectedKey] = useState(getUserKey(usersList[0]));
   const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
+  const selected = usersList.find((user) => getUserKey(user) === selectedKey) ?? usersList[0];
 
   const openUser = (user) => {
-    setSelected(user);
+    setSelectedKey(getUserKey(user));
     openDetail();
   };
 
   if (detailOpen) {
     return (
       <DetailPageShell title="Fiche utilisateur" subtitle={selected.name} onBack={closeDetail}>
-        <UserProfilePanel user={selected} onAction={onAction} />
+        <UserProfilePanel
+          user={selected}
+          history={userHistories[getUserKey(selected)] ?? getDefaultUserHistory(selected)}
+          onAction={onAction}
+        />
       </DetailPageShell>
     );
   }
@@ -14567,7 +14821,7 @@ function UsersAdmin({ onAction }) {
       <Panel title="Utilisateurs">
         <DataTable
           columns={["Nom", "Email", "Rôle", "Statut", "Dernière connexion", "Action"]}
-          rows={users.map((user) => [
+          rows={usersList.map((user) => [
             user.name,
             user.email,
             user.role,
@@ -14575,8 +14829,10 @@ function UsersAdmin({ onAction }) {
             user.lastLogin,
             <div className="table-actions">
               <Button compact onClick={() => openUser(user)}><Eye size={15} /> Fiche</Button>
-              <Button compact onClick={() => onAction("Modifier utilisateur")}><Pencil size={15} /> Modifier</Button>
-              <Button compact onClick={() => onAction("Désactiver utilisateur")}><XCircle size={15} /> Désactiver</Button>
+              <Button compact onClick={() => onAction("Modifier utilisateur", { user })}><Pencil size={15} /> Modifier</Button>
+              <Button compact onClick={() => onAction(user.status === "Suspendu" ? "Réactiver utilisateur" : "Désactiver utilisateur", { user })}>
+                <XCircle size={15} /> {user.status === "Suspendu" ? "Réactiver" : "Désactiver"}
+              </Button>
             </div>,
           ])}
         />
@@ -14585,7 +14841,7 @@ function UsersAdmin({ onAction }) {
   );
 }
 
-function UserProfilePanel({ user, onAction }) {
+function UserProfilePanel({ user, history = [], onAction }) {
   const modules =
     user.role === "Administrateur"
       ? "Tous modules"
@@ -14595,7 +14851,7 @@ function UserProfilePanel({ user, onAction }) {
 
   return (
     <Panel title="Fiche utilisateur" className="profile-panel">
-      <ProfileHeader person={{ name: user.name, email: user.email, phone: "+223 70 00 00 00", id: user.role }} />
+      <ProfileHeader person={{ name: user.name, email: user.email, phone: user.phone, id: user.role }} />
       <DetailMetrics
         items={[
           ["Rôle", user.role],
@@ -14607,17 +14863,24 @@ function UserProfilePanel({ user, onAction }) {
       <div className="simple-list">
         <p><span>Nom complet</span><strong>{user.name}</strong></p>
         <p><span>Email</span><strong>{user.email}</strong></p>
+        <p><span>Téléphone</span><strong>{user.phone}</strong></p>
         <p><span>Rôle attribué</span><strong>{user.role}</strong></p>
         <p><span>Permissions principales</span><strong>{modules}</strong></p>
         <p><span>Statut du compte</span><Badge label={user.status} /></p>
         <p><span>Dernière connexion</span><strong>{user.lastLogin}</strong></p>
       </div>
+      <Panel title="Historique récent" className="nested-panel">
+        <DataTable
+          columns={["Date", "Type", "Détail", "Utilisateur"]}
+          rows={history.slice(0, 3).map((item) => [item.date, item.type, item.detail, item.by])}
+        />
+      </Panel>
       <div className="stack-actions">
-        <Button variant="primary" onClick={() => onAction("Modifier utilisateur")}><Pencil size={17} /> Modifier</Button>
-        <Button onClick={() => onAction("Changer rôle utilisateur")}><ShieldCheck size={17} /> Changer rôle</Button>
-        <Button onClick={() => onAction("Réinitialiser mot de passe")}><LockKeyhole size={17} /> Mot de passe</Button>
-        <Button onClick={() => onAction(user.status === "Suspendu" ? "Réactiver utilisateur" : "Désactiver utilisateur")}><XCircle size={17} /> {user.status === "Suspendu" ? "Réactiver" : "Désactiver"}</Button>
-        <Button onClick={() => onAction("Historique utilisateur")}><History size={17} /> Historique</Button>
+        <Button variant="primary" onClick={() => onAction("Modifier utilisateur", { user })}><Pencil size={17} /> Modifier</Button>
+        <Button onClick={() => onAction("Changer rôle utilisateur", { user })}><ShieldCheck size={17} /> Changer rôle</Button>
+        <Button onClick={() => onAction("Réinitialiser mot de passe", { user })}><LockKeyhole size={17} /> Mot de passe</Button>
+        <Button onClick={() => onAction(user.status === "Suspendu" ? "Réactiver utilisateur" : "Désactiver utilisateur", { user })}><XCircle size={17} /> {user.status === "Suspendu" ? "Réactiver" : "Désactiver"}</Button>
+        <Button onClick={() => onAction("Historique utilisateur", { user })}><History size={17} /> Historique</Button>
       </div>
     </Panel>
   );
@@ -14737,6 +15000,178 @@ function HistoryAdmin() {
         ]}
       />
     </Panel>
+  );
+}
+
+function UserFormAdminModal({ mode = "create", user = null, sequence = 1, onCreate, onUpdate, onClose }) {
+  const isEdit = mode === "edit";
+  const [values, setValues] = useState({
+    name: user?.name ?? "",
+    email: user?.email ?? "",
+    phone: user?.phone ?? "",
+    role: user?.role ?? "Agent immobilier",
+    status: user?.status ?? "Actif",
+    invitationMode: "Invitation par email",
+    temporaryPassword: "EKIMMO-2026",
+  });
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+  const submitCreate = (sendInvitation = false) => {
+    const nextUser = {
+      id: `USR-2026-${String(sequence).padStart(3, "0")}`,
+      name: values.name || "Nouvel utilisateur",
+      email: values.email || `utilisateur${sequence}@ekimmo.ml`,
+      phone: values.phone || "+223 70 00 00 00",
+      role: values.role,
+      status: values.status,
+      lastLogin: sendInvitation ? "Invitation en attente" : "Jamais connecté",
+      invitationMode: values.invitationMode,
+      temporaryPassword: values.temporaryPassword,
+    };
+    onCreate?.({ user: nextUser, sendInvitation });
+  };
+  const submitEdit = () => {
+    onUpdate?.({
+      user,
+      values: {
+        name: values.name,
+        email: values.email,
+        phone: values.phone,
+        role: values.role,
+        status: values.status,
+      },
+    });
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="round-icon"><UserCog size={22} /></div>
+        <h2>{isEdit ? "Modifier utilisateur" : "Ajouter utilisateur"}</h2>
+        <p>{isEdit ? "Mettre à jour les informations, le rôle et le statut de l'utilisateur." : "Créer un accès collaborateur pour l'espace E.K immo."}</p>
+        <div className="form-grid compact-form">
+          <label>Nom<input value={values.name} onChange={update("name")} placeholder="Nom complet" /></label>
+          <label>Email<input value={values.email} onChange={update("email")} placeholder="nom@ekimmo.ml" /></label>
+          <label>Téléphone<input value={values.phone} onChange={update("phone")} placeholder="+223 70 00 00 00" /></label>
+          <label>Rôle<select value={values.role} onChange={update("role")}>{roleProfiles.map((role) => <option key={role}>{role}</option>)}</select></label>
+          <label>Statut<select value={values.status} onChange={update("status")}><option>Actif</option><option>Suspendu</option></select></label>
+          {!isEdit && (
+            <>
+              <label>Activation<select value={values.invitationMode} onChange={update("invitationMode")}><option>Invitation par email</option><option>Mot de passe temporaire</option></select></label>
+              <label className="full">Mot de passe temporaire<input value={values.temporaryPassword} onChange={update("temporaryPassword")} /></label>
+            </>
+          )}
+        </div>
+        <div className="action-row">
+          <Button onClick={onClose}>Annuler</Button>
+          {isEdit ? (
+            <Button variant="primary" onClick={submitEdit}><CheckCircle2 size={17} /> Enregistrer les modifications</Button>
+          ) : (
+            <>
+              <Button onClick={() => submitCreate(false)}><UserCog size={17} /> Créer utilisateur</Button>
+              <Button variant="primary" onClick={() => submitCreate(true)}><Send size={17} /> Créer et envoyer invitation</Button>
+            </>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function UserStatusModal({ user, nextStatus, onConfirm, onClose }) {
+  const disabling = nextStatus === "Suspendu";
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card compact-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="round-icon"><XCircle size={22} /></div>
+        <h2>{disabling ? "Désactiver cet utilisateur ?" : "Réactiver cet utilisateur ?"}</h2>
+        <p>
+          {disabling
+            ? "Désactiver cet utilisateur ? Il ne pourra plus accéder à l’application."
+            : "Réactiver cet utilisateur ? Il pourra de nouveau accéder à l’application."}
+        </p>
+        <DetailMetrics items={[["Utilisateur", user.name], ["Rôle", user.role], ["Statut actuel", user.status], ["Nouveau statut", nextStatus]]} />
+        <div className="action-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => onConfirm({ user, nextStatus })}>{disabling ? "Désactiver" : "Réactiver"}</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function UserRoleModal({ user, onSave, onClose }) {
+  const [values, setValues] = useState({
+    role: user.role,
+    comment: "Mise à jour des responsabilités dans l'agence.",
+  });
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card compact-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="round-icon"><ShieldCheck size={22} /></div>
+        <h2>Changer rôle</h2>
+        <p>{user.name}</p>
+        <div className="form-grid compact-form">
+          <label>Rôle actuel<input value={user.role} readOnly /></label>
+          <label>Nouveau rôle<select value={values.role} onChange={(event) => setValues((current) => ({ ...current, role: event.target.value }))}>{roleProfiles.map((role) => <option key={role}>{role}</option>)}</select></label>
+          <label className="full">Commentaire<textarea value={values.comment} onChange={(event) => setValues((current) => ({ ...current, comment: event.target.value }))} /></label>
+        </div>
+        <div className="action-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => onSave({ user, values })}>Confirmer</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function UserPasswordAdminModal({ user, onSave, onClose }) {
+  const [values, setValues] = useState({
+    temporaryPassword: `EK-${new Date().getFullYear()}-${getInitials(user.name)}`,
+    sendByEmail: "Oui",
+  });
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card compact-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="round-icon"><LockKeyhole size={22} /></div>
+        <h2>Mot de passe utilisateur</h2>
+        <p>{user.name} · {user.email}</p>
+        <div className="form-grid compact-form">
+          <label className="full">Mot de passe temporaire<input value={values.temporaryPassword} onChange={(event) => setValues((current) => ({ ...current, temporaryPassword: event.target.value }))} /></label>
+          <label>Envoyer par email<select value={values.sendByEmail} onChange={(event) => setValues((current) => ({ ...current, sendByEmail: event.target.value }))}><option>Oui</option><option>Non</option></select></label>
+        </div>
+        <div className="action-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button onClick={() => onSave({ user, action: "temporary", values })}><KeyRound size={17} /> Générer mot de passe temporaire</Button>
+          <Button variant="primary" onClick={() => onSave({ user, action: "reset", values })}><Send size={17} /> Envoyer lien de réinitialisation</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function UserHistoryModal({ user, history = [], onClose }) {
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="round-icon"><History size={22} /></div>
+        <h2>Historique utilisateur</h2>
+        <p>{user.name} · connexions, modifications, actions réalisées et changements de rôle.</p>
+        <DataTable
+          columns={["Date", "Catégorie", "Détail", "Utilisateur"]}
+          rows={history.map((item) => [item.date, item.type, item.detail, item.by])}
+        />
+        <div className="action-row">
+          <Button variant="primary" onClick={onClose}>Fermer</Button>
+        </div>
+      </section>
+    </div>
   );
 }
 
