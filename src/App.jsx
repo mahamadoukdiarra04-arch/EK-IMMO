@@ -2148,6 +2148,39 @@ function getMaintenanceKey(maintenance) {
   return maintenance?.reference ?? normalizeSearch(`${maintenance?.property ?? "bien"}-${maintenance?.type ?? "entretien"}-${maintenance?.date ?? "date"}`);
 }
 
+function getReversalKey(reversal) {
+  return reversal?.reference ?? normalizeSearch(`${reversal?.owner ?? "proprietaire"}-${reversal?.period ?? "periode"}-${reversal?.balance ?? "solde"}`);
+}
+
+function calculateOwnerReversal(ownerName, paymentsList = paymentRecords, chargesList = charges, reversalsList = reversals) {
+  const ownerData = owners.find((owner) => owner.name === ownerName);
+  const ownerPayments = paymentsList.filter((payment) => payment.owner === ownerName);
+  const ownerCharges = chargesList.filter((charge) => charge.owner === ownerName && !["Annulé", "Annulée"].includes(charge.status));
+  const ownerReversals = reversalsList.filter((reversal) => reversal.owner === ownerName && !["Annulé", "Annulée", "Archivé"].includes(reversal.status));
+  const collectedFromPayments = ownerPayments.reduce((sum, payment) => sum + parseFCFA(payment.paid), 0);
+  const collected = Math.max(collectedFromPayments, parseFCFA(ownerData?.rent));
+  const commissions = parseFCFA(ownerData?.commission) || Math.round(collected * 0.05);
+  const chargesAmount = Math.max(
+    ownerCharges.reduce((sum, charge) => sum + parseFCFA(charge.amount ?? charge.charges), 0),
+    parseFCFA(ownerData?.charges)
+  );
+  const alreadyPaid = ownerReversals.reduce((sum, reversal) => sum + parseFCFA(reversal.paid), 0);
+  const balance = Math.max(0, collected - commissions - chargesAmount - alreadyPaid);
+
+  return {
+    collected,
+    commissions,
+    charges: chargesAmount,
+    alreadyPaid,
+    balance,
+    collectedLabel: formatFCFA(collected),
+    commissionsLabel: formatFCFA(commissions),
+    chargesLabel: formatFCFA(chargesAmount),
+    alreadyPaidLabel: formatFCFA(alreadyPaid),
+    balanceLabel: formatFCFA(balance),
+  };
+}
+
 function getProspectObjective(prospect) {
   return prospect?.objective ?? (prospect?.need?.includes("Bureau") ? "Location pro" : "Location");
 }
@@ -2338,6 +2371,8 @@ function App() {
   const [maintenanceContext, setMaintenanceContext] = useState(null);
   const [maintenanceActionContext, setMaintenanceActionContext] = useState(null);
   const [maintenanceOverrides, setMaintenanceOverrides] = useState({});
+  const [reversalActionContext, setReversalActionContext] = useState(null);
+  const [reversalOverrides, setReversalOverrides] = useState({});
   const [chargeContext, setChargeContext] = useState(null);
   const [chargeActionContext, setChargeActionContext] = useState(null);
   const [chargeOverrides, setChargeOverrides] = useState({});
@@ -2419,7 +2454,11 @@ function App() {
 
     return [...notificationAlerts, ...visitNotifications];
   }, [allVisits]);
-  const allReversals = useMemo(() => [...ownerReversements, ...reversals], [ownerReversements]);
+  const allReversals = useMemo(() => [...ownerReversements, ...reversals].map((reversal) => ({
+    ...reversal,
+    ...(reversalOverrides[getReversalKey(reversal)] ?? {}),
+    history: reversalOverrides[getReversalKey(reversal)]?.history ?? reversal.history ?? [],
+  })), [ownerReversements, reversalOverrides]);
   const propertiesWithArchiveState = useMemo(() => properties.map((property) => {
     const propertyWithOverride = { ...property, ...(propertyOverrides[property.code] ?? {}) };
     const archive = archivedProperties[property.code];
@@ -3000,6 +3039,60 @@ function App() {
       return;
     }
 
+    if (normalizedAction === "preparer un reversement") {
+      setReversalActionContext({ owner: context.owner ?? allOwners[0] ?? owners[0] });
+      setModal("Préparer reversement");
+      return;
+    }
+
+    if (normalizedAction === "calcul reversement" && context.reversal) {
+      setReversalActionContext({ reversal: context.reversal });
+      setModal("Calcul reversement");
+      return;
+    }
+
+    if (normalizedAction === "enregistrer reversement finance" && context.reversal) {
+      setReversalActionContext({ reversal: context.reversal });
+      setModal("Valider reversement");
+      return;
+    }
+
+    if (normalizedAction === "paiement partiel reversement" && context.reversal) {
+      setReversalActionContext({ reversal: context.reversal });
+      setModal("Partiel reversement");
+      return;
+    }
+
+    if (normalizedAction === "etat de reversement" && context.reversal) {
+      setReversalActionContext({ reversal: context.reversal, intent: "preview" });
+      setModal("Etat reversement finance");
+      return;
+    }
+
+    if (normalizedAction === "exporter reversement pdf" && context.reversal) {
+      setReversalActionContext({ reversal: context.reversal, intent: "pdf" });
+      setModal("Etat reversement finance");
+      return;
+    }
+
+    if (normalizedAction === "imprimer reversement" && context.reversal) {
+      setReversalActionContext({ reversal: context.reversal, intent: "print" });
+      setModal("Etat reversement finance");
+      return;
+    }
+
+    if (normalizedAction === "archiver reversement" && context.reversal) {
+      setReversalActionContext({ reversal: context.reversal });
+      setModal("Archiver reversement");
+      return;
+    }
+
+    if (normalizedAction === "annuler reversement" && context.reversal) {
+      setReversalActionContext({ reversal: context.reversal });
+      setModal("Annuler reversement");
+      return;
+    }
+
     if ((normalizedAction === "imprimer proprietaire" || normalizedAction === "exporter pdf proprietaire") && context.owner) {
       setOwnerActionContext({
         owner: context.owner,
@@ -3338,6 +3431,169 @@ function App() {
 
     setModal(null);
     setOwnerActionContext(null);
+  };
+
+  const updateReversalRecord = (reversal, patch, historyEntry) => {
+    const key = getReversalKey(reversal);
+    const nextHistory = [
+      ...(reversal.history ?? []),
+      ...(historyEntry ? [historyEntry] : []),
+    ];
+    const nextReversal = {
+      ...reversal,
+      ...patch,
+      history: nextHistory,
+    };
+
+    const isDynamic = ownerReversements.some((item) => getReversalKey(item) === key || item.reference === reversal.reference);
+    if (isDynamic) {
+      setOwnerReversements((current) => current.map((item) => (
+        getReversalKey(item) === key || item.reference === reversal.reference ? nextReversal : item
+      )));
+    } else {
+      setReversalOverrides((current) => ({
+        ...current,
+        [key]: nextReversal,
+      }));
+    }
+
+    const owner = allOwners.find((item) => item.name === nextReversal.owner);
+    if (owner) {
+      setOwnerOverrides((current) => ({
+        ...current,
+        [owner.id]: {
+          ...(current[owner.id] ?? {}),
+          balance: nextReversal.balance,
+          lastPayment: nextReversal.date ?? nextReversal.nextDate ?? owner.lastPayment,
+        },
+      }));
+    }
+
+    return nextReversal;
+  };
+
+  const closeReversalAction = () => {
+    setReversalActionContext(null);
+    setModal(null);
+  };
+
+  const handleFinanceReversalPrepareSave = ({ reversement, owner, generateStatement = false }) => {
+    setOwnerReversements((current) => [
+      reversement,
+      ...current.filter((item) => item.reference !== reversement.reference),
+    ]);
+
+    setOwnerOverrides((current) => ({
+      ...current,
+      [owner.id]: {
+        ...(current[owner.id] ?? {}),
+        balance: reversement.balance,
+        lastPayment: reversement.date,
+      },
+    }));
+
+    setFinanceTab("Reversements");
+    setActivePage("Finance");
+
+    if (generateStatement) {
+      setReversalActionContext({ reversal: reversement, intent: "preview" });
+      setModal("Etat reversement finance");
+      return;
+    }
+
+    setReversalActionContext(null);
+    setModal(null);
+  };
+
+  const handleReversalCompleteSave = ({ reversal, values }) => {
+    const paidAmount = parseFCFA(reversal.paid) + parseFCFA(reversal.balance);
+    updateReversalRecord(reversal, {
+      paid: formatFCFA(paidAmount),
+      balance: "0 FCFA",
+      status: "Soldé",
+      validationComment: values.comment,
+      validatedBy: "Aïssata Diarra",
+      validatedAt: "25/06/2026",
+    }, `Validation : reversement complet confirmé. ${values.comment}`);
+    closeReversalAction();
+  };
+
+  const handleReversalPartialSave = ({ reversal, values }) => {
+    const nextPaid = parseFCFA(reversal.paid) + parseFCFA(values.amount);
+    const nextBalance = Math.max(0, parseFCFA(reversal.balance) - parseFCFA(values.amount));
+    updateReversalRecord(reversal, {
+      paid: formatFCFA(nextPaid),
+      balance: formatFCFA(nextBalance),
+      status: nextBalance > 0 ? "Partiel" : "Soldé",
+      nextDate: fromDateInputValue(values.nextDate),
+      partialComment: values.comment,
+    }, `Paiement partiel : ${values.amount}. Prochaine échéance ${fromDateInputValue(values.nextDate)}.`);
+    closeReversalAction();
+  };
+
+  const handleReversalArchiveSave = ({ reversal, values }) => {
+    const nextReversal = updateReversalRecord(reversal, {
+      status: "Archivé",
+      archiveReason: values.reason,
+      archiveComment: values.comment,
+      archivedAt: "25/06/2026",
+    }, `Archivage : ${values.reason}. ${values.comment}`);
+
+    const reference = nextReversal.reference ?? makeDocumentNumber("REV", 900 + propertyDocumentArchives.length + 1);
+    setPropertyDocumentArchives((current) => [
+      {
+        id: `reversal-archive-${reference}`,
+        category: "Finance",
+        reference,
+        title: `État de reversement - ${nextReversal.owner}`,
+        linked: `${nextReversal.period ?? "Mai 2026"} · ${nextReversal.balance}`,
+        date: "25/06/2026",
+        status: "Archivé",
+        module: "Finance",
+        owner: nextReversal.owner,
+        documentType: "État de reversement",
+        fileName: `EKIMMO_EtatReversement_${reference}_2026-06-25.pdf`,
+        comment: values.comment || values.reason,
+        templateKey: "rapport",
+        values: nextReversal,
+      },
+      ...current.filter((item) => item.reference !== reference),
+    ]);
+    closeReversalAction();
+  };
+
+  const handleReversalCancelSave = ({ reversal, values }) => {
+    updateReversalRecord(reversal, {
+      status: "Annulé",
+      cancelReason: values.reason,
+      cancelComment: values.comment,
+      canceledAt: "25/06/2026",
+    }, `Annulation : ${values.reason}. ${values.comment}`);
+    closeReversalAction();
+  };
+
+  const handleReversalStatementArchive = ({ reversal, values }) => {
+    const reference = reversal.reference ?? makeDocumentNumber("REV", 940 + propertyDocumentArchives.length + 1);
+    setPropertyDocumentArchives((current) => [
+      {
+        id: `reversal-statement-${reference}`,
+        category: "Finance",
+        reference,
+        title: `État de reversement - ${reversal.owner}`,
+        linked: `${reversal.period ?? "Mai 2026"} · ${reversal.balance}`,
+        date: values.date ?? "25/06/2026",
+        status: "Archivé",
+        module: "Finance",
+        owner: reversal.owner,
+        documentType: "État de reversement",
+        fileName: `EKIMMO_EtatReversement_${reference}_2026-06-25.pdf`,
+        comment: values.observation ?? "État de reversement archivé depuis Finance → Reversements.",
+        templateKey: "rapport",
+        values,
+      },
+      ...current.filter((item) => item.reference !== reference),
+    ]);
+    updateReversalRecord(reversal, { statementArchived: true, statementReference: reference }, `État : ${reference} archivé.`);
   };
 
   const handleTenantSave = ({ tenant }) => {
@@ -5818,6 +6074,58 @@ function App() {
             setOwnerActionContext(null);
             setModal(null);
           }}
+        />
+      ) : modal === "Préparer reversement" ? (
+        <FinanceReversalPrepareModal
+          owner={reversalActionContext?.owner ?? allOwners[0]}
+          ownersList={allOwners}
+          paymentsList={allPayments}
+          chargesList={allCharges}
+          reversalsList={allReversals}
+          sequence={ownerReversements.length + allReversals.length + 1}
+          onSave={handleFinanceReversalPrepareSave}
+          onClose={closeReversalAction}
+        />
+      ) : modal === "Calcul reversement" ? (
+        <ReversalCalculationModal
+          reversal={reversalActionContext?.reversal ?? allReversals[0]}
+          paymentsList={allPayments}
+          chargesList={allCharges}
+          reversalsList={allReversals}
+          onClose={closeReversalAction}
+        />
+      ) : modal === "Valider reversement" ? (
+        <ReversalConfirmModal
+          reversal={reversalActionContext?.reversal ?? allReversals[0]}
+          onSave={handleReversalCompleteSave}
+          onClose={closeReversalAction}
+        />
+      ) : modal === "Partiel reversement" ? (
+        <ReversalPartialModal
+          reversal={reversalActionContext?.reversal ?? allReversals[0]}
+          onSave={handleReversalPartialSave}
+          onClose={closeReversalAction}
+        />
+      ) : modal === "Etat reversement finance" ? (
+        <ReversalStatementModal
+          reversal={reversalActionContext?.reversal ?? allReversals[0]}
+          intent={reversalActionContext?.intent ?? "preview"}
+          paymentsList={allPayments}
+          chargesList={allCharges}
+          onArchive={handleReversalStatementArchive}
+          onClose={closeReversalAction}
+        />
+      ) : modal === "Archiver reversement" ? (
+        <ReversalArchiveModal
+          reversal={reversalActionContext?.reversal ?? allReversals[0]}
+          onSave={handleReversalArchiveSave}
+          onClose={closeReversalAction}
+        />
+      ) : modal === "Annuler reversement" ? (
+        <ReversalCancelModal
+          reversal={reversalActionContext?.reversal ?? allReversals[0]}
+          onSave={handleReversalCancelSave}
+          onClose={closeReversalAction}
         />
       ) : ["Imprimer propriétaire", "Export PDF propriétaire"].includes(modal) ? (
         <OwnerPrintableModal
@@ -13056,9 +13364,410 @@ function MaintenanceProfilePanel({ maintenance, onAction }) {
   );
 }
 
+function FinanceReversalPrepareModal({ owner, ownersList = owners, paymentsList = paymentRecords, chargesList = charges, reversalsList = reversals, sequence = 1, onSave, onClose }) {
+  const [ownerName, setOwnerName] = useState(owner?.name ?? ownersList[0]?.name ?? "");
+  const selectedOwner = ownersList.find((item) => item.name === ownerName) ?? owner ?? ownersList[0];
+  const calculation = calculateOwnerReversal(ownerName, paymentsList, chargesList, reversalsList);
+  const [values, setValues] = useState({
+    start: "2026-06-01",
+    end: "2026-06-30",
+    amount: calculation.balanceLabel,
+    mode: "Virement bancaire",
+    reference: makeDocumentNumber("REV", 120 + sequence),
+    date: "2026-06-28",
+    proof: "",
+    observation: "Reversement préparé depuis Finance → Reversements.",
+  });
+  const [preview, setPreview] = useState(false);
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+
+  useEffect(() => {
+    setValues((current) => ({ ...current, amount: calculation.balanceLabel }));
+  }, [ownerName]);
+
+  const buildReversement = () => {
+    const paidAmount = parseFCFA(values.amount);
+    const remaining = Math.max(0, calculation.balance - paidAmount);
+    return {
+      owner: selectedOwner.name,
+      ownerId: selectedOwner.id,
+      period: `${fromDateInputValue(values.start)} au ${fromDateInputValue(values.end)}`,
+      collected: calculation.collectedLabel,
+      commission: calculation.commissionsLabel,
+      charges: calculation.chargesLabel,
+      paid: formatFCFA(paidAmount),
+      balance: formatFCFA(remaining),
+      status: remaining > 0 ? "Partiel" : "Soldé",
+      mode: values.mode,
+      reference: values.reference,
+      date: fromDateInputValue(values.date),
+      proof: values.proof || "Justificatif à archiver",
+      note: values.observation,
+      preparedAt: "25/06/2026",
+    };
+  };
+
+  const submit = (generateStatement = false) => {
+    onSave({ reversement: buildReversement(), owner: selectedOwner, generateStatement });
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal owner-reversal-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Reversement propriétaire</span>
+            <h2>Préparer un reversement</h2>
+            <p>Sélectionnez le propriétaire, contrôlez le calcul, puis enregistrez le paiement prévu.</p>
+          </div>
+          <Badge label={values.reference} />
+        </div>
+
+        <div className="form-section">
+          <h3>Propriétaire</h3>
+          <div className="form-grid compact-form">
+            <label>Sélectionner propriétaire<select value={ownerName} onChange={(event) => setOwnerName(event.target.value)}>{ownersList.map((item) => <option key={item.id}>{item.name}</option>)}</select></label>
+            <label>Période début<input type="date" value={values.start} onChange={update("start")} /></label>
+            <label>Période fin<input type="date" value={values.end} onChange={update("end")} /></label>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Calcul automatique</h3>
+          <div className="simple-list">
+            <p><span>Loyers encaissés</span><strong>{calculation.collectedLabel}</strong></p>
+            <p><span>Commissions retenues</span><strong>{calculation.commissionsLabel}</strong></p>
+            <p><span>Charges déduites</span><strong>{calculation.chargesLabel}</strong></p>
+            <p><span>Reversements déjà effectués</span><strong>{calculation.alreadyPaidLabel}</strong></p>
+            <p><span>Solde à reverser</span><strong>{calculation.balanceLabel}</strong></p>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Paiement</h3>
+          <div className="form-grid compact-form">
+            <label>Montant à reverser<input value={values.amount} onChange={update("amount")} /></label>
+            <label>Mode de paiement<select value={values.mode} onChange={update("mode")}><option>Virement bancaire</option><option>Orange Money</option><option>Moov Money</option><option>Chèque</option><option>Espèces</option></select></label>
+            <label>Référence<input value={values.reference} onChange={update("reference")} /></label>
+            <label>Date prévue<input type="date" value={values.date} onChange={update("date")} /></label>
+            <label>Justificatif<input type="file" onChange={(event) => setValues((current) => ({ ...current, proof: event.target.files?.[0]?.name ?? "" }))} /><small>{values.proof || "Aucun fichier sélectionné"}</small></label>
+            <label className="full">Observation<textarea value={values.observation} onChange={update("observation")} /></label>
+          </div>
+        </div>
+
+        {preview && <ReversalStatementDocument reversal={buildReversement()} calculation={calculation} />}
+
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button onClick={() => setPreview(true)}><Eye size={17} /> Prévisualiser état</Button>
+          <Button variant="primary" onClick={() => submit(false)}><CheckCircle2 size={17} /> Enregistrer reversement</Button>
+          <Button onClick={() => submit(true)}><FileText size={17} /> Enregistrer et générer état</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function getReversalCalculationFromRecord(reversal, paymentsList = paymentRecords, chargesList = charges, reversalsList = reversals) {
+  const live = calculateOwnerReversal(reversal.owner, paymentsList, chargesList, reversalsList.filter((item) => getReversalKey(item) !== getReversalKey(reversal)));
+  const collected = parseFCFA(reversal.collected) || live.collected;
+  const commissions = parseFCFA(reversal.commission) || live.commissions;
+  const chargeAmount = parseFCFA(reversal.charges) || live.charges;
+  const paid = parseFCFA(reversal.paid);
+  const balance = Math.max(0, collected - commissions - chargeAmount - paid);
+  return {
+    ...live,
+    collected,
+    commissions,
+    charges: chargeAmount,
+    alreadyPaid: paid,
+    balance,
+    collectedLabel: formatFCFA(collected),
+    commissionsLabel: formatFCFA(commissions),
+    chargesLabel: formatFCFA(chargeAmount),
+    alreadyPaidLabel: formatFCFA(paid),
+    balanceLabel: formatFCFA(balance),
+  };
+}
+
+function ReversalCalculationModal({ reversal, paymentsList = paymentRecords, chargesList = charges, reversalsList = reversals, onClose }) {
+  const calculation = getReversalCalculationFromRecord(reversal, paymentsList, chargesList, reversalsList);
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal reversal-action-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Détail du calcul</span>
+            <h2>{reversal.owner}</h2>
+            <p>{reversal.period ?? "Période en cours"}</p>
+          </div>
+          <Badge label={reversal.status} />
+        </div>
+        <div className="simple-list">
+          <p><span>Loyers encaissés</span><strong>{calculation.collectedLabel}</strong></p>
+          <p><span>Commissions retenues</span><strong>- {calculation.commissionsLabel}</strong></p>
+          <p><span>Charges déduites</span><strong>- {calculation.chargesLabel}</strong></p>
+          <p><span>Reversements déjà effectués</span><strong>- {calculation.alreadyPaidLabel}</strong></p>
+          <p><span>Solde à reverser</span><strong>{calculation.balanceLabel}</strong></p>
+        </div>
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Fermer</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ReversalConfirmModal({ reversal, onSave, onClose }) {
+  const [comment, setComment] = useState("Reversement complet validé après contrôle du solde propriétaire.");
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal reversal-action-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Valider reversement</span>
+            <h2>Confirmer le reversement complet ?</h2>
+            <p>{reversal.owner} · solde actuel {reversal.balance}</p>
+          </div>
+          <Badge label={reversal.status} />
+        </div>
+        <div className="notice">Le reversement sera marqué comme soldé et l'historique financier du propriétaire sera mis à jour.</div>
+        <div className="form-grid compact-form">
+          <label className="full">Commentaire<textarea value={comment} onChange={(event) => setComment(event.target.value)} /></label>
+        </div>
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => onSave({ reversal, values: { comment } })}><CheckCircle2 size={17} /> Enregistrer</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ReversalPartialModal({ reversal, onSave, onClose }) {
+  const halfAmount = Math.max(0, Math.round(parseFCFA(reversal.balance) / 2));
+  const [values, setValues] = useState({
+    amount: formatFCFA(halfAmount),
+    nextDate: "2026-07-05",
+    comment: "Paiement partiel planifié, solde à suivre.",
+  });
+  const remaining = Math.max(0, parseFCFA(reversal.balance) - parseFCFA(values.amount));
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal reversal-action-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Paiement partiel</span>
+            <h2>{reversal.owner}</h2>
+            <p>Solde initial : {reversal.balance}</p>
+          </div>
+          <Badge label={formatFCFA(remaining)} />
+        </div>
+        <div className="form-grid compact-form">
+          <label>Montant partiel<input value={values.amount} onChange={update("amount")} /></label>
+          <label>Solde restant<input value={formatFCFA(remaining)} readOnly /></label>
+          <label>Date prochaine échéance<input type="date" value={values.nextDate} onChange={update("nextDate")} /></label>
+          <label className="full">Commentaire<textarea value={values.comment} onChange={update("comment")} /></label>
+        </div>
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => onSave({ reversal, values })}><Banknote size={17} /> Enregistrer partiel</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ReversalStatementModal({ reversal, intent = "preview", paymentsList = paymentRecords, chargesList = charges, onArchive, onClose }) {
+  const calculation = getReversalCalculationFromRecord(reversal, paymentsList, chargesList, [reversal]);
+  const [preview, setPreview] = useState(intent !== "pdf" && intent !== "print");
+  const [archived, setArchived] = useState(Boolean(reversal.statementArchived));
+  const values = {
+    reference: reversal.reference ?? makeDocumentNumber("REV", 901),
+    date: "25/06/2026",
+    observation: reversal.note ?? "État de reversement généré depuis Finance.",
+  };
+
+  useEffect(() => {
+    if (intent === "pdf") {
+      downloadGeneratedPdf({ label: "État de reversement" }, { ...values, owner: reversal.owner, balance: reversal.balance }, `EKIMMO_EtatReversement_${values.reference}_2026-06-25.pdf`);
+      setPreview(true);
+    }
+    if (intent === "print") {
+      setPreview(true);
+      window.setTimeout(() => window.print(), 250);
+    }
+  }, [intent]);
+
+  const archive = () => {
+    onArchive({ reversal, values: { ...values, ...calculation } });
+    setArchived(true);
+  };
+
+  return (
+    <div className="modal-backdrop document-print-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card document-print-modal reversal-statement-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="document-print-head">
+          <div>
+            <span>État de reversement</span>
+            <h2>{reversal.owner}</h2>
+            <p>{reversal.period ?? "Période en cours"} · {reversal.balance}</p>
+          </div>
+          <div className="document-editor-actions">
+            <Button onClick={() => setPreview(true)}><Eye size={17} /> Aperçu</Button>
+            <Button variant="primary" onClick={() => downloadGeneratedPdf({ label: "État de reversement" }, { ...values, owner: reversal.owner, balance: reversal.balance }, `EKIMMO_EtatReversement_${values.reference}_2026-06-25.pdf`)}><Download size={17} /> PDF</Button>
+            <Button onClick={() => window.print()}><Printer size={17} /> Imprimer</Button>
+            <Button onClick={archive} disabled={archived}><Archive size={17} /> {archived ? "Archivé" : "Archiver"}</Button>
+          </div>
+        </div>
+        {preview ? (
+          <ReversalStatementDocument reversal={reversal} calculation={calculation} />
+        ) : (
+          <Panel className="owner-preview-placeholder">
+            <FileText size={34} />
+            <h3>Aperçu de l'état</h3>
+            <p>Prévisualisez l'état avant PDF, impression ou archivage.</p>
+          </Panel>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function ReversalStatementDocument({ reversal, calculation }) {
+  return (
+    <div className="digital-document-page">
+      <DigitalDocumentHeader title="État de reversement" subtitle={`${reversal.reference ?? "REV-2026"} · ${reversal.period ?? "Période en cours"}`}>
+        <div>
+          <strong>{reversal.owner}</strong>
+          <span>{reversal.status}</span>
+        </div>
+      </DigitalDocumentHeader>
+      <section className="document-block">
+        <h3>Calcul propriétaire</h3>
+        <div className="document-info-grid">
+          <p><span>Loyers encaissés</span><strong>{calculation.collectedLabel}</strong></p>
+          <p><span>Commissions retenues</span><strong>{calculation.commissionsLabel}</strong></p>
+          <p><span>Charges déduites</span><strong>{calculation.chargesLabel}</strong></p>
+          <p><span>Déjà reversé</span><strong>{reversal.paid}</strong></p>
+          <p><span>Solde</span><strong>{reversal.balance}</strong></p>
+          <p><span>Mode</span><strong>{reversal.mode ?? "À confirmer"}</strong></p>
+        </div>
+      </section>
+      <section className="document-block">
+        <h3>Paiement</h3>
+        <p>Référence : {reversal.reference ?? "À générer"} · Date : {reversal.date ?? "À confirmer"} · Justificatif : {reversal.proof ?? "À archiver"}.</p>
+        <p>{reversal.note ?? "État généré pour validation propriétaire."}</p>
+      </section>
+    </div>
+  );
+}
+
+function ReversalArchiveModal({ reversal, onSave, onClose }) {
+  const [values, setValues] = useState({
+    reason: "",
+    comment: "",
+  });
+  const [error, setError] = useState("");
+  const update = (field) => (event) => {
+    setError("");
+    setValues((current) => ({ ...current, [field]: event.target.value }));
+  };
+  const submit = () => {
+    if (!values.reason.trim()) {
+      setError("Le motif d'archivage est obligatoire.");
+      return;
+    }
+    onSave({ reversal, values });
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal reversal-action-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Archivage</span>
+            <h2>Archiver ce reversement ?</h2>
+            <p>{reversal.owner} · {reversal.balance}</p>
+          </div>
+          <Badge label={reversal.status} />
+        </div>
+        <div className="notice">Le reversement restera consultable dans Docs → Archives avec son état et son historique.</div>
+        <div className="form-grid compact-form">
+          <label>Motif d'archivage<input value={values.reason} onChange={update("reason")} /></label>
+          <label className="full">Commentaire<textarea value={values.comment} onChange={update("comment")} /></label>
+        </div>
+        {error && <p className="form-alert">{error}</p>}
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={submit}><Archive size={17} /> Confirmer l'archivage</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ReversalCancelModal({ reversal, onSave, onClose }) {
+  const [values, setValues] = useState({
+    reason: "",
+    comment: "",
+  });
+  const [error, setError] = useState("");
+  const update = (field) => (event) => {
+    setError("");
+    setValues((current) => ({ ...current, [field]: event.target.value }));
+  };
+  const submit = () => {
+    if (!values.reason.trim()) {
+      setError("Le motif d'annulation est obligatoire.");
+      return;
+    }
+    onSave({ reversal, values });
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal reversal-action-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Annulation</span>
+            <h2>Annuler ce reversement ?</h2>
+            <p>{reversal.owner} · {reversal.reference ?? "Référence à confirmer"}</p>
+          </div>
+          <Badge label={reversal.status} />
+        </div>
+        <div className="form-grid compact-form">
+          <label>Motif obligatoire<input value={values.reason} onChange={update("reason")} placeholder="Erreur, paiement rejeté, doublon..." /></label>
+          <label className="full">Commentaire<textarea value={values.comment} onChange={update("comment")} /></label>
+        </div>
+        {error && <p className="form-alert">{error}</p>}
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Retour</Button>
+          <Button variant="primary" onClick={submit}><XCircle size={17} /> Confirmer l'annulation</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function ReversalsView({ onAction, reversalsList = reversals }) {
   const [selected, setSelected] = useState(reversalsList[0] ?? reversals[0]);
   const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
+
+  useEffect(() => {
+    setSelected((current) => reversalsList.find((reversal) => getReversalKey(reversal) === getReversalKey(current)) ?? current ?? reversalsList[0] ?? reversals[0]);
+  }, [reversalsList]);
 
   const openReversal = (row) => {
     setSelected(row);
@@ -13095,9 +13804,14 @@ function ReversalsView({ onAction, reversalsList = reversals }) {
 }
 
 function ReversalProfilePanel({ reversal, onAction }) {
+  const netBeforePayments = Math.max(0, parseFCFA(reversal.collected) - parseFCFA(reversal.commission) - parseFCFA(reversal.charges));
+  const alreadyPaid = parseFCFA(reversal.paid);
+  const expectedBalance = Math.max(0, netBeforePayments - alreadyPaid);
+  const reference = reversal.reference ?? `REV-${normalizeSearch(reversal.owner).slice(0, 3).toUpperCase()}-2026`;
+
   return (
     <Panel title="Fiche reversement" className="profile-panel">
-      <ProfileHeader person={{ name: reversal.owner, id: "Mai 2026" }} />
+      <ProfileHeader person={{ name: reversal.owner, id: reference }} />
       <DetailMetrics
         items={[
           ["Net à reverser", reversal.balance],
@@ -13114,19 +13828,30 @@ function ReversalProfilePanel({ reversal, onAction }) {
         <p><span>Montant net à reverser</span><strong>{reversal.balance}</strong></p>
         <p><span>Montant payé</span><strong>{reversal.paid}</strong></p>
         <p><span>Mode de paiement</span><strong>{reversal.mode ?? "Virement"}</strong></p>
-        <p><span>Référence</span><strong>{reversal.reference ?? "REV-2026-051"}</strong></p>
+        <p><span>Référence</span><strong>{reference}</strong></p>
         <p><span>Justificatif</span><Badge label={reversal.proof ? "Archivé" : "À valider"} /></p>
         <p><span>Observation</span><strong>{reversal.note ?? "État propriétaire généré"}</strong></p>
       </div>
+      <div className="profile-section impact-section">
+        <h3>Détail du calcul</h3>
+        <div className="simple-list">
+          <p><span>Loyers encaissés</span><strong>{reversal.collected}</strong></p>
+          <p><span>Commissions retenues</span><strong>- {reversal.commission}</strong></p>
+          <p><span>Charges déduites</span><strong>- {reversal.charges}</strong></p>
+          <p><span>Net calculé</span><strong>{formatFCFA(netBeforePayments)}</strong></p>
+          <p><span>Reversements déjà effectués</span><strong>{formatFCFA(alreadyPaid)}</strong></p>
+          <p><span>Solde attendu</span><strong>{formatFCFA(expectedBalance)}</strong></p>
+        </div>
+      </div>
       <div className="stack-actions">
-        <Button onClick={() => onAction("Calcul reversement")}><Eye size={17} /> Calcul</Button>
-        <Button variant="primary" onClick={() => onAction("Enregistrer reversement")}><HandCoins size={17} /> Enregistrer</Button>
-        <Button onClick={() => onAction("Paiement partiel reversement")}><Banknote size={17} /> Partiel</Button>
-        <Button onClick={() => onAction("État de reversement")}><FileText size={17} /> Générer état</Button>
-        <Button onClick={() => onAction("Exporter reversement PDF")}><Download size={17} /> PDF</Button>
-        <Button onClick={() => onAction("Imprimer reversement")}><Printer size={17} /> Imprimer</Button>
-        <Button onClick={() => onAction("Archiver reversement")}><Archive size={17} /> Archiver</Button>
-        <Button onClick={() => onAction("Annuler reversement")}><XCircle size={17} /> Annuler</Button>
+        <Button onClick={() => onAction("Calcul reversement", { reversal })}><Eye size={17} /> Calcul</Button>
+        <Button variant="primary" onClick={() => onAction("Enregistrer reversement finance", { reversal })}><HandCoins size={17} /> Enregistrer</Button>
+        <Button onClick={() => onAction("Paiement partiel reversement", { reversal })}><Banknote size={17} /> Partiel</Button>
+        <Button onClick={() => onAction("État de reversement", { reversal })}><FileText size={17} /> Générer état</Button>
+        <Button onClick={() => onAction("Exporter reversement PDF", { reversal })}><Download size={17} /> PDF</Button>
+        <Button onClick={() => onAction("Imprimer reversement", { reversal })}><Printer size={17} /> Imprimer</Button>
+        <Button onClick={() => onAction("Archiver reversement", { reversal })}><Archive size={17} /> Archiver</Button>
+        <Button onClick={() => onAction("Annuler reversement", { reversal })}><XCircle size={17} /> Annuler</Button>
       </div>
     </Panel>
   );
