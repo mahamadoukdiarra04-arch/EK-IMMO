@@ -2356,6 +2356,7 @@ function App() {
   const [paymentContext, setPaymentContext] = useState(null);
   const [paymentActionContext, setPaymentActionContext] = useState(null);
   const [paymentDetailRequest, setPaymentDetailRequest] = useState(null);
+  const [financeDetailRequest, setFinanceDetailRequest] = useState(null);
   const [paymentHistories, setPaymentHistories] = useState({});
   const [paymentProofs, setPaymentProofs] = useState({});
   const [rentActionContext, setRentActionContext] = useState(null);
@@ -3012,6 +3013,84 @@ function App() {
     if (normalizedAction === "telecharger contrat" && context.contract) {
       handleContractDocumentAction(context.contract, "Document telecharge", "PDF du contrat ouvert pour telechargement.");
       return;
+    }
+
+    if (normalizedAction === "detail ligne rapport" && context.reportRow) {
+      const row = context.reportRow;
+
+      if (row.type === "bien" && row.property) {
+        const property = propertiesWithArchiveState.find((item) => item.name === row.property.name || item.code === row.property.code) ?? row.property;
+        setSelectedProperty(property);
+        setPropertyView("detail");
+        setPropertyReturnContext(null);
+        setActivePage("Biens");
+        return;
+      }
+
+      if (row.type === "propriétaire" && row.owner) {
+        const owner = allOwners.find((item) => item.id === row.owner.id || item.name === row.owner.name) ?? row.owner;
+        setSelectedOwner(owner);
+        setClientTab("Propriétaires");
+        setClientDetailRequest({ type: "owner", key: owner.id, nonce: Date.now() });
+        setActivePage("Clients");
+        return;
+      }
+
+      if (row.type === "locataire" && row.tenant) {
+        const tenant = allTenants.find((item) => item.id === row.tenant.id || item.name === row.tenant.name) ?? row.tenant;
+        setSelectedTenant(tenant);
+        setClientTab("Locataires");
+        setClientDetailRequest({ type: "tenant", key: tenant.id, nonce: Date.now() });
+        setActivePage("Clients");
+        return;
+      }
+
+      if (row.type === "paiement" && row.payment) {
+        setPaymentDetailRequest({ reference: row.payment.reference, nonce: Date.now() });
+        setFinanceTab("Paiements");
+        setActivePage("Finance");
+        return;
+      }
+
+      if (row.type === "charge" && row.charge) {
+        setFinanceDetailRequest({ type: "charge", key: getChargeKey(row.charge), nonce: Date.now() });
+        setFinanceTab("Charges");
+        setActivePage("Finance");
+        return;
+      }
+
+      if (row.type === "entretien" && row.maintenance) {
+        setFinanceDetailRequest({ type: "maintenance", key: getMaintenanceKey(row.maintenance), nonce: Date.now() });
+        setFinanceTab("Entretiens");
+        setActivePage("Finance");
+        return;
+      }
+
+      if (row.type === "contrat" && row.contract) {
+        setContractDetailRequest({
+          contractKey: getContractKey(row.contract),
+          contractNumber: row.contract.number,
+          returnTo: { page: "Rapports", reportType },
+          nonce: Date.now(),
+        });
+        setContractTab("Contrats");
+        setActivePage("Contrats");
+        return;
+      }
+
+      if (row.type === "reversement" && row.reversal) {
+        setFinanceDetailRequest({ type: "reversal", key: getReversalKey(row.reversal), nonce: Date.now() });
+        setFinanceTab("Reversements");
+        setActivePage("Finance");
+        return;
+      }
+
+      if (row.type === "visite" && row.visit) {
+        setClientTab("Visites");
+        setClientFilterRequest({ visitQuick: row.visit.status === "Reportée" ? "Visites reportées" : "Toutes visites", nonce: Date.now() });
+        setActivePage("Clients");
+        return;
+      }
     }
 
     if (normalizedAction === "modifier proprietaire" && context.owner) {
@@ -5752,6 +5831,7 @@ function App() {
             onBack={handlePropertyBack}
             onAction={openAction}
             contractsList={allContracts}
+            commissionsList={allCommissions}
             paymentsList={allPayments}
             rentRowsList={allRentRows}
             chargesList={allCharges}
@@ -5813,9 +5893,23 @@ function App() {
             onFilterRequestConsumed={() => setContractFilterRequest(null)}
           />
         )}
-        {activePage === "Finance" && <FinancePage activeTab={financeTab} onTab={setFinanceTab} onAction={openAction} paymentsList={allPayments} paymentRequest={paymentDetailRequest} rentRowsList={allRentRows} commissionsList={allCommissions} chargesList={allCharges} maintenancesList={allMaintenances} reversalsList={allReversals} relancesList={tenantRelances} arrearsStatuses={arrearsStatusOverrides} arrearsPromises={arrearsPromises} arrearsHistories={arrearsHistories} />}
+        {activePage === "Finance" && <FinancePage activeTab={financeTab} onTab={setFinanceTab} onAction={openAction} paymentsList={allPayments} paymentRequest={paymentDetailRequest} detailRequest={financeDetailRequest} onDetailRequestConsumed={() => setFinanceDetailRequest(null)} rentRowsList={allRentRows} commissionsList={allCommissions} chargesList={allCharges} maintenancesList={allMaintenances} reversalsList={allReversals} relancesList={tenantRelances} arrearsStatuses={arrearsStatusOverrides} arrearsPromises={arrearsPromises} arrearsHistories={arrearsHistories} />}
         {activePage === "Rapports" && (
-          <ReportsPage selected={reportType} onSelect={setReportType} onAction={openAction} />
+          <ReportsPage
+            selected={reportType}
+            onSelect={setReportType}
+            onAction={openAction}
+            propertiesList={propertiesWithArchiveState}
+            ownersList={allOwners}
+            tenantsList={allTenants}
+            contractsList={allContracts}
+            paymentsList={allPayments}
+            rentRowsList={allRentRows}
+            chargesList={allCharges}
+            maintenancesList={allMaintenances}
+            visitsList={allVisits}
+            reversalsList={allReversals}
+          />
         )}
         {activePage === "Plus" && <AdminPage activeTab={adminTab} onTab={setAdminTab} onAction={openAction} />}
       </main>
@@ -12291,7 +12385,7 @@ function InvoiceActions({ invoice, onAction }) {
   );
 }
 
-function FinancePage({ activeTab, onTab, onAction, paymentsList = paymentRecords, paymentRequest = null, rentRowsList = rentRows, commissionsList = commissions, chargesList = charges, maintenancesList = maintenances, reversalsList = reversals, relancesList = [], arrearsStatuses = {}, arrearsPromises = {}, arrearsHistories = {} }) {
+function FinancePage({ activeTab, onTab, onAction, paymentsList = paymentRecords, paymentRequest = null, detailRequest = null, onDetailRequestConsumed, rentRowsList = rentRows, commissionsList = commissions, chargesList = charges, maintenancesList = maintenances, reversalsList = reversals, relancesList = [], arrearsStatuses = {}, arrearsPromises = {}, arrearsHistories = {} }) {
   const tabs = ["Loyers", "Paiements", "Impayés", "Commissions", "Charges", "Entretiens", "Reversements"];
   const effectiveTab = tabs.includes(activeTab) ? activeTab : "Loyers";
   const agencyRentRows = rentRowsList.filter((row) => isAgencyCollectedProperty(row.property));
@@ -12313,9 +12407,9 @@ function FinancePage({ activeTab, onTab, onAction, paymentsList = paymentRecords
       {effectiveTab === "Paiements" && <PaymentForm onAction={onAction} paymentsList={paymentsList} rentRowsList={rentRowsList} paymentRequest={paymentRequest} />}
       {effectiveTab === "Impayés" && <ArrearsView onAction={onAction} rentRowsList={rentRowsList} relancesList={relancesList} arrearsStatuses={arrearsStatuses} arrearsPromises={arrearsPromises} arrearsHistories={arrearsHistories} />}
       {effectiveTab === "Commissions" && <CommissionsView onAction={onAction} commissionsList={commissionsList} />}
-      {effectiveTab === "Charges" && <ChargesView onAction={onAction} chargesList={chargesList} />}
-      {effectiveTab === "Entretiens" && <MaintenancesView onAction={onAction} maintenancesList={maintenancesList} />}
-      {effectiveTab === "Reversements" && <ReversalsView onAction={onAction} reversalsList={reversalsList} />}
+      {effectiveTab === "Charges" && <ChargesView onAction={onAction} chargesList={chargesList} detailRequest={detailRequest?.type === "charge" ? detailRequest : null} onDetailRequestConsumed={onDetailRequestConsumed} />}
+      {effectiveTab === "Entretiens" && <MaintenancesView onAction={onAction} maintenancesList={maintenancesList} detailRequest={detailRequest?.type === "maintenance" ? detailRequest : null} onDetailRequestConsumed={onDetailRequestConsumed} />}
+      {effectiveTab === "Reversements" && <ReversalsView onAction={onAction} reversalsList={reversalsList} detailRequest={detailRequest?.type === "reversal" ? detailRequest : null} onDetailRequestConsumed={onDetailRequestConsumed} />}
     </>
   );
 }
@@ -12979,9 +13073,19 @@ function buildChargeReportHtml(payload, mode) {
 </html>`;
 }
 
-function ChargesView({ onAction, chargesList = charges }) {
+function ChargesView({ onAction, chargesList = charges, detailRequest = null, onDetailRequestConsumed }) {
   const [selected, setSelected] = useState(chargesList[0] ?? charges[0]);
   const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
+
+  useEffect(() => {
+    if (!detailRequest?.key) return;
+    const requestedCharge = chargesList.find((charge) => getChargeKey(charge) === detailRequest.key);
+    if (requestedCharge) {
+      setSelected(requestedCharge);
+      openDetail();
+      onDetailRequestConsumed?.();
+    }
+  }, [detailRequest?.nonce, chargesList]);
   const [query, setQuery] = useState("");
   const [period, setPeriod] = useState("Toutes périodes");
   const [type, setType] = useState("Tous types");
@@ -13272,9 +13376,19 @@ function ChargeProfilePanel({ charge, onAction }) {
   );
 }
 
-function MaintenancesView({ onAction, maintenancesList = maintenances }) {
+function MaintenancesView({ onAction, maintenancesList = maintenances, detailRequest = null, onDetailRequestConsumed }) {
   const [selected, setSelected] = useState(maintenancesList[0] ?? maintenances[0]);
   const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
+
+  useEffect(() => {
+    if (!detailRequest?.key) return;
+    const requestedMaintenance = maintenancesList.find((maintenance) => getMaintenanceKey(maintenance) === detailRequest.key);
+    if (requestedMaintenance) {
+      setSelected(requestedMaintenance);
+      openDetail();
+      onDetailRequestConsumed?.();
+    }
+  }, [detailRequest?.nonce, maintenancesList]);
 
   useEffect(() => {
     setSelected((current) => maintenancesList.find((maintenance) => getMaintenanceKey(maintenance) === getMaintenanceKey(current)) ?? current ?? maintenancesList[0] ?? maintenances[0]);
@@ -13761,9 +13875,19 @@ function ReversalCancelModal({ reversal, onSave, onClose }) {
   );
 }
 
-function ReversalsView({ onAction, reversalsList = reversals }) {
+function ReversalsView({ onAction, reversalsList = reversals, detailRequest = null, onDetailRequestConsumed }) {
   const [selected, setSelected] = useState(reversalsList[0] ?? reversals[0]);
   const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
+
+  useEffect(() => {
+    if (!detailRequest?.key) return;
+    const requestedReversal = reversalsList.find((reversal) => getReversalKey(reversal) === detailRequest.key);
+    if (requestedReversal) {
+      setSelected(requestedReversal);
+      openDetail();
+      onDetailRequestConsumed?.();
+    }
+  }, [detailRequest?.nonce, reversalsList]);
 
   useEffect(() => {
     setSelected((current) => reversalsList.find((reversal) => getReversalKey(reversal) === getReversalKey(current)) ?? current ?? reversalsList[0] ?? reversals[0]);
@@ -14025,21 +14149,320 @@ function ArrearsProfilePanel({ row, onAction, status, promise, history = [] }) {
   );
 }
 
-function ReportsPage({ selected, onSelect, onAction }) {
-  const reportRows = [
-    ["Villa Koulouba", "Mamadou Keita", "Awa Traoré", "2 750 000 FCFA", "Payé"],
-    ["Résidence ACI Baobab", "Sira Coulibaly", "Oumar Sidibé", "400 000 FCFA", "Partiel"],
-    ["Plateau Office Center", "Foncière Mandé", "Cabinet Diarra", "Direct propriétaire", "Suivi"],
+function buildReportRows(selected, { propertiesList, ownersList, tenantsList, contractsList, commissionsList, paymentsList, rentRowsList, chargesList, maintenancesList, visitsList, reversalsList }) {
+  if (selected === "Rapport des biens") {
+    return propertiesList.map((property) => ({
+      type: "bien",
+      property,
+      cells: [property.name, property.owner, property.tenant, property.price, property.status],
+    }));
+  }
+
+  if (selected === "Rapport des propriétaires" || selected === "Situation propriétaire") {
+    return ownersList.map((owner) => ({
+      type: "propriétaire",
+      owner,
+      cells: [owner.name, owner.phone, `${owner.properties} biens`, owner.balance, owner.status],
+    }));
+  }
+
+  if (selected === "Rapport des locataires") {
+    return tenantsList.map((tenant) => ({
+      type: "locataire",
+      tenant,
+      cells: [tenant.name, tenant.phone, tenant.property, tenant.rent, tenant.paymentStatus],
+    }));
+  }
+
+  if (selected === "Rapport des loyers") {
+    return rentRowsList.map((row) => {
+      const payment = paymentsList.find((item) => item.tenant === row.tenant && item.property === row.property && item.period === row.period)
+        ?? paymentsList.find((item) => item.tenant === row.tenant && item.property === row.property)
+        ?? { ...row, reference: `${row.period}-${row.tenant}` };
+      return {
+        type: "paiement",
+        payment,
+        cells: [row.property, row.owner, row.tenant, row.balance === "0 FCFA" ? row.paid : row.balance, row.status],
+      };
+    });
+  }
+
+  if (selected === "Rapport des impayés") {
+    return rentRowsList.filter((row) => parseFCFA(row.balance) > 0).map((row) => ({
+      type: "paiement",
+      payment: paymentsList.find((item) => item.tenant === row.tenant && item.property === row.property) ?? { ...row, reference: `IMP-${row.tenant}` },
+      cells: [row.property, row.owner, row.tenant, row.balance, row.status],
+    }));
+  }
+
+  if (selected === "Rapport des commissions") {
+    return commissionsList.map((commission) => ({
+      type: "contrat",
+      contract: contractsList.find((contract) => contract.number === commission.contractNumber)
+        ?? contractsList.find((contract) => contract.property === commission.property)
+        ?? contractsList[0],
+      cells: [commission.property, commission.owner, commission.client, commission.commission, commission.status],
+    }));
+  }
+
+  if (selected === "Rapport des charges") {
+    return chargesList.map((charge) => ({
+      type: "charge",
+      charge,
+      cells: [charge.property, charge.owner, charge.tenant, charge.amount, charge.status],
+    }));
+  }
+
+  if (selected === "Rapport des entretiens") {
+    return maintenancesList.map((maintenance) => ({
+      type: "entretien",
+      maintenance,
+      cells: [maintenance.property, maintenance.manager, maintenance.provider ?? "Prestataire à confirmer", maintenance.cost, maintenance.status],
+    }));
+  }
+
+  if (selected === "Rapport des visites") {
+    return visitsList.map((visit) => ({
+      type: "visite",
+      visit,
+      cells: [visit.property, visit.agent, visit.client, visit.date, visit.status],
+    }));
+  }
+
+  if (selected === "Contrats à échéance") {
+    return contractsList.map((contract) => ({
+      type: "contrat",
+      contract,
+      cells: [contract.property, contract.owner, contract.client, contract.end, getContractStatusLabel(contract)],
+    }));
+  }
+
+  if (selected === "Reversements propriétaires") {
+    return reversalsList.map((reversal) => ({
+      type: "reversement",
+      reversal,
+      cells: [reversal.owner, reversal.period ?? "Mai 2026", reversal.paid, reversal.balance, reversal.status],
+    }));
+  }
+
+  return propertiesList.slice(0, 3).map((property) => ({
+    type: "bien",
+    property,
+    cells: [property.name, property.owner, property.tenant, property.price, property.status],
+  }));
+}
+
+function filterReportRows(rows, filters) {
+  return rows.filter((row) => {
+    const haystack = normalizeSearch(row.cells.join(" "));
+    return (
+      (filters.property === "Tous les biens" || haystack.includes(normalizeSearch(filters.property))) &&
+      (filters.owner === "Tous les propriétaires" || haystack.includes(normalizeSearch(filters.owner))) &&
+      (filters.tenant === "Tous les locataires" || haystack.includes(normalizeSearch(filters.tenant))) &&
+      (filters.agent === "Tous les agents" || haystack.includes(normalizeSearch(filters.agent))) &&
+      (filters.status === "Tous statuts" || haystack.includes(normalizeSearch(filters.status))) &&
+      (filters.operation === "Toutes opérations" || row.type === normalizeSearch(filters.operation).replace("loyer", "paiement"))
+    );
+  });
+}
+
+function buildReportExportPayload({ selected, rows, filters }) {
+  const exportedAt = new Date();
+  const filterLabels = [
+    `Période : ${filters.period}`,
+    `Bien : ${filters.property}`,
+    `Propriétaire : ${filters.owner}`,
+    `Locataire : ${filters.tenant}`,
+    `Agent : ${filters.agent}`,
+    `Statut : ${filters.status}`,
+    `Type d'opération : ${filters.operation}`,
+  ].filter((item) => !item.includes("Tous les") && !item.includes("Tous statuts") && !item.includes("Toutes opérations"));
+
+  return {
+    title: selected || "Rapport E.K immo",
+    exportedAtLabel: exportedAt.toLocaleString("fr-FR"),
+    user: "Aïssata Diarra",
+    filters: filterLabels.length ? filterLabels : ["Aucun filtre spécifique"],
+    columns: ["Dossier", "Propriétaire / contact", "Client / lien", "Montant / info", "Statut"],
+    rows: rows.map((row) => row.cells),
+    filename: `EKIMMO_${slugifyFilename(selected || "rapport")}_${exportedAt.toISOString().slice(0, 10)}`,
+  };
+}
+
+function exportReportAsXlsx(payload) {
+  const workbookRows = [
+    [payload.title],
+    [`Date d'export : ${payload.exportedAtLabel}`],
+    [`Généré par : ${payload.user}`],
+    [`Filtres appliqués : ${payload.filters.join(" | ")}`],
+    [],
+    payload.columns,
+    ...payload.rows,
   ];
+  downloadBlob(createXlsxBlob(workbookRows, "Rapport"), `${payload.filename}.xlsx`);
+}
+
+function openReportPrintView(payload, mode = "pdf") {
+  const blobUrl = URL.createObjectURL(new Blob([buildReportHtml(payload, mode)], { type: "text/html;charset=utf-8" }));
+  const reportWindow = window.open(blobUrl, "_blank", "width=1180,height=820");
+  if (!reportWindow) {
+    const fallbackFrame = document.createElement("iframe");
+    fallbackFrame.style.position = "fixed";
+    fallbackFrame.style.width = "0";
+    fallbackFrame.style.height = "0";
+    fallbackFrame.style.border = "0";
+    fallbackFrame.style.opacity = "0";
+    fallbackFrame.src = blobUrl;
+    fallbackFrame.onload = () => {
+      fallbackFrame.contentWindow?.focus();
+      fallbackFrame.contentWindow?.print();
+      window.setTimeout(() => {
+        fallbackFrame.remove();
+        URL.revokeObjectURL(blobUrl);
+      }, 5000);
+    };
+    document.body.appendChild(fallbackFrame);
+    return;
+  }
+  let hasPrinted = false;
+  const printReport = () => {
+    if (hasPrinted) return;
+    hasPrinted = true;
+    reportWindow.focus();
+    reportWindow.print();
+    window.setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+  };
+  reportWindow.addEventListener?.("load", () => window.setTimeout(printReport, 250), { once: true });
+  window.setTimeout(printReport, 1000);
+}
+
+function buildReportHtml(payload, mode) {
+  const filterList = payload.filters.map((filter) => `<span>${escapeHtml(filter)}</span>`).join("");
+  const headerCells = payload.columns.map((column) => `<th>${escapeHtml(column)}</th>`).join("");
+  const rows = payload.rows.length
+    ? payload.rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")
+    : `<tr><td colspan="${payload.columns.length}">Aucun résultat pour les filtres appliqués.</td></tr>`;
+
+  return `<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(payload.title)}</title>
+  <style>
+    :root { color: #071b3d; font-family: Arial, sans-serif; }
+    body { margin: 0; padding: 28px; background: #fff; }
+    header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 3px solid #c9a227; padding-bottom: 18px; margin-bottom: 22px; }
+    h1 { margin: 0 0 8px; font-size: 25px; }
+    p { margin: 4px 0; color: #46536a; }
+    .brand { font-weight: 900; font-size: 22px; color: #06366f; white-space: nowrap; }
+    .filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 20px; }
+    .filters span { border: 1px solid #d7e2ef; border-radius: 999px; padding: 6px 10px; background: #f3f8fd; font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    th { text-align: left; background: #eef4fa; color: #071b3d; font-size: 12px; text-transform: uppercase; padding: 10px 8px; border: 1px solid #cbd9e8; }
+    td { padding: 9px 8px; border: 1px solid #dce7f2; vertical-align: top; word-break: break-word; }
+    tr:nth-child(even) td { background: #f8fbfe; }
+    footer { margin-top: 22px; color: #62708a; font-size: 12px; }
+    .screen-actions { position: sticky; top: 0; display: flex; justify-content: flex-end; gap: 10px; padding: 0 0 14px; background: #fff; }
+    button { border: 1px solid #cbd9e8; border-radius: 9px; background: #06366f; color: #fff; font-weight: 800; padding: 10px 14px; cursor: pointer; }
+    @media print { body { padding: 16px; } .screen-actions { display: none; } table { font-size: 11px; } tr { break-inside: avoid; } }
+  </style>
+</head>
+<body>
+  <div class="screen-actions"><button onclick="window.print()">${mode === "pdf" ? "Enregistrer en PDF" : "Imprimer"}</button></div>
+  <header>
+    <div>
+      <h1>${escapeHtml(payload.title)}</h1>
+      <p>${payload.rows.length} ligne(s) · Exporté le ${escapeHtml(payload.exportedAtLabel)}</p>
+      <p>Généré par : ${escapeHtml(payload.user)}</p>
+    </div>
+    <div class="brand">E.K IMMO</div>
+  </header>
+  <section class="filters">${filterList}</section>
+  <table><thead><tr>${headerCells}</tr></thead><tbody>${rows}</tbody></table>
+  <footer>© 2026 E.K immo · Rapport généré depuis le module Rapports.</footer>
+</body>
+</html>`;
+}
+
+function ReportsPage({
+  selected,
+  onSelect,
+  onAction,
+  propertiesList = properties,
+  ownersList = owners,
+  tenantsList = tenants,
+  contractsList = contracts,
+  commissionsList = commissions,
+  paymentsList = paymentRecords,
+  rentRowsList = rentRows,
+  chargesList = charges,
+  maintenancesList = maintenances,
+  visitsList = visits,
+  reversalsList = reversals,
+}) {
+  const [filters, setFilters] = useState({
+    period: "Mai 2026",
+    property: "Tous les biens",
+    owner: "Tous les propriétaires",
+    tenant: "Tous les locataires",
+    agent: "Tous les agents",
+    status: "Tous statuts",
+    operation: "Toutes opérations",
+    format: "PDF",
+  });
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [exportMessage, setExportMessage] = useState("");
+  const reportRows = useMemo(() => buildReportRows(selected, {
+    propertiesList,
+    ownersList,
+    tenantsList,
+    contractsList,
+    commissionsList,
+    paymentsList,
+    rentRowsList,
+    chargesList,
+    maintenancesList,
+    visitsList,
+    reversalsList,
+  }), [chargesList, commissionsList, contractsList, maintenancesList, ownersList, paymentsList, propertiesList, rentRowsList, reversalsList, selected, tenantsList, visitsList]);
+  const filteredRows = useMemo(() => filterReportRows(reportRows, filters), [filters, reportRows]);
+  const exportPayload = useMemo(() => buildReportExportPayload({ selected, rows: filteredRows, filters }), [filteredRows, filters, selected]);
+  const updateFilter = (field) => (event) => setFilters((current) => ({ ...current, [field]: event.target.value }));
+  const exportActions = {
+    PDF: () => openReportPrintView(exportPayload, "pdf"),
+    Excel: () => exportReportAsXlsx(exportPayload),
+    Impression: () => openReportPrintView(exportPayload, "print"),
+  };
+  const openExportMenu = () => {
+    if (!selected) {
+      setExportMessage("Veuillez sélectionner un rapport avant export.");
+      return;
+    }
+    setExportMessage("");
+    setExportMenuOpen((current) => !current);
+  };
+  const runExport = (type) => {
+    exportActions[type]?.();
+    setExportMenuOpen(false);
+  };
 
   return (
     <>
       <PageIntro
         title="Rapports & exports"
         actions={
-          <Button variant="primary" onClick={() => onAction("Exporter rapport")}>
-            <Download size={18} /> Exporter rapport
-          </Button>
+          <div className="inline-menu-wrapper">
+            <Button variant="primary" onClick={openExportMenu}>
+              <Download size={18} /> Exporter rapport
+            </Button>
+            {exportMenuOpen && (
+              <div className="inline-action-menu">
+                <button onClick={() => runExport("PDF")}><FileText size={16} /><span>PDF</span></button>
+                <button onClick={() => runExport("Excel")}><Download size={16} /><span>Excel</span></button>
+                <button onClick={() => runExport("Impression")}><Printer size={16} /><span>Impression</span></button>
+              </div>
+            )}
+          </div>
         }
       />
       <section className="reports-layout" data-demo="reports-layout">
@@ -14056,41 +14479,43 @@ function ReportsPage({ selected, onSelect, onAction }) {
           <div className="report-selected">
             <BarChart3 size={28} />
             <div>
-              <h3>{selected}</h3>
+              <h3>{selected || "Aucun rapport sélectionné"}</h3>
+              {exportMessage && <p className="form-alert">{exportMessage}</p>}
             </div>
           </div>
           <div className="form-grid compact-form">
-            <label>Période<select><option>Mai 2026</option><option>Trimestre en cours</option><option>Année 2026</option></select></label>
-            <label>Bien<select><option>Tous les biens</option>{properties.map((property) => <option key={property.code}>{property.name}</option>)}</select></label>
-            <label>Propriétaire<select><option>Tous les propriétaires</option>{owners.map((owner) => <option key={owner.id}>{owner.name}</option>)}</select></label>
-            <label>Locataire<select><option>Tous les locataires</option>{tenants.map((tenant) => <option key={tenant.id}>{tenant.name}</option>)}</select></label>
-            <label>Agent<select><option>Tous les agents</option><option>Mariam Traoré</option><option>Issa Maïga</option><option>Cheick Camara</option></select></label>
-            <label>Statut<select><option>Tous statuts</option><option>Actif</option><option>À valider</option><option>Archivé</option><option>Impayé</option></select></label>
-            <label>Type d'opération<select><option>Toutes opérations</option><option>Loyer</option><option>Commission</option><option>Charge</option><option>Entretien</option><option>Reversement</option></select></label>
-            <label>Format<select><option>PDF</option><option>Excel</option><option>Impression</option></select></label>
+            <label>Période<select value={filters.period} onChange={updateFilter("period")}><option>Mai 2026</option><option>Trimestre en cours</option><option>Année 2026</option></select></label>
+            <label>Bien<select value={filters.property} onChange={updateFilter("property")}><option>Tous les biens</option>{propertiesList.map((property) => <option key={property.code}>{property.name}</option>)}</select></label>
+            <label>Propriétaire<select value={filters.owner} onChange={updateFilter("owner")}><option>Tous les propriétaires</option>{ownersList.map((owner) => <option key={owner.id}>{owner.name}</option>)}</select></label>
+            <label>Locataire<select value={filters.tenant} onChange={updateFilter("tenant")}><option>Tous les locataires</option>{tenantsList.map((tenant) => <option key={tenant.id}>{tenant.name}</option>)}</select></label>
+            <label>Agent<select value={filters.agent} onChange={updateFilter("agent")}><option>Tous les agents</option><option>Mariam Traoré</option><option>Aïssata Diarra</option><option>Issa Maïga</option><option>Cheick Camara</option></select></label>
+            <label>Statut<select value={filters.status} onChange={updateFilter("status")}><option>Tous statuts</option><option>Actif</option><option>À valider</option><option>Archivé</option><option>Impayé</option><option>Payé</option><option>Partiel</option><option>Suivi</option></select></label>
+            <label>Type d'opération<select value={filters.operation} onChange={updateFilter("operation")}><option>Toutes opérations</option><option>Bien</option><option>Loyer</option><option>Charge</option><option>Entretien</option><option>Contrat</option><option>Reversement</option></select></label>
+            <label>Format<select value={filters.format} onChange={updateFilter("format")}><option>PDF</option><option>Excel</option><option>Impression</option></select></label>
           </div>
           <div className="summary-strip">
-            <Info label="Lignes" value="142" />
-            <Info label="Montant total" value="85.4M FCFA" />
+            <Info label="Lignes" value={String(filteredRows.length)} />
+            <Info label="Montant total" value={formatFCFA(filteredRows.reduce((sum, row) => sum + parseFCFA(row.cells[3]), 0))} />
             <Info label="Dernière génération" value="28/05/2026" />
           </div>
           <Panel title="Résultat du rapport" className="nested-panel">
             <DataTable
-              columns={["Bien", "Propriétaire", "Locataire", "Montant / info", "Statut"]}
-              rows={reportRows.map((row) => [
-                row[0],
-                row[1],
-                row[2],
-                row[3],
-                <Badge label={row[4]} />,
+              columns={["Dossier", "Propriétaire / contact", "Client / lien", "Montant / info", "Statut", "Action"]}
+              rows={filteredRows.map((row) => [
+                row.cells[0],
+                row.cells[1],
+                row.cells[2],
+                row.cells[3],
+                <Badge label={row.cells[4]} />,
+                <Button compact onClick={() => onAction("Détail ligne rapport", { reportRow: row })}><Eye size={15} /> Détail</Button>,
               ])}
             />
           </Panel>
           <div className="action-row compact-row">
-            <Button onClick={() => onAction(`Détail ligne ${selected}`)}><Eye size={17} /> Détail ligne</Button>
-            <Button variant="primary" onClick={() => onAction(`Exporter ${selected} PDF`)}><Download size={17} /> PDF</Button>
-            <Button onClick={() => onAction(`Exporter ${selected} Excel`)}><Download size={17} /> Excel</Button>
-            <Button onClick={() => onAction(`Imprimer ${selected}`)}><Printer size={17} /> Imprimer</Button>
+            <Button onClick={() => filteredRows[0] ? onAction("Détail ligne rapport", { reportRow: filteredRows[0] }) : setExportMessage("Veuillez sélectionner une ligne avant d'ouvrir le détail.")}><Eye size={17} /> Détail ligne</Button>
+            <Button variant="primary" onClick={() => runExport("PDF")}><Download size={17} /> PDF</Button>
+            <Button onClick={() => runExport("Excel")}><Download size={17} /> Excel</Button>
+            <Button onClick={() => runExport("Impression")}><Printer size={17} /> Imprimer</Button>
           </div>
         </Panel>
       </section>
