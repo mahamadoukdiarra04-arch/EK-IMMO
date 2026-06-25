@@ -2144,6 +2144,10 @@ function getChargeKey(charge) {
   return charge?.id ?? normalizeSearch(`${charge?.property ?? "bien"}-${charge?.type ?? "charge"}-${charge?.date ?? "date"}`);
 }
 
+function getMaintenanceKey(maintenance) {
+  return maintenance?.reference ?? normalizeSearch(`${maintenance?.property ?? "bien"}-${maintenance?.type ?? "entretien"}-${maintenance?.date ?? "date"}`);
+}
+
 function getProspectObjective(prospect) {
   return prospect?.objective ?? (prospect?.need?.includes("Bureau") ? "Location pro" : "Location");
 }
@@ -2332,6 +2336,8 @@ function App() {
   const [scheduledMaintenances, setScheduledMaintenances] = useState([]);
   const [maintenanceCharges, setMaintenanceCharges] = useState([]);
   const [maintenanceContext, setMaintenanceContext] = useState(null);
+  const [maintenanceActionContext, setMaintenanceActionContext] = useState(null);
+  const [maintenanceOverrides, setMaintenanceOverrides] = useState({});
   const [chargeContext, setChargeContext] = useState(null);
   const [chargeActionContext, setChargeActionContext] = useState(null);
   const [chargeOverrides, setChargeOverrides] = useState({});
@@ -2366,7 +2372,11 @@ function App() {
     ...(commissionOverrides[getCommissionKey(commission)] ?? {}),
   })), [commissionOverrides]);
   const allRentRows = useMemo(() => mergeRentRowsWithPayments(rentRows, recordedPayments), [recordedPayments]);
-  const allMaintenances = useMemo(() => [...scheduledMaintenances, ...maintenances], [scheduledMaintenances]);
+  const allMaintenances = useMemo(() => [...scheduledMaintenances, ...maintenances].map((maintenance) => ({
+    ...maintenance,
+    ...(maintenanceOverrides[getMaintenanceKey(maintenance)] ?? {}),
+    history: maintenanceOverrides[getMaintenanceKey(maintenance)]?.history ?? maintenance.history ?? [],
+  })), [maintenanceOverrides, scheduledMaintenances]);
   const allCharges = useMemo(() => {
     const dynamicChargeIds = new Set(maintenanceCharges.map((charge) => charge.id));
     return [...maintenanceCharges, ...charges.filter((charge) => !dynamicChargeIds.has(charge.id))].map((charge) => ({
@@ -3039,6 +3049,65 @@ function App() {
     if (normalizedAction === "situation locataire") {
       setTenantActionContext({ tenant: context.tenant ?? selectedTenant, property: context.property, contract: context.contract, row: context.row, activeTenantTab: context.activeTenantTab ?? "Résumé" });
       setModal("Situation locataire");
+      return;
+    }
+
+    if (normalizedAction === "modifier entretien" && context.maintenance) {
+      setMaintenanceContext({
+        property: context.property ?? getPropertyByName(context.maintenance.property) ?? selectedProperty,
+        maintenance: context.maintenance,
+        maintenanceKey: getMaintenanceKey(context.maintenance),
+        mode: "edit",
+      });
+      setModal("Ajouter entretien");
+      return;
+    }
+
+    if (normalizedAction === "responsable entretien" && context.maintenance) {
+      setMaintenanceActionContext({ maintenance: context.maintenance });
+      setModal("Responsable entretien");
+      return;
+    }
+
+    if (normalizedAction === "ajouter cout entretien" && context.maintenance) {
+      setMaintenanceActionContext({ maintenance: context.maintenance });
+      setModal("Cout entretien");
+      return;
+    }
+
+    if (normalizedAction === "justificatif entretien" && context.maintenance) {
+      setMaintenanceActionContext({ maintenance: context.maintenance });
+      setModal("Justificatif entretien");
+      return;
+    }
+
+    if (normalizedAction === "photos entretien" && context.maintenance) {
+      setMaintenanceActionContext({ maintenance: context.maintenance });
+      setModal("Photos entretien");
+      return;
+    }
+
+    if (normalizedAction === "valider entretien" && context.maintenance) {
+      setMaintenanceActionContext({ maintenance: context.maintenance });
+      setModal("Valider entretien");
+      return;
+    }
+
+    if (normalizedAction === "terminer entretien" && context.maintenance) {
+      setMaintenanceActionContext({ maintenance: context.maintenance });
+      setModal("Terminer entretien");
+      return;
+    }
+
+    if (normalizedAction === "rapport entretien" && context.maintenance) {
+      setMaintenanceActionContext({ maintenance: context.maintenance });
+      setModal("Rapport entretien");
+      return;
+    }
+
+    if (normalizedAction === "annuler entretien" && context.maintenance) {
+      setMaintenanceActionContext({ maintenance: context.maintenance });
+      setModal("Annuler entretien");
       return;
     }
 
@@ -4781,6 +4850,23 @@ function App() {
   };
 
   const handleMaintenanceSchedule = ({ maintenance, createCharge }) => {
+    if (maintenance.originalKey) {
+      const existingMaintenance = allMaintenances.find((item) => getMaintenanceKey(item) === maintenance.originalKey) ?? maintenance;
+      const nextMaintenance = updateMaintenanceRecord(existingMaintenance, {
+        ...maintenance,
+        originalKey: undefined,
+      }, "Modification : formulaire entretien mis à jour.");
+
+      if (createCharge) {
+        setMaintenanceCharges((current) => [makeMaintenanceCharge(nextMaintenance, current.length + 1), ...current]);
+      }
+
+      setMaintenanceContext(null);
+      setFinanceTab(createCharge ? "Charges" : "Entretiens");
+      setModal(null);
+      return;
+    }
+
     const sequence = scheduledMaintenances.length + 1;
     const nextMaintenance = {
       ...maintenance,
@@ -4809,7 +4895,188 @@ function App() {
 
     setPropertyTab("Charges & entretiens");
     setFinanceTab(createCharge ? "Charges" : "Entretiens");
+    setMaintenanceContext(null);
     setModal(null);
+  };
+
+  const updateMaintenanceRecord = (maintenance, patch, historyEntry) => {
+    const key = patch?.originalKey ?? getMaintenanceKey(maintenance);
+    const nextHistory = [
+      ...(maintenance.history ?? []),
+      ...(historyEntry ? [historyEntry] : []),
+    ];
+    const nextMaintenance = {
+      ...maintenance,
+      ...patch,
+      originalKey: undefined,
+      history: nextHistory,
+    };
+
+    setMaintenanceOverrides((current) => ({
+      ...current,
+      [key]: nextMaintenance,
+    }));
+
+    if (nextMaintenance.property) {
+      setPropertyHistoryOverrides((current) => ({
+        ...current,
+        [nextMaintenance.property]: [
+          [
+            historyEntry?.split(" : ")?.[0] ?? "Entretien mis à jour",
+            `${nextMaintenance.type} · ${nextMaintenance.status} · ${nextMaintenance.cost}.`,
+            "25/06/2026",
+          ],
+          ...(current[nextMaintenance.property] ?? []),
+        ],
+      }));
+    }
+
+    return nextMaintenance;
+  };
+
+  const closeMaintenanceAction = () => {
+    setMaintenanceActionContext(null);
+    setModal(null);
+  };
+
+  const handleMaintenanceResponsibleSave = ({ maintenance, values }) => {
+    updateMaintenanceRecord(maintenance, {
+      manager: values.manager,
+      responsibleChangeReason: values.reason,
+      responsibleNotified: values.notify,
+    }, `Responsable : ${maintenance.manager} remplacé par ${values.manager}. ${values.reason}`);
+    closeMaintenanceAction();
+  };
+
+  const handleMaintenanceCostSave = ({ maintenance, values }) => {
+    const nextMaintenance = updateMaintenanceRecord(maintenance, {
+      cost: values.estimatedCost,
+      realCost: values.realCost,
+      payer: values.payer,
+      proof: values.proof || maintenance.proof,
+      costObservation: values.observation,
+    }, `Coût : estimation ${values.estimatedCost}, réel ${values.realCost || "à confirmer"}.`);
+
+    if (values.createCharge === "Oui") {
+      setMaintenanceCharges((current) => [makeMaintenanceCharge(nextMaintenance, current.length + 1), ...current]);
+    }
+
+    closeMaintenanceAction();
+  };
+
+  const handleMaintenanceProofSave = ({ maintenance, proof }) => {
+    updateMaintenanceRecord(maintenance, proof
+      ? {
+          proof: proof.fileName,
+          proofReference: proof.reference,
+          proofComment: proof.comment,
+          proofStatus: "Présent",
+        }
+      : {
+          proof: "",
+          proofReference: "",
+          proofComment: "",
+          proofStatus: "Manquant",
+        },
+    proof ? `Justificatif : ${proof.fileName} importé.` : "Justificatif : fichier supprimé.");
+    setMaintenanceActionContext((current) => current ? { ...current, maintenance: { ...maintenance, proof: proof?.fileName ?? "", proofStatus: proof ? "Présent" : "Manquant" } } : null);
+  };
+
+  const handleMaintenancePhotosSave = ({ maintenance, values }) => {
+    updateMaintenanceRecord(maintenance, {
+      beforePhotos: values.beforePhotos,
+      afterPhotos: values.afterPhotos,
+      photosComment: values.comment,
+    }, `Photos : ${values.beforePhotos || "aucune photo avant"} / ${values.afterPhotos || "aucune photo après"}.`);
+    closeMaintenanceAction();
+  };
+
+  const handleMaintenanceValidationSave = ({ maintenance, values }) => {
+    updateMaintenanceRecord(maintenance, {
+      status: "Validé",
+      validationComment: values.comment,
+      validatedBy: "Aïssata Diarra",
+      validationDate: "25/06/2026",
+      realCost: values.realCost || maintenance.realCost,
+      payer: values.payer,
+    }, `Validation : ${values.comment || "Entretien validé après contrôle."}`);
+    closeMaintenanceAction();
+  };
+
+  const handleMaintenanceCompletionSave = ({ maintenance, values }) => {
+    const nextMaintenance = updateMaintenanceRecord(maintenance, {
+      status: "Terminé",
+      completedDate: fromDateInputValue(values.completedDate),
+      workDone: values.workDone,
+      realCost: values.realCost,
+      note: values.observation || maintenance.note,
+      afterPhotos: values.afterPhotos || maintenance.afterPhotos,
+    }, `Clôture : ${values.workDone}.`);
+
+    if (values.createReport === "Oui") {
+      archiveMaintenanceReport(nextMaintenance, { observation: values.observation, reportType: "Rapport de clôture" });
+    }
+
+    closeMaintenanceAction();
+  };
+
+  const archiveMaintenanceReport = (maintenance, values = {}) => {
+    const reference = makeDocumentNumber("RAP", 800 + propertyDocumentArchives.length + 1);
+    const property = getPropertyByName(maintenance.property) ?? selectedProperty;
+    const archive = {
+      id: `maintenance-report-${reference}`,
+      category: "Charges et entretiens",
+      reference,
+      title: `Rapport d'entretien - ${maintenance.type}`,
+      linked: `${maintenance.property} · ${maintenance.cost}`,
+      date: values.date ?? "25/06/2026",
+      status: "Archivé",
+      module: "Finance",
+      owner: property.owner,
+      property: maintenance.property,
+      tenant: property.tenant,
+      documentType: "Rapport d'entretien",
+      fileName: `EKIMMO_RapportEntretien_${reference}_2026-06-25.pdf`,
+      comment: values.observation || "Rapport d'entretien archivé depuis Finance → Entretiens.",
+      templateKey: "rapport",
+      values: {
+        ...values,
+        reference,
+        maintenanceType: maintenance.type,
+        property: maintenance.property,
+        owner: property.owner,
+        tenant: property.tenant,
+        manager: maintenance.manager,
+        provider: maintenance.provider,
+        cost: maintenance.realCost || maintenance.cost,
+      },
+    };
+
+    setPropertyDocumentArchives((current) => [
+      archive,
+      ...current.filter((item) => item.reference !== reference),
+    ]);
+
+    updateMaintenanceRecord(maintenance, {
+      reportArchived: true,
+      reportReference: reference,
+    }, `Rapport : ${reference} archivé.`);
+
+    return archive;
+  };
+
+  const handleMaintenanceReportArchive = ({ maintenance, values }) => {
+    archiveMaintenanceReport(maintenance, values);
+  };
+
+  const handleMaintenanceCancelSave = ({ maintenance, values }) => {
+    updateMaintenanceRecord(maintenance, {
+      status: "Annulé",
+      cancellationReason: values.reason,
+      cancellationComment: values.comment,
+      cancellationNotify: values.notify,
+    }, `Annulation : ${values.reason}. ${values.comment}`);
+    closeMaintenanceAction();
   };
 
   const handleChargeSave = ({ charge, validate = false }) => {
@@ -5833,8 +6100,24 @@ function App() {
         <ContractTerminationModal contract={contractActionContext?.contract ?? allContracts[0]} onSave={handleContractTerminationSave} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "Enregistrer paiement" ? (
         <PaymentRegistrationModal context={paymentContext} paymentsList={allPayments} rentRowsList={allRentRows} onSave={handlePaymentRegistration} onClose={() => setModal(null)} />
+      ) : modal === "Responsable entretien" ? (
+        <MaintenanceResponsibleModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onSave={handleMaintenanceResponsibleSave} onClose={closeMaintenanceAction} />
+      ) : modal === "Cout entretien" ? (
+        <MaintenanceCostModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onSave={handleMaintenanceCostSave} onClose={closeMaintenanceAction} />
+      ) : modal === "Justificatif entretien" ? (
+        <MaintenanceProofModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onSave={handleMaintenanceProofSave} onClose={closeMaintenanceAction} />
+      ) : modal === "Photos entretien" ? (
+        <MaintenancePhotosModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onSave={handleMaintenancePhotosSave} onClose={closeMaintenanceAction} />
+      ) : modal === "Valider entretien" ? (
+        <MaintenanceValidationModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onSave={handleMaintenanceValidationSave} onClose={closeMaintenanceAction} />
+      ) : modal === "Terminer entretien" ? (
+        <MaintenanceCompletionModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onSave={handleMaintenanceCompletionSave} onClose={closeMaintenanceAction} />
+      ) : modal === "Rapport entretien" ? (
+        <MaintenanceReportModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onArchive={handleMaintenanceReportArchive} onClose={closeMaintenanceAction} />
+      ) : modal === "Annuler entretien" ? (
+        <MaintenanceCancelModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onSave={handleMaintenanceCancelSave} onClose={closeMaintenanceAction} />
       ) : modal === "Ajouter entretien" ? (
-        <MaintenanceFormModal context={maintenanceContext} onSave={handleMaintenanceSchedule} onClose={() => setModal(null)} />
+        <MaintenanceFormModal context={maintenanceContext} onSave={handleMaintenanceSchedule} onClose={() => { setMaintenanceContext(null); setModal(null); }} />
       ) : modal === "Intervention urgente" ? (
         <UrgentMaintenanceModal context={maintenanceContext} onSave={handleMaintenanceSchedule} onClose={() => setModal(null)} />
       ) : modal === "Document manquant" ? (
@@ -12685,6 +12968,10 @@ function MaintenancesView({ onAction, maintenancesList = maintenances }) {
   const [selected, setSelected] = useState(maintenancesList[0] ?? maintenances[0]);
   const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
 
+  useEffect(() => {
+    setSelected((current) => maintenancesList.find((maintenance) => getMaintenanceKey(maintenance) === getMaintenanceKey(current)) ?? current ?? maintenancesList[0] ?? maintenances[0]);
+  }, [maintenancesList]);
+
   const openMaintenance = (row) => {
     setSelected(row);
     openDetail();
@@ -12744,25 +13031,26 @@ function MaintenanceProfilePanel({ maintenance, onAction }) {
         <p><span>Responsable</span><strong>{maintenance.manager}</strong></p>
         <p><span>Prestataire</span><strong>{maintenance.provider ?? "Prestataire local agréé"}</strong></p>
         <p><span>Date prévue</span><strong>{maintenance.date}</strong></p>
-        <p><span>Date réalisée</span><strong>{maintenance.status === "Terminé" ? maintenance.date : "À confirmer"}</strong></p>
+        <p><span>Date réalisée</span><strong>{maintenance.completedDate ?? (maintenance.status === "Terminé" ? maintenance.date : "À confirmer")}</strong></p>
         <p><span>Coût estimé</span><strong>{maintenance.cost}</strong></p>
         <p><span>Coût réel</span><strong>{maintenance.realCost ?? (maintenance.status === "En cours" ? "À confirmer" : maintenance.cost)}</strong></p>
         <p><span>Prise en charge</span><strong>{maintenance.payer}</strong></p>
-        <p><span>Justificatif</span><Badge label="À valider" /></p>
-        <p><span>Observations</span><strong>{maintenance.note}</strong></p>
+        <p><span>Justificatif</span><Badge label={maintenance.proof ? "Justificatif joint" : "À valider"} /></p>
+        <p><span>Photos</span><strong>{maintenance.beforePhotos || maintenance.afterPhotos ? `${maintenance.beforePhotos || "Avant à compléter"} · ${maintenance.afterPhotos || "Après à compléter"}` : "À compléter"}</strong></p>
+        <p><span>Observations</span><strong>{maintenance.workDone ?? maintenance.note}</strong></p>
         <p><span>Statut</span><Badge label={maintenance.status} /></p>
       </div>
       <div className="stack-actions">
         <Button variant="primary" onClick={() => onAction("Planifier entretien", { maintenance, property })}><CalendarDays size={17} /> Planifier</Button>
-        <Button onClick={() => onAction(`Modifier ${maintenance.type}`)}><Pencil size={17} /> Modifier</Button>
-        <Button onClick={() => onAction(`Affecter responsable ${maintenance.type}`)}><UserCog size={17} /> Responsable</Button>
-        <Button onClick={() => onAction(`Ajouter coût ${maintenance.type}`)}><Banknote size={17} /> Ajouter coût</Button>
-        <Button onClick={() => onAction(`Ajouter justificatif ${maintenance.type}`)}><Upload size={17} /> Justificatif</Button>
-        <Button onClick={() => onAction(`Ajouter photos ${maintenance.type}`)}><Upload size={17} /> Photos</Button>
-        <Button onClick={() => onAction(`Valider ${maintenance.type}`)}><CheckCircle2 size={17} /> Valider</Button>
-        <Button onClick={() => onAction(`Marquer terminé ${maintenance.type}`)}><CheckCircle2 size={17} /> Terminer</Button>
-        <Button onClick={() => onAction(`Rapport entretien ${maintenance.type}`)}><FileText size={17} /> Rapport</Button>
-        <Button onClick={() => onAction(`Annuler entretien ${maintenance.type}`)}><XCircle size={17} /> Annuler</Button>
+        <Button onClick={() => onAction("Modifier entretien", { maintenance, property })}><Pencil size={17} /> Modifier</Button>
+        <Button onClick={() => onAction("Responsable entretien", { maintenance, property })}><UserCog size={17} /> Responsable</Button>
+        <Button onClick={() => onAction("Ajouter coût entretien", { maintenance, property })}><Banknote size={17} /> Ajouter coût</Button>
+        <Button onClick={() => onAction("Justificatif entretien", { maintenance, property })}><Upload size={17} /> Justificatif</Button>
+        <Button onClick={() => onAction("Photos entretien", { maintenance, property })}><Upload size={17} /> Photos</Button>
+        <Button onClick={() => onAction("Valider entretien", { maintenance, property })}><CheckCircle2 size={17} /> Valider</Button>
+        <Button onClick={() => onAction("Terminer entretien", { maintenance, property })}><CheckCircle2 size={17} /> Terminer</Button>
+        <Button onClick={() => onAction("Rapport entretien", { maintenance, property })}><FileText size={17} /> Rapport</Button>
+        <Button onClick={() => onAction("Annuler entretien", { maintenance, property })}><XCircle size={17} /> Annuler</Button>
       </div>
     </Panel>
   );
@@ -17323,9 +17611,396 @@ function UrgentMaintenanceModal({ context, onSave, onClose }) {
   );
 }
 
+function MaintenanceResponsibleModal({ maintenance, onSave, onClose }) {
+  const managers = ["Mariam Traoré", "Aïssata Diarra", "Issa Maïga", "Cheick Camara"];
+  const [values, setValues] = useState({
+    manager: maintenance.manager ?? managers[0],
+    reason: "Réaffectation pour disponibilité terrain.",
+    notify: "Oui",
+  });
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal maintenance-action-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Changer responsable</span>
+            <h2>{maintenance.type}</h2>
+            <p>{maintenance.property} · responsable actuel : {maintenance.manager}</p>
+          </div>
+          <Badge label={maintenance.status} />
+        </div>
+        <div className="form-grid compact-form">
+          <label>Responsable actuel<input value={maintenance.manager} readOnly /></label>
+          <label>Nouveau responsable<select value={values.manager} onChange={update("manager")}>{managers.map((manager) => <option key={manager}>{manager}</option>)}</select></label>
+          <label>Notifier<select value={values.notify} onChange={update("notify")}><option>Oui</option><option>Non</option></select></label>
+          <label className="full">Motif<textarea value={values.reason} onChange={update("reason")} /></label>
+        </div>
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => onSave({ maintenance, values })}><UserCog size={17} /> Confirmer</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function MaintenanceCostModal({ maintenance, onSave, onClose }) {
+  const payers = ["Agence", "Propriétaire", "Locataire", "À déterminer"];
+  const [values, setValues] = useState({
+    estimatedCost: maintenance.cost ?? "",
+    realCost: maintenance.realCost ?? "",
+    payer: maintenance.payer ?? "Propriétaire",
+    createCharge: "Oui",
+    proof: maintenance.proof ?? "",
+    observation: maintenance.costObservation ?? "Coût ajouté après devis ou intervention.",
+  });
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal maintenance-action-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Ajouter coût d'entretien</span>
+            <h2>{maintenance.type}</h2>
+            <p>{maintenance.property} · {maintenance.payer}</p>
+          </div>
+          <Badge label={maintenance.cost} />
+        </div>
+        <div className="form-grid compact-form">
+          <label>Coût estimé<input value={values.estimatedCost} onChange={update("estimatedCost")} /></label>
+          <label>Coût réel<input value={values.realCost} onChange={update("realCost")} placeholder="À confirmer" /></label>
+          <label>Prise en charge<select value={values.payer} onChange={update("payer")}>{payers.map((payer) => <option key={payer}>{payer}</option>)}</select></label>
+          <label>Créer charge liée<select value={values.createCharge} onChange={update("createCharge")}><option>Oui</option><option>Non</option></select></label>
+          <label>Justificatif<input type="file" onChange={(event) => setValues((current) => ({ ...current, proof: event.target.files?.[0]?.name ?? current.proof }))} /><small>{values.proof || "Aucun fichier sélectionné"}</small></label>
+          <label className="full">Observation<textarea value={values.observation} onChange={update("observation")} /></label>
+        </div>
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => onSave({ maintenance, values })}><Banknote size={17} /> Enregistrer coût</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function MaintenanceProofModal({ maintenance, onSave, onClose }) {
+  const hasProof = Boolean(maintenance.proof);
+  const [fileName, setFileName] = useState(maintenance.proof ?? "");
+  const [reference, setReference] = useState(maintenance.proofReference ?? "");
+  const [comment, setComment] = useState(maintenance.proofComment ?? "");
+  const [message, setMessage] = useState("");
+  const save = () => {
+    if (!fileName.trim()) {
+      setMessage("Veuillez importer un justificatif.");
+      return;
+    }
+    onSave({ maintenance, proof: { fileName, reference, comment } });
+    setMessage("Justificatif enregistré.");
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal maintenance-action-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Justificatif entretien</span>
+            <h2>{maintenance.type}</h2>
+            <p>{maintenance.property}</p>
+          </div>
+          <Badge label={hasProof ? "Justificatif joint" : "À importer"} />
+        </div>
+        {hasProof ? (
+          <div className="simple-list">
+            <p><span>Fichier</span><strong>{maintenance.proof}</strong></p>
+            <p><span>Référence</span><strong>{maintenance.proofReference || "Non renseignée"}</strong></p>
+            <p><span>Commentaire</span><strong>{maintenance.proofComment || "Aucun commentaire"}</strong></p>
+          </div>
+        ) : (
+          <div className="notice">Aucun justificatif n'est encore rattaché à cet entretien.</div>
+        )}
+        <div className="form-grid compact-form">
+          <label>Importer PDF / image<input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(event) => setFileName(event.target.files?.[0]?.name ?? fileName)} /><small>{fileName || "Aucun fichier sélectionné"}</small></label>
+          <label>Référence<input value={reference} onChange={(event) => setReference(event.target.value)} /></label>
+          <label className="full">Commentaire<textarea value={comment} onChange={(event) => setComment(event.target.value)} /></label>
+        </div>
+        {message && <p className="form-feedback">{message}</p>}
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Fermer</Button>
+          {hasProof && <Button onClick={() => window.print()}><Eye size={17} /> Prévisualiser</Button>}
+          {hasProof && <Button onClick={() => downloadGeneratedPdf({ label: "Justificatif entretien" }, { fileName, reference, entretien: maintenance.type }, `EKIMMO_JustificatifEntretien_${getMaintenanceKey(maintenance)}.pdf`)}><Download size={17} /> Télécharger</Button>}
+          <Button variant="primary" onClick={save}><Upload size={17} /> Enregistrer</Button>
+          {hasProof && <Button onClick={() => onSave({ maintenance, proof: null })}><Trash2 size={17} /> Supprimer</Button>}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function MaintenancePhotosModal({ maintenance, onSave, onClose }) {
+  const [values, setValues] = useState({
+    beforePhotos: maintenance.beforePhotos ?? "",
+    afterPhotos: maintenance.afterPhotos ?? "",
+    comment: maintenance.photosComment ?? "Photos ajoutées au dossier d'entretien.",
+  });
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal maintenance-action-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Galerie entretien</span>
+            <h2>{maintenance.type}</h2>
+            <p>{maintenance.property}</p>
+          </div>
+          <Badge label="Photos" />
+        </div>
+        <div className="form-section">
+          <h3>Photos avant</h3>
+          <div className="document-upload-grid">
+            <label>Ajouter photos avant<input type="file" accept=".jpg,.jpeg,.png" multiple onChange={(event) => setValues((current) => ({ ...current, beforePhotos: `${event.target.files?.length ?? 0} photo(s) avant` }))} /><small>{values.beforePhotos || "Aucune photo avant"}</small></label>
+          </div>
+        </div>
+        <div className="form-section">
+          <h3>Photos après</h3>
+          <div className="document-upload-grid">
+            <label>Ajouter photos après<input type="file" accept=".jpg,.jpeg,.png" multiple onChange={(event) => setValues((current) => ({ ...current, afterPhotos: `${event.target.files?.length ?? 0} photo(s) après` }))} /><small>{values.afterPhotos || "Aucune photo après"}</small></label>
+          </div>
+        </div>
+        <div className="form-grid compact-form">
+          <label className="full">Commentaire<textarea value={values.comment} onChange={(event) => setValues((current) => ({ ...current, comment: event.target.value }))} /></label>
+        </div>
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Fermer</Button>
+          <Button onClick={() => downloadGeneratedPdf({ label: "Photos entretien" }, values, `EKIMMO_PhotosEntretien_${getMaintenanceKey(maintenance)}.pdf`)}><Download size={17} /> Télécharger</Button>
+          {(values.beforePhotos || values.afterPhotos) && <Button onClick={() => setValues((current) => ({ ...current, beforePhotos: "", afterPhotos: "" }))}><Trash2 size={17} /> Supprimer</Button>}
+          <Button variant="primary" onClick={() => onSave({ maintenance, values })}><Upload size={17} /> Enregistrer photos</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function MaintenanceValidationModal({ maintenance, onSave, onClose }) {
+  const [values, setValues] = useState({
+    realCost: maintenance.realCost ?? maintenance.cost,
+    payer: maintenance.payer ?? "Propriétaire",
+    comment: "Entretien contrôlé et validé pour suivi financier.",
+  });
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal maintenance-action-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Validation entretien</span>
+            <h2>Valider l'entretien</h2>
+            <p>{maintenance.type} · {maintenance.property}</p>
+          </div>
+          <Badge label={maintenance.status} />
+        </div>
+        <div className="simple-list">
+          <p><span>Résumé</span><strong>{maintenance.note}</strong></p>
+          <p><span>Coût estimé</span><strong>{maintenance.cost}</strong></p>
+          <p><span>Prise en charge</span><strong>{maintenance.payer}</strong></p>
+        </div>
+        <div className="form-grid compact-form">
+          <label>Coût réel<input value={values.realCost} onChange={update("realCost")} /></label>
+          <label>Prise en charge<select value={values.payer} onChange={update("payer")}><option>Agence</option><option>Propriétaire</option><option>Locataire</option><option>À déterminer</option></select></label>
+          <label className="full">Commentaire de validation<textarea value={values.comment} onChange={update("comment")} /></label>
+        </div>
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => onSave({ maintenance, values })}><CheckCircle2 size={17} /> Valider</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function MaintenanceCompletionModal({ maintenance, onSave, onClose }) {
+  const [values, setValues] = useState({
+    completedDate: "2026-06-25",
+    workDone: maintenance.workDone ?? "Intervention réalisée et zone contrôlée.",
+    realCost: maintenance.realCost ?? maintenance.cost,
+    observation: maintenance.note ?? "",
+    afterPhotos: maintenance.afterPhotos ?? "",
+    createReport: "Oui",
+  });
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal maintenance-action-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Clôture d'entretien</span>
+            <h2>Terminer l'entretien</h2>
+            <p>{maintenance.type} · {maintenance.property}</p>
+          </div>
+          <Badge label={maintenance.status} />
+        </div>
+        <div className="form-grid compact-form">
+          <label>Date de réalisation<input type="date" value={values.completedDate} onChange={update("completedDate")} /></label>
+          <label>Coût réel<input value={values.realCost} onChange={update("realCost")} /></label>
+          <label>Photos après<input type="file" accept=".jpg,.jpeg,.png" multiple onChange={(event) => setValues((current) => ({ ...current, afterPhotos: `${event.target.files?.length ?? 0} photo(s) après` }))} /><small>{values.afterPhotos || "Aucune photo après"}</small></label>
+          <label>Créer rapport<select value={values.createReport} onChange={update("createReport")}><option>Oui</option><option>Non</option></select></label>
+          <label className="full">Travail effectué<textarea value={values.workDone} onChange={update("workDone")} /></label>
+          <label className="full">Observation<textarea value={values.observation} onChange={update("observation")} /></label>
+        </div>
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => onSave({ maintenance, values })}><CheckCircle2 size={17} /> Clôturer</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function MaintenanceReportModal({ maintenance, onArchive, onClose }) {
+  const property = getPropertyByName(maintenance.property) ?? properties[0];
+  const [preview, setPreview] = useState(false);
+  const [archived, setArchived] = useState(Boolean(maintenance.reportArchived));
+  const values = {
+    reference: maintenance.reportReference ?? makeDocumentNumber("RAP", 801),
+    date: "25/06/2026",
+    bien: maintenance.property,
+    proprietaire: property.owner,
+    locataire: property.tenant,
+    type: maintenance.type,
+    description: maintenance.note,
+    responsable: maintenance.manager,
+    prestataire: maintenance.provider ?? "Prestataire local agréé",
+    cout: maintenance.realCost ?? maintenance.cost,
+    photos: `${maintenance.beforePhotos || "Photos avant à compléter"} / ${maintenance.afterPhotos || "Photos après à compléter"}`,
+    observations: maintenance.workDone ?? maintenance.note,
+  };
+  const archive = () => {
+    onArchive({ maintenance, values });
+    setArchived(true);
+  };
+
+  return (
+    <div className="modal-backdrop document-print-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card document-print-modal maintenance-report-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="document-print-head">
+          <div>
+            <span>Rapport d'entretien</span>
+            <h2>{maintenance.type}</h2>
+            <p>{maintenance.property} · {values.cout}</p>
+          </div>
+          <div className="document-editor-actions">
+            <Button onClick={() => setPreview(true)}><Eye size={17} /> Aperçu</Button>
+            <Button variant="primary" onClick={() => downloadGeneratedPdf({ label: "Rapport entretien" }, values, `EKIMMO_RapportEntretien_${values.reference}_2026-06-25.pdf`)}><Download size={17} /> PDF</Button>
+            <Button onClick={() => window.print()}><Printer size={17} /> Impression</Button>
+            <Button onClick={archive} disabled={archived}><Archive size={17} /> {archived ? "Archivé" : "Archiver"}</Button>
+          </div>
+        </div>
+        {preview ? (
+          <MaintenanceReportDocument values={values} />
+        ) : (
+          <Panel className="owner-preview-placeholder">
+            <FileText size={34} />
+            <h3>Aperçu du rapport</h3>
+            <p>Contrôlez le rapport avant PDF, impression ou archivage.</p>
+          </Panel>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function MaintenanceReportDocument({ values }) {
+  return (
+    <div className="digital-document-page">
+      <DigitalDocumentHeader title="Rapport d'entretien" subtitle={`${values.reference} · ${values.date}`}>
+        <div>
+          <strong>{values.bien}</strong>
+          <span>{values.proprietaire}</span>
+        </div>
+      </DigitalDocumentHeader>
+      <section className="document-block">
+        <h3>Intervention</h3>
+        <div className="document-info-grid">
+          <p><span>Bien</span><strong>{values.bien}</strong></p>
+          <p><span>Propriétaire</span><strong>{values.proprietaire}</strong></p>
+          <p><span>Type</span><strong>{values.type}</strong></p>
+          <p><span>Date</span><strong>{values.date}</strong></p>
+          <p><span>Responsable</span><strong>{values.responsable}</strong></p>
+          <p><span>Prestataire</span><strong>{values.prestataire}</strong></p>
+          <p><span>Coût</span><strong>{values.cout}</strong></p>
+          <p><span>Photos</span><strong>{values.photos}</strong></p>
+        </div>
+      </section>
+      <section className="document-block">
+        <h3>Description et observations</h3>
+        <p>{values.description}</p>
+        <p>{values.observations}</p>
+      </section>
+    </div>
+  );
+}
+
+function MaintenanceCancelModal({ maintenance, onSave, onClose }) {
+  const [values, setValues] = useState({
+    reason: "",
+    comment: "",
+    notify: "Oui",
+  });
+  const [error, setError] = useState("");
+  const update = (field) => (event) => {
+    setError("");
+    setValues((current) => ({ ...current, [field]: event.target.value }));
+  };
+  const submit = () => {
+    if (!values.reason.trim()) {
+      setError("Le motif d'annulation est obligatoire.");
+      return;
+    }
+    onSave({ maintenance, values });
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal maintenance-action-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Annuler entretien</span>
+            <h2>{maintenance.type}</h2>
+            <p>{maintenance.property} · {maintenance.date}</p>
+          </div>
+          <Badge label={maintenance.status} />
+        </div>
+        <div className="form-grid compact-form">
+          <label>Motif obligatoire<input value={values.reason} onChange={update("reason")} placeholder="Client indisponible, prestataire indisponible, doublon..." /></label>
+          <label>Notifier responsable<select value={values.notify} onChange={update("notify")}><option>Oui</option><option>Non</option></select></label>
+          <label className="full">Commentaire<textarea value={values.comment} onChange={update("comment")} /></label>
+        </div>
+        {error && <p className="form-alert">{error}</p>}
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={submit}><XCircle size={17} /> Confirmer l'annulation</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function MaintenanceFormModal({ context, onSave, onClose }) {
   const baseProperty = context?.property ?? getPropertyByName(context?.maintenance?.property) ?? properties[0];
   const baseMaintenance = context?.maintenance;
+  const isEditMode = context?.mode === "edit";
   const [propertyName, setPropertyName] = useState(baseMaintenance?.property ?? baseProperty.name);
   const selectedProperty = getPropertyByName(propertyName) ?? baseProperty;
   const suggestedProvider = selectedProperty.serviceProvider?.company ?? baseMaintenance?.provider ?? "";
@@ -17338,14 +18013,16 @@ function MaintenanceFormModal({ context, onSave, onClose }) {
   const [estimatedCost, setEstimatedCost] = useState(baseMaintenance?.cost ?? "95 000 FCFA");
   const [realCost, setRealCost] = useState(baseMaintenance?.realCost ?? "");
   const [payer, setPayer] = useState(baseMaintenance?.payer ?? "Propriétaire");
+  const [status, setStatus] = useState(baseMaintenance?.status ?? "Planifié");
   const [createCharge, setCreateCharge] = useState("Oui");
   const [proofName, setProofName] = useState(baseMaintenance?.proof ?? "");
-  const [beforePhotos, setBeforePhotos] = useState("");
-  const [afterPhotos, setAfterPhotos] = useState("");
+  const [beforePhotos, setBeforePhotos] = useState(baseMaintenance?.beforePhotos ?? "");
+  const [afterPhotos, setAfterPhotos] = useState(baseMaintenance?.afterPhotos ?? "");
   const maintenanceTypes = ["Nettoyage", "Plomberie", "Électricité", "Peinture", "Réparation", "Inspection", "Autre"];
   const priorities = ["Normale", "Urgente", "Critique"];
   const managers = ["Mariam Traoré", "Aïssata Diarra", "Issa Maïga", "Cheick Camara"];
   const payers = ["Agence", "Propriétaire", "Locataire", "À déterminer"];
+  const statuses = ["À prévoir", "Planifié", "En cours", "Validé", "Terminé", "Annulé"];
 
   useEffect(() => {
     const nextProperty = getPropertyByName(propertyName);
@@ -17356,6 +18033,7 @@ function MaintenanceFormModal({ context, onSave, onClose }) {
 
   const submit = (forceCharge = false) => {
     const maintenance = {
+      originalKey: context?.maintenanceKey,
       reference: baseMaintenance?.reference,
       property: propertyName,
       type,
@@ -17364,7 +18042,7 @@ function MaintenanceFormModal({ context, onSave, onClose }) {
       cost: estimatedCost,
       realCost: realCost || undefined,
       payer,
-      status: "Planifié",
+      status,
       note: description,
       priority,
       provider: provider || "Prestataire à confirmer",
@@ -17383,8 +18061,8 @@ function MaintenanceFormModal({ context, onSave, onClose }) {
         <div className="payment-modal-head">
           <div>
             <span>Bien : {propertyName}</span>
-            <h2>Ajouter un entretien</h2>
-            <p>Suivi technique, coût et charge liée pour E.K immo.</p>
+            <h2>{isEditMode ? "Modifier entretien" : "Ajouter un entretien"}</h2>
+            <p>{isEditMode ? "Formulaire prérempli pour mettre à jour le suivi technique." : "Suivi technique, coût et charge liée pour E.K immo."}</p>
           </div>
           <Badge label={priority} />
         </div>
@@ -17398,6 +18076,7 @@ function MaintenanceFormModal({ context, onSave, onClose }) {
             <label>Date prévue<input value={date} onChange={(event) => setDate(event.target.value)} /></label>
             <label>Responsable interne<select value={manager} onChange={(event) => setManager(event.target.value)}>{managers.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label>Prestataire, si connu<input value={provider} onChange={(event) => setProvider(event.target.value)} placeholder="À confirmer" /></label>
+            <label>Statut<select value={status} onChange={(event) => setStatus(event.target.value)}>{statuses.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label className="full">Description du besoin<textarea value={description} onChange={(event) => setDescription(event.target.value)} /></label>
           </div>
         </div>
