@@ -1493,6 +1493,33 @@ function getDefaultUserHistory(user) {
   ];
 }
 
+const roleModules = ["Dashboard", "Biens", "Clients", "Contrats", "Finance", "Rapports", "Administration"];
+const permissionDefinitions = [
+  { key: "voir", label: "Voir" },
+  { key: "creer", label: "Créer" },
+  { key: "modifier", label: "Modifier" },
+  { key: "supprimer", label: "Supprimer" },
+  { key: "valider", label: "Valider" },
+  { key: "exporter", label: "Exporter" },
+];
+
+function buildRolePermissionMatrix(roleName) {
+  return Object.fromEntries(roleModules.map((module, moduleIndex) => [
+    module,
+    Object.fromEntries(permissionDefinitions.map(({ key }) => [
+      key,
+      roleName === "Administrateur" ||
+        (roleName === "Directeur / Manager" && key !== "supprimer") ||
+        moduleIndex < 3 ||
+        key === "exporter",
+    ])),
+  ]));
+}
+
+function clonePermissionMatrix(matrix) {
+  return Object.fromEntries(Object.entries(matrix).map(([module, permissions]) => [module, { ...permissions }]));
+}
+
 const periodOptions = ["Jour", "Semaine", "Mois", "Année", "Période personnalisée"];
 
 const dashboardKpisByPeriod = {
@@ -14886,15 +14913,102 @@ function UserProfilePanel({ user, history = [], onAction }) {
   );
 }
 
-function RolesAdmin({ onAction }) {
-  const permissions = ["Voir", "Créer", "Modifier", "Supprimer", "Valider", "Exporter"];
-  const modules = ["Dashboard", "Biens", "Clients", "Contrats", "Finance", "Rapports", "Administration"];
+function RolesAdmin() {
+  const [roles, setRoles] = useState(() => roleProfiles.map((role) => ({
+    name: role,
+    description: role === "Administrateur"
+      ? "Accès complet à tous les modules et réglages sensibles."
+      : role === "Directeur / Manager"
+        ? "Pilotage opérationnel, validations et exports sans suppression globale."
+        : role === "Caisse / Encaissement"
+          ? "Encaissements, reçus, finance courante et états de paiement."
+          : "Accès ciblé aux opérations quotidiennes de l'agence.",
+    status: "Actif",
+  })));
   const [profile, setProfile] = useState(roleProfiles[0]);
-  const canUse = (permission, index) =>
-    profile === "Administrateur" ||
-    (profile === "Directeur / Manager" && permission !== "Supprimer") ||
-    index < 3 ||
-    permission === "Exporter";
+  const [savedPermissions, setSavedPermissions] = useState(() => Object.fromEntries(roleProfiles.map((role) => [role, buildRolePermissionMatrix(role)])));
+  const [draftPermissions, setDraftPermissions] = useState(() => Object.fromEntries(roleProfiles.map((role) => [role, buildRolePermissionMatrix(role)])));
+  const [roleModal, setRoleModal] = useState(null);
+  const [feedback, setFeedback] = useState("");
+  const activeRole = roles.find((role) => role.name === profile) ?? roles[0];
+  const activePermissions = draftPermissions[profile] ?? buildRolePermissionMatrix(profile);
+  const savedForProfile = savedPermissions[profile] ?? buildRolePermissionMatrix(profile);
+  const hasUnsavedChanges = JSON.stringify(activePermissions) !== JSON.stringify(savedForProfile);
+
+  const togglePermission = (module, permissionKey) => {
+    setFeedback("");
+    setDraftPermissions((current) => {
+      const roleMatrix = current[profile] ?? buildRolePermissionMatrix(profile);
+      return {
+        ...current,
+        [profile]: {
+          ...roleMatrix,
+          [module]: {
+            ...(roleMatrix[module] ?? {}),
+            [permissionKey]: !roleMatrix[module]?.[permissionKey],
+          },
+        },
+      };
+    });
+  };
+
+  const savePermissions = () => {
+    setSavedPermissions((current) => ({ ...current, [profile]: clonePermissionMatrix(activePermissions) }));
+    setFeedback("Permissions enregistrées avec succès.");
+  };
+
+  const createRole = ({ values }) => {
+    const name = values.name.trim() || `Nouveau rôle ${roles.length + 1}`;
+    const sourceMatrix = values.copyPermissions === "Oui"
+      ? draftPermissions[values.sourceRole] ?? buildRolePermissionMatrix(values.sourceRole)
+      : buildRolePermissionMatrix("Assistant administratif");
+    const nextRole = {
+      name,
+      description: values.description || "Rôle personnalisé E.K immo.",
+      status: "Actif",
+    };
+    setRoles((current) => [nextRole, ...current.filter((role) => role.name !== name)]);
+    setSavedPermissions((current) => ({ ...current, [name]: clonePermissionMatrix(sourceMatrix) }));
+    setDraftPermissions((current) => ({ ...current, [name]: clonePermissionMatrix(sourceMatrix) }));
+    setProfile(name);
+    setFeedback("Rôle créé. Ajustez les permissions puis sauvegardez si nécessaire.");
+    setRoleModal(null);
+  };
+
+  const updateRole = ({ role, values }) => {
+    const nextName = values.name.trim() || role.name;
+    setRoles((current) => current.map((item) => (item.name === role.name ? { ...item, name: nextName, description: values.description || item.description } : item)));
+    if (nextName !== role.name) {
+      setSavedPermissions((current) => {
+        const { [role.name]: oldMatrix, ...rest } = current;
+        return { ...rest, [nextName]: oldMatrix ?? buildRolePermissionMatrix(role.name) };
+      });
+      setDraftPermissions((current) => {
+        const { [role.name]: oldMatrix, ...rest } = current;
+        return { ...rest, [nextName]: oldMatrix ?? buildRolePermissionMatrix(role.name) };
+      });
+      setProfile(nextName);
+    }
+    setFeedback("Rôle modifié. Les permissions restent à sauvegarder si elles ont changé.");
+    setRoleModal(null);
+  };
+
+  const duplicateRole = ({ values }) => {
+    const name = values.name.trim() || `${values.sourceRole} copie`;
+    const sourceMatrix = draftPermissions[values.sourceRole] ?? buildRolePermissionMatrix(values.sourceRole);
+    setRoles((current) => [{ name, description: `Copie du rôle ${values.sourceRole}`, status: "Actif" }, ...current.filter((role) => role.name !== name)]);
+    setSavedPermissions((current) => ({ ...current, [name]: clonePermissionMatrix(sourceMatrix) }));
+    setDraftPermissions((current) => ({ ...current, [name]: clonePermissionMatrix(sourceMatrix) }));
+    setProfile(name);
+    setFeedback("Rôle dupliqué avec les permissions du rôle source.");
+    setRoleModal(null);
+  };
+
+  const disableRole = (role) => {
+    setRoles((current) => current.map((item) => (item.name === role.name ? { ...item, status: "Inactif" } : item)));
+    setFeedback("Rôle désactivé. Les utilisateurs associés devront recevoir un nouveau rôle.");
+    setRoleModal(null);
+  };
 
   return (
     <Panel title="Rôles et permissions">
@@ -14902,46 +15016,171 @@ function RolesAdmin({ onAction }) {
         <label>
           Rôle
           <select value={profile} onChange={(event) => setProfile(event.target.value)}>
-            {roleProfiles.map((role) => <option key={role}>{role}</option>)}
+            {roles.map((role) => <option key={role.name}>{role.name}</option>)}
           </select>
         </label>
         <div className="table-actions">
-          <Button compact onClick={() => onAction("Créer rôle")}><Plus size={15} /> Créer</Button>
-          <Button compact onClick={() => onAction(`Modifier rôle ${profile}`)}><Pencil size={15} /> Modifier</Button>
-          <Button compact onClick={() => onAction(`Sauvegarder permissions ${profile}`)}><CheckCircle2 size={15} /> Sauvegarder</Button>
-          <Button compact onClick={() => onAction(`Dupliquer rôle ${profile}`)}><Archive size={15} /> Dupliquer</Button>
-          <Button compact onClick={() => onAction(`Désactiver rôle ${profile}`)}><XCircle size={15} /> Désactiver</Button>
+          <Button compact onClick={() => setRoleModal("Créer rôle")}><Plus size={15} /> Créer</Button>
+          <Button compact onClick={() => setRoleModal("Modifier rôle")}><Pencil size={15} /> Modifier</Button>
+          <Button compact variant="primary" onClick={savePermissions}><CheckCircle2 size={15} /> Sauvegarder</Button>
+          <Button compact onClick={() => setRoleModal("Dupliquer rôle")}><Archive size={15} /> Dupliquer</Button>
+          <Button compact onClick={() => setRoleModal("Désactiver rôle")} disabled={activeRole?.status === "Inactif"}><XCircle size={15} /> Désactiver</Button>
         </div>
       </div>
       <DetailMetrics
         items={[
           ["Rôle sélectionné", profile],
-          ["Modules couverts", modules.length],
-          ["Permissions", permissions.length],
-          ["Dernière mise à jour", "28/05/2026"],
+          ["Statut", activeRole?.status ?? "Actif"],
+          ["Modules couverts", roleModules.length],
+          ["Permissions", permissionDefinitions.length],
+          ["État", hasUnsavedChanges ? "Modifications non enregistrées" : "À jour"],
         ]}
       />
+      <p className={feedback === "Permissions enregistrées avec succès." ? "form-success" : hasUnsavedChanges ? "form-alert" : "role-description"}>
+        {feedback || (hasUnsavedChanges ? "Des permissions ont été modifiées. Cliquez sur Sauvegarder pour enregistrer." : activeRole?.description)}
+      </p>
       <div className="permission-grid">
         <span>Module</span>
-        {permissions.map((permission) => <strong key={permission}>{permission}</strong>)}
-        {modules.map((module, rowIndex) => (
+        {permissionDefinitions.map((permission) => <strong key={permission.key}>{permission.label}</strong>)}
+        {roleModules.map((module) => (
           <Fragment key={module}>
             <p key={`${module}-label`}><ShieldCheck size={17} /> {module}</p>
-            {permissions.map((permission, index) => (
+            {permissionDefinitions.map((permission) => {
+              const checked = Boolean(activePermissions[module]?.[permission.key]);
+              return (
               <button
-                className={canUse(permission, index) && rowIndex < (profile === "Assistant administratif" ? 5 : modules.length) ? "checked" : ""}
-                key={`${module}-${permission}`}
-                onClick={() => onAction(`Permission ${permission} ${module}`)}
+                aria-pressed={checked}
+                className={checked ? "checked" : ""}
+                key={`${module}-${permission.key}`}
+                onClick={() => togglePermission(module, permission.key)}
                 type="button"
               >
-                <span className="sr-only">{permission} {module}</span>
-                {canUse(permission, index) && rowIndex < (profile === "Assistant administratif" ? 5 : modules.length) ? "✓" : ""}
+                <span className="sr-only">{permission.label} {module}</span>
+                {checked ? "✓" : ""}
               </button>
-            ))}
+              );
+            })}
           </Fragment>
         ))}
       </div>
+      {roleModal === "Créer rôle" && (
+        <RoleCreateModal roles={roles} onSave={createRole} onClose={() => setRoleModal(null)} />
+      )}
+      {roleModal === "Modifier rôle" && (
+        <RoleEditModal role={activeRole} onSave={updateRole} onClose={() => setRoleModal(null)} />
+      )}
+      {roleModal === "Dupliquer rôle" && (
+        <RoleDuplicateModal roles={roles} activeRole={activeRole} onSave={duplicateRole} onClose={() => setRoleModal(null)} />
+      )}
+      {roleModal === "Désactiver rôle" && (
+        <RoleDeactivateModal role={activeRole} onConfirm={disableRole} onClose={() => setRoleModal(null)} />
+      )}
     </Panel>
+  );
+}
+
+function RoleCreateModal({ roles, onSave, onClose }) {
+  const [values, setValues] = useState({
+    name: "",
+    description: "",
+    copyPermissions: "Non",
+    sourceRole: roles[0]?.name ?? roleProfiles[0],
+  });
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card compact-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="round-icon"><ShieldCheck size={22} /></div>
+        <h2>Créer rôle</h2>
+        <p>Définissez un rôle métier puis ajustez ses permissions dans la grille.</p>
+        <div className="form-grid compact-form">
+          <label className="full">Nom du rôle<input value={values.name} onChange={update("name")} placeholder="Ex. Responsable commercial" /></label>
+          <label className="full">Description<textarea value={values.description} onChange={update("description")} placeholder="Décrivez le périmètre du rôle" /></label>
+          <label>Copier permissions d'un rôle existant<select value={values.copyPermissions} onChange={update("copyPermissions")}><option>Non</option><option>Oui</option></select></label>
+          {values.copyPermissions === "Oui" && (
+            <label>Rôle source<select value={values.sourceRole} onChange={update("sourceRole")}>{roles.map((role) => <option key={role.name}>{role.name}</option>)}</select></label>
+          )}
+        </div>
+        <div className="action-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => onSave({ values })}><Plus size={17} /> Créer rôle</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function RoleEditModal({ role, onSave, onClose }) {
+  const [values, setValues] = useState({
+    name: role?.name ?? "",
+    description: role?.description ?? "",
+  });
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card compact-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="round-icon"><Pencil size={22} /></div>
+        <h2>Modifier rôle</h2>
+        <p>Modifiez le libellé et la description du rôle sélectionné.</p>
+        <div className="form-grid compact-form">
+          <label className="full">Nom du rôle<input value={values.name} onChange={update("name")} /></label>
+          <label className="full">Description<textarea value={values.description} onChange={update("description")} /></label>
+        </div>
+        <div className="action-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => onSave({ role, values })}><CheckCircle2 size={17} /> Enregistrer</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function RoleDuplicateModal({ roles, activeRole, onSave, onClose }) {
+  const [values, setValues] = useState({
+    sourceRole: activeRole?.name ?? roles[0]?.name ?? roleProfiles[0],
+    name: `${activeRole?.name ?? "Rôle"} copie`,
+  });
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card compact-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="round-icon"><Archive size={22} /></div>
+        <h2>Dupliquer rôle</h2>
+        <p>Copiez un profil de permissions existant vers un nouveau rôle.</p>
+        <div className="form-grid compact-form">
+          <label>Rôle source<select value={values.sourceRole} onChange={update("sourceRole")}>{roles.map((role) => <option key={role.name}>{role.name}</option>)}</select></label>
+          <label>Nom du nouveau rôle<input value={values.name} onChange={update("name")} /></label>
+        </div>
+        <div className="action-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => onSave({ values })}>Confirmer</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function RoleDeactivateModal({ role, onConfirm, onClose }) {
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card compact-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="round-icon"><XCircle size={22} /></div>
+        <h2>Désactiver ce rôle ?</h2>
+        <p>Les utilisateurs associés devront recevoir un nouveau rôle.</p>
+        <DetailMetrics items={[["Rôle", role?.name ?? "Rôle"], ["Statut actuel", role?.status ?? "Actif"], ["Nouveau statut", "Inactif"]]} />
+        <div className="action-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={() => onConfirm(role)}>Désactiver</Button>
+        </div>
+      </section>
+    </div>
   );
 }
 
