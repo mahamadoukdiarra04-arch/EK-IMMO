@@ -10642,7 +10642,8 @@ function ArchivesView({ onAction, contractsList = contracts, paymentsList = paym
   );
 }
 
-function DocumentStudio({ initialTemplate = "facture", lockedTemplate, title, data, onAction, onArchiveDocument, documentArchiveSequence = 1, autoOpen = false }) {
+function DocumentStudio({ initialTemplate = "facture", lockedTemplate, title, data, onAction, onArchiveDocument, documentArchiveSequence = 1, autoOpen = false, availableTemplates = documentTemplates, onArchiveTemplate }) {
+  const templates = availableTemplates.length > 0 ? availableTemplates : [];
   const [templateKey, setTemplateKey] = useState(lockedTemplate ?? initialTemplate);
   const [editingKey, setEditingKey] = useState(lockedTemplate ?? (autoOpen ? initialTemplate : null));
 
@@ -10652,14 +10653,21 @@ function DocumentStudio({ initialTemplate = "facture", lockedTemplate, title, da
   }, [autoOpen, initialTemplate, lockedTemplate]);
 
   const activeKey = lockedTemplate ?? editingKey ?? templateKey;
-  const template = documentTemplates.find((item) => item.key === activeKey) ?? documentTemplates[0];
+  const template = templates.find((item) => item.key === activeKey) ?? templates[0];
 
   if (!lockedTemplate && !editingKey) {
     return (
       <section className="document-hub" data-demo="document-generation">
         <Panel title={title}>
-          <div className="document-template-grid">
-            {documentTemplates.map((item) => {
+          {templates.length === 0 ? (
+            <div className="empty-state compact-empty">
+              <FileText size={22} />
+              <h3>Aucun modèle disponible</h3>
+              <p>Tous les modèles sont archivés. Réactivez ou recréez un modèle avant de générer un document.</p>
+            </div>
+          ) : (
+            <div className="document-template-grid">
+              {templates.map((item) => {
               const relatedFiles = getRelatedDocumentFiles(item.key);
               return (
                 <button
@@ -10682,7 +10690,22 @@ function DocumentStudio({ initialTemplate = "facture", lockedTemplate, title, da
                   <span className="template-card-action"><Pencil size={16} /> Modifier</span>
                 </button>
               );
-            })}
+              })}
+            </div>
+          )}
+        </Panel>
+      </section>
+    );
+  }
+
+  if (!template) {
+    return (
+      <section className="document-hub" data-demo="document-generation">
+        <Panel title={title}>
+          <div className="empty-state compact-empty">
+            <FileText size={22} />
+            <h3>Aucun modèle disponible</h3>
+            <p>Tous les modèles sont archivés. Réactivez ou recréez un modèle avant de générer un document.</p>
           </div>
         </Panel>
       </section>
@@ -10697,18 +10720,23 @@ function DocumentStudio({ initialTemplate = "facture", lockedTemplate, title, da
       onArchiveDocument={onArchiveDocument}
       documentArchiveSequence={documentArchiveSequence}
       onBack={lockedTemplate ? null : () => setEditingKey(null)}
+      onArchiveTemplate={onArchiveTemplate ? (payload) => {
+        onArchiveTemplate(payload);
+        if (!lockedTemplate) setEditingKey(null);
+      } : null}
       template={template}
       title={title}
     />
   );
 }
 
-function DocumentEditor({ compact = false, data, onAction, onArchiveDocument, documentArchiveSequence = 1, onBack, template, title }) {
+function DocumentEditor({ compact = false, data, onAction, onArchiveDocument, documentArchiveSequence = 1, onBack, onArchiveTemplate, template, title }) {
   const relatedFiles = getRelatedDocumentFiles(template.key);
   const defaults = useMemo(() => getDocumentDefaults(template.key, data), [template.key, data]);
   const [values, setValues] = useState(defaults);
   const [previewIntent, setPreviewIntent] = useState(null);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [templateArchiveOpen, setTemplateArchiveOpen] = useState(false);
 
   useEffect(() => {
     setValues(defaults);
@@ -10734,7 +10762,7 @@ function DocumentEditor({ compact = false, data, onAction, onArchiveDocument, do
         <div className="document-editor-actions">
           <Button variant="primary" onClick={() => setPreviewIntent("pdf")}><Download size={17} /> Générer PDF</Button>
           <Button onClick={() => setPreviewIntent("print")}><Printer size={17} /> Imprimer</Button>
-          <Button onClick={() => setArchiveOpen(true)}><Archive size={17} /> Archiver</Button>
+          <Button onClick={() => (onArchiveTemplate ? setTemplateArchiveOpen(true) : setArchiveOpen(true))}><Archive size={17} /> Archiver</Button>
         </div>
       </div>
 
@@ -10780,7 +10808,63 @@ function DocumentEditor({ compact = false, data, onAction, onArchiveDocument, do
           onClose={() => setArchiveOpen(false)}
         />
       )}
+      {templateArchiveOpen && (
+        <TemplateArchiveModal
+          template={template}
+          onConfirm={(payload) => {
+            setTemplateArchiveOpen(false);
+            onArchiveTemplate?.(payload);
+          }}
+          onClose={() => setTemplateArchiveOpen(false)}
+        />
+      )}
     </section>
+  );
+}
+
+function TemplateArchiveModal({ template, onConfirm, onClose }) {
+  const [values, setValues] = useState({
+    reason: "Modèle remplacé par une version plus récente",
+    comment: "Archivé depuis Plus → Modèles documents. Le modèle ne sera plus proposé dans la génération.",
+    confirmed: false,
+  });
+  const update = (field) => (event) => {
+    const value = event.target.type === "checkbox" ? event.target.checked : event.target.value;
+    setValues((current) => ({ ...current, [field]: value }));
+  };
+  const canArchive = values.reason.trim().length > 0 && values.confirmed;
+
+  return (
+    <div className="modal-backdrop nested-modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card compact-modal template-archive-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="round-icon"><Archive size={22} /></div>
+        <h2>Archiver modèle</h2>
+        <p>Ce modèle ne sera plus disponible dans la génération de documents, mais restera visible dans les archives.</p>
+        <DetailMetrics
+          items={[
+            ["Modèle", template.label],
+            ["Fichier", template.source],
+            ["Format", template.format],
+            ["Nouveau statut", "Archivé"],
+          ]}
+        />
+        <div className="form-grid compact-form">
+          <label className="full">Motif<input value={values.reason} onChange={update("reason")} /></label>
+          <label className="full">Commentaire<textarea value={values.comment} onChange={update("comment")} /></label>
+          <label className="full checkbox-line">
+            <input type="checkbox" checked={values.confirmed} onChange={update("confirmed")} />
+            <span>Confirmer l’archivage du modèle</span>
+          </label>
+        </div>
+        <div className="action-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" disabled={!canArchive} onClick={() => onConfirm({ template, values })}>
+            <Archive size={17} /> Confirmer
+          </Button>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -15209,20 +15293,69 @@ function SettingsAdmin() {
 }
 
 function TemplatesAdmin({ onAction }) {
+  const [templateArchives, setTemplateArchives] = useState([]);
+  const archivedKeys = templateArchives.map((archive) => archive.key);
+  const availableTemplates = documentTemplates.filter((template) => !archivedKeys.includes(template.key));
+
+  const archiveTemplate = ({ template, values }) => {
+    const archive = {
+      id: `template-archive-${template.key}-${templateArchives.length + 1}`,
+      key: template.key,
+      label: template.label,
+      source: template.source,
+      format: template.format,
+      reason: values.reason,
+      comment: values.comment,
+      confirmed: values.confirmed,
+      date: "26/06/2026",
+      status: "Archivé",
+    };
+    setTemplateArchives((current) => [
+      archive,
+      ...current.filter((item) => item.key !== template.key),
+    ]);
+  };
+
   return (
-    <DocumentStudio
-      initialTemplate="facture"
-      title="Atelier des modèles E.K immo"
-      onAction={onAction}
-      data={{
-        invoice: invoices[0],
-        payment: paymentRecords[0],
-        commission: commissions[0],
-        property: properties[0],
-        owner: owners[0],
-        tenant: tenants[0],
-      }}
-    />
+    <section className="templates-admin-view">
+      <DocumentStudio
+        initialTemplate={availableTemplates[0]?.key ?? "facture"}
+        title="Atelier des modèles E.K immo"
+        onAction={onAction}
+        data={{
+          invoice: invoices[0],
+          payment: paymentRecords[0],
+          commission: commissions[0],
+          property: properties[0],
+          owner: owners[0],
+          tenant: tenants[0],
+        }}
+        availableTemplates={availableTemplates}
+        onArchiveTemplate={archiveTemplate}
+      />
+      <Panel title="Archives des modèles" className="template-archives-panel">
+        {templateArchives.length === 0 ? (
+          <div className="empty-state compact-empty">
+            <Archive size={22} />
+            <h3>Aucun modèle archivé</h3>
+            <p>Les modèles archivés seront masqués de la génération et resteront consultables ici.</p>
+          </div>
+        ) : (
+          <DataTable
+            columns={["Modèle", "Fichier source", "Format", "Motif", "Commentaire", "Date", "Statut"]}
+            rows={templateArchives.map((archive) => [
+              archive.label,
+              archive.source,
+              archive.format,
+              archive.reason,
+              archive.comment,
+              archive.date,
+              <Badge label={archive.status} />,
+            ])}
+          />
+        )}
+      </Panel>
+    </section>
   );
 }
 
