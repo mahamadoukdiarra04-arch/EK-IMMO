@@ -263,7 +263,7 @@ const interactiveDemoSteps = [
     key: "dashboard-alert",
     tracks: ["Dashboard", "Finance"],
     page: "Dashboard",
-    target: "dashboard-alerts",
+    target: "dashboard-alert-relance",
     title: "Traiter une alerte",
     body: "Dans les alertes importantes, cliquez sur Relancer pour ouvrir la relance des locataires en retard, puis enregistrez la relance.",
     task: "Action attendue : Relancer les locataires en retard.",
@@ -7525,12 +7525,15 @@ function App() {
 function getDemoCardPosition(rect) {
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
-  const cardWidth = Math.min(410, viewportWidth - 28);
-  const cardHeight = 245;
+  const margin = 16;
+  const gap = 18;
+  const cardWidth = Math.min(390, viewportWidth - margin * 2);
+  const cardHeight = Math.min(420, viewportHeight - margin * 2);
+  const clamp = (value, min, max) => Math.min(Math.max(value, min), Math.max(min, max));
 
   if (!rect) {
     return {
-      left: Math.max(14, viewportWidth - cardWidth - 22),
+      left: Math.max(margin, viewportWidth - cardWidth - 22),
       top: 88,
       width: cardWidth,
       arrowPath: "",
@@ -7538,21 +7541,45 @@ function getDemoCardPosition(rect) {
   }
 
   const centerX = rect.left + rect.width / 2;
-  const belowTop = rect.top + rect.height + 18;
-  const aboveTop = rect.top - cardHeight - 18;
-  const top = belowTop + cardHeight < viewportHeight ? belowTop : Math.max(16, aboveTop);
-  const left = Math.min(Math.max(14, centerX - cardWidth / 2), viewportWidth - cardWidth - 14);
-  const startX = left + cardWidth / 2;
-  const startY = top < rect.top ? top + cardHeight : top;
+  const centerY = rect.top + rect.height / 2;
+  const spaceRight = viewportWidth - (rect.left + rect.width) - gap - margin;
+  const spaceLeft = rect.left - gap - margin;
+  const spaceBelow = viewportHeight - (rect.top + rect.height) - gap - margin;
+  const spaceAbove = rect.top - gap - margin;
+
+  let side = "floating";
+  let left = clamp(viewportWidth - cardWidth - margin, margin, viewportWidth - cardWidth - margin);
+  let top = clamp(viewportHeight - cardHeight - margin, margin, viewportHeight - cardHeight - margin);
+
+  if (spaceRight >= cardWidth) {
+    side = "right";
+    left = rect.left + rect.width + gap;
+    top = clamp(centerY - cardHeight / 2, margin, viewportHeight - cardHeight - margin);
+  } else if (spaceLeft >= cardWidth) {
+    side = "left";
+    left = rect.left - cardWidth - gap;
+    top = clamp(centerY - cardHeight / 2, margin, viewportHeight - cardHeight - margin);
+  } else if (spaceBelow >= cardHeight) {
+    side = "below";
+    left = clamp(centerX - cardWidth / 2, margin, viewportWidth - cardWidth - margin);
+    top = rect.top + rect.height + gap;
+  } else if (spaceAbove >= cardHeight) {
+    side = "above";
+    left = clamp(centerX - cardWidth / 2, margin, viewportWidth - cardWidth - margin);
+    top = rect.top - cardHeight - gap;
+  }
+
+  const startX = side === "right" ? left : side === "left" ? left + cardWidth : left + cardWidth / 2;
+  const startY = side === "above" ? top + cardHeight : side === "below" ? top : clamp(centerY, top + 26, top + cardHeight - 26);
   const endX = centerX;
-  const endY = rect.top + rect.height / 2;
-  const controlY = (startY + endY) / 2;
+  const endY = centerY;
+  const controlX = (startX + endX) / 2;
 
   return {
     left,
     top,
     width: cardWidth,
-    arrowPath: `M ${startX} ${startY} C ${startX} ${controlY}, ${endX} ${controlY}, ${endX} ${endY}`,
+    arrowPath: `M ${startX} ${startY} C ${controlX} ${startY}, ${controlX} ${endY}, ${endX} ${endY}`,
   };
 }
 
@@ -7962,7 +7989,7 @@ function DashboardPage({ onAction, onOpenProperty, propertiesList = properties }
                   <strong>{title}</strong>
                   <small>{text}</small>
                 </span>
-                <button onClick={() => onAction(title)}>{action}</button>
+                <button data-demo={title === "Loyers en retard" ? "dashboard-alert-relance" : undefined} onClick={() => onAction(title)}>{action}</button>
               </div>
             ))}
           </div>

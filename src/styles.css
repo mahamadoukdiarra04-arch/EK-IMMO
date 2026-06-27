@@ -7269,8 +7269,17 @@ td:last-child {
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 26px 70px rgba(17, 10, 35, 0.22);
-  pointer-events: auto;
+  pointer-events: none;
   transition: left 180ms ease, top 180ms ease;
+}
+
+.demo-card button,
+.demo-card a,
+.demo-card input,
+.demo-card select,
+.demo-card textarea,
+.demo-card [role="button"] {
+  pointer-events: auto;
 }
 
 .demo-card-head,
