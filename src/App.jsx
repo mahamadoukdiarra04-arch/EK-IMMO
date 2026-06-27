@@ -67,45 +67,45 @@ const demoSteps = [
     page: "Dashboard",
     target: "demo-button",
     title: "Bienvenue dans le mode DEMO",
-    body: "Ce parcours accompagne le client pas à pas. Il met en lumière chaque zone importante sans bloquer l'interface, et peut être arrêté à tout moment.",
+    body: "Lancez un parcours rapide des écrans, actions clés et suivis métier.",
   },
   {
     page: "Dashboard",
     target: "main-nav",
-    title: "Navigation métier complète",
-    body: "Les onglets donnent accès aux modules clés : biens, clients, contrats, finance, rapports et administration.",
+    title: "Navigation principale",
+    body: "Accédez aux biens, clients, documents, finances, rapports et réglages.",
   },
   {
     page: "Dashboard",
     target: "dashboard-kpis",
     title: "Vue de pilotage",
-    body: "Le dashboard synthétise les biens en gestion locative, les biens suivis en entretien seul, les flux loyers, les flux non-loyer et les alertes financières.",
+    body: "Suivez le portefeuille, les disponibilités, les flux, les impayés et les charges.",
   },
   {
     page: "Dashboard",
     target: "dashboard-charts",
     title: "Suivi visuel de l'activité",
-    body: "Les graphiques montrent les loyers attendus et le pipeline commercial pour comprendre rapidement l'état du portefeuille.",
+    body: "Visualisez les loyers attendus et l'avancement commercial.",
   },
   {
     page: "Dashboard",
     target: "dashboard-alerts",
     title: "Actions prioritaires",
-    body: "Les alertes orientent l'équipe vers les retards, visites, contrats à échéance, maintenances et documents manquants.",
+    body: "Retards, visites, échéances, maintenances et documents à traiter.",
   },
   {
     page: "Biens",
     propertyView: "list",
     target: "property-filters",
     title: "Recherche et filtres des biens",
-    body: "Le portefeuille peut être recherché par référence, quartier, statut, type, propriétaire, occupant ou critères avancés.",
+    body: "Recherchez par référence, quartier, statut, type, propriétaire ou occupant.",
   },
   {
     page: "Biens",
     propertyView: "list",
     target: "property-grid",
     title: "Cartes du portefeuille immobilier",
-    body: "Chaque bien présente son statut, son adresse à Bamako, son loyer, son propriétaire et un accès direct à la fiche.",
+    body: "Consultez les biens, leurs statuts, adresses, loyers et propriétaires.",
   },
   {
     page: "Biens",
@@ -121,7 +121,7 @@ const demoSteps = [
     propertyTab: "Résumé",
     target: "property-actions",
     title: "Actions depuis la fiche",
-    body: "Depuis une fiche, E.K immo peut modifier le bien, planifier une visite, créer un contrat, enregistrer un paiement ou générer des documents.",
+    body: "Modifiez le bien, planifiez une visite, créez un contrat, enregistrez un paiement ou générez un document.",
   },
   {
     page: "Biens",
@@ -129,14 +129,14 @@ const demoSteps = [
     propertyTab: "Documents",
     target: "property-detail-tabs",
     title: "Toutes les rubriques du bien",
-    body: "Les sous-onglets donnent accès au propriétaire, locataire, contrats, paiements, charges, documents et historique du bien.",
+    body: "Passez du propriétaire aux contrats, paiements, charges, documents et historique.",
   },
   {
     page: "Clients",
     clientTab: "Propriétaires",
     target: "client-tabs",
     title: "Gestion clients structurée",
-    body: "Les clients sont séparés en propriétaires, locataires, prospects et visites pour clarifier les responsabilités de l'agence.",
+    body: "Retrouvez propriétaires, locataires, prospects et visites au même endroit.",
   },
   {
     page: "Clients",
@@ -171,14 +171,14 @@ const demoSteps = [
     contractTab: "Génération de document",
     target: "document-generation",
     title: "Génération documentaire",
-    body: "Les modèles permettent de produire contrats, quittances, mandats et documents propriétaires avec aperçu avant export.",
+    body: "Préparez contrats, reçus, états, courriers et autres documents E.K immo.",
   },
   {
     page: "Finance",
     financeTab: "Loyers",
     target: "finance-tabs",
     title: "Finance métier E.K immo",
-    body: "Le module finance regroupe loyers, paiements, impayés, factures, commissions, charges, entretiens et reversements.",
+    body: "Pilotez loyers, paiements, impayés, commissions, charges, entretiens et reversements.",
   },
   {
     page: "Finance",
@@ -212,13 +212,352 @@ const demoSteps = [
     adminTab: "Utilisateurs",
     target: "admin-workspace",
     title: "Administration",
-    body: "Le module Plus regroupe utilisateurs, rôles, droits, paramètres, modèles de documents et historique des opérations.",
+    body: "Gérez les utilisateurs, rôles, permissions, modèles et paramètres.",
   },
   {
     page: "Dashboard",
     target: "demo-button",
     title: "Fin du parcours",
-    body: "La démonstration a parcouru les écrans et fonctionnalités principales. Le client peut maintenant naviguer librement ou relancer le mode DEMO.",
+    body: "Le tour est terminé. Vous pouvez continuer la navigation ou relancer la visite.",
+  },
+];
+
+const demoTrackOptions = [
+  { key: "complete", label: "Démo complète", description: "Parcours interactif de bout en bout, avec actions à réaliser." },
+  { key: "Dashboard", label: "Tableau de bord", description: "Lecture des KPI, alertes et actions prioritaires." },
+  { key: "Biens", label: "Module Biens", description: "Créer un bien, rattacher un locataire, ajouter documents, charges et entretiens." },
+  { key: "Clients", label: "Module Clients", description: "Créer propriétaires, locataires, prospects et planifier une visite." },
+  { key: "Contrats", label: "Module Docs", description: "Créer contrats, générer documents, gérer échéances et archives." },
+  { key: "Finance", label: "Module Finance", description: "Paiements, impayés, charges, entretiens et reversements." },
+  { key: "Rapports", label: "Module Rapports", description: "Filtres, états, exports PDF, Excel et impression." },
+  { key: "Plus", label: "Administration", description: "Créer utilisateurs, gérer rôles, permissions et modèles." },
+];
+
+function getDemoStepsForTrack(track = "complete") {
+  const intro = interactiveDemoSteps.find((step) => step.key === "intro");
+  const end = interactiveDemoSteps.find((step) => step.key === "end");
+  if (track === "complete") return interactiveDemoSteps;
+  const pageSteps = interactiveDemoSteps.filter((step) => step.tracks?.includes(track));
+  return [intro, ...pageSteps, end].filter(Boolean);
+}
+
+const interactiveDemoSteps = [
+  {
+    key: "intro",
+    page: "Dashboard",
+    target: "demo-button",
+    title: "Bienvenue dans la visite guidée",
+    body: "Ce mode vous accompagne comme un tutoriel interactif. Certaines étapes demandent une action réelle : ouvrir un formulaire, enregistrer, archiver ou générer un document.",
+    task: "Suivez les consignes. Vous pouvez passer une étape ou arrêter le tutoriel à tout moment.",
+  },
+  {
+    key: "dashboard-read",
+    tracks: ["Dashboard"],
+    page: "Dashboard",
+    target: "dashboard-kpis",
+    title: "Lire le tableau de bord",
+    body: "Commencez par repérer les indicateurs : portefeuille suivi, biens disponibles, gestion locative, flux, impayés, honoraires, charges et reversements.",
+    task: "Observez les cartes puis cliquez sur Suivant.",
+  },
+  {
+    key: "dashboard-alert",
+    tracks: ["Dashboard", "Finance"],
+    page: "Dashboard",
+    target: "dashboard-alerts",
+    title: "Traiter une alerte",
+    body: "Dans les alertes importantes, cliquez sur Relancer pour ouvrir la relance des locataires en retard, puis enregistrez la relance.",
+    task: "Action attendue : Relancer les locataires en retard.",
+    waitFor: "save:dashboard-relance",
+    success: "Relance enregistrée et visible dans le suivi des impayés.",
+  },
+  {
+    key: "property-create",
+    tracks: ["Biens"],
+    page: "Biens",
+    propertyView: "list",
+    target: "property-grid",
+    title: "Créer un premier bien",
+    body: "Cliquez sur Ajouter un bien, parcourez les sections du formulaire, laissez les champs préremplis si vous voulez aller vite, puis cliquez sur Enregistrer.",
+    task: "Action attendue : créer ou enregistrer une fiche bien.",
+    waitFor: "save:property",
+    success: "Bien créé. La fiche du bien s’ouvre automatiquement.",
+  },
+  {
+    key: "property-tenant",
+    tracks: ["Biens", "Clients"],
+    page: "Biens",
+    propertyView: "detail",
+    propertyTab: "Résumé",
+    target: "property-actions",
+    title: "Rattacher un locataire au bien",
+    body: "Dans les actions de la fiche, cliquez sur Ajouter locataire. Choisissez un locataire existant ou nouveau, puis validez le rattachement.",
+    task: "Action attendue : rattacher un locataire au bien.",
+    waitFor: "save:tenant-attachment",
+    success: "Locataire rattaché, fiche bien et onglet Locataire mis à jour.",
+  },
+  {
+    key: "property-contract",
+    tracks: ["Biens", "Contrats"],
+    page: "Biens",
+    propertyView: "detail",
+    propertyTab: "Résumé",
+    target: "property-actions",
+    title: "Créer un contrat depuis le bien",
+    body: "Cliquez sur Créer contrat, vérifiez les informations du formulaire, puis générez le contrat.",
+    task: "Action attendue : générer un contrat.",
+    waitFor: "save:contract-generation",
+    success: "Contrat généré et ajouté aux documents liés.",
+  },
+  {
+    key: "property-payment",
+    tracks: ["Biens", "Finance"],
+    page: "Biens",
+    propertyView: "detail",
+    propertyTab: "Résumé",
+    target: "property-actions",
+    title: "Enregistrer un paiement",
+    body: "Cliquez sur Paiement, contrôlez le locataire, le bien, la période, le montant et le mode de paiement, puis enregistrez.",
+    task: "Action attendue : enregistrer un paiement.",
+    waitFor: "save:payment",
+    success: "Paiement enregistré, solde et fiche locataire mis à jour.",
+  },
+  {
+    key: "property-maintenance",
+    tracks: ["Biens", "Finance"],
+    page: "Biens",
+    propertyView: "detail",
+    propertyTab: "Résumé",
+    target: "property-actions",
+    title: "Planifier un entretien",
+    body: "Cliquez sur Ajouter entretien, renseignez le type, la priorité, la date, le prestataire et la prise en charge, puis planifiez.",
+    task: "Action attendue : planifier un entretien.",
+    waitFor: "save:maintenance",
+    success: "Entretien planifié et visible dans Finance → Entretiens.",
+  },
+  {
+    key: "property-charge",
+    tracks: ["Biens", "Finance"],
+    page: "Biens",
+    propertyView: "detail",
+    propertyTab: "Résumé",
+    target: "property-actions",
+    title: "Ajouter une charge",
+    body: "Cliquez sur Ajouter charge, contrôlez le bien, le montant, la prise en charge et le justificatif, puis enregistrez.",
+    task: "Action attendue : ajouter une charge.",
+    waitFor: "save:charge",
+    success: "Charge ajoutée dans la fiche bien et le module Finance.",
+  },
+  {
+    key: "property-document",
+    tracks: ["Biens", "Contrats"],
+    page: "Biens",
+    propertyView: "detail",
+    propertyTab: "Documents",
+    target: "property-detail-tabs",
+    title: "Importer un document dans le dossier du bien",
+    body: "Allez dans Documents, cliquez sur Importer, choisissez un type de document et validez.",
+    task: "Action attendue : importer un document.",
+    waitFor: "save:document-import",
+    success: "Document importé et historisé sur le bien.",
+  },
+  {
+    key: "owner-create",
+    tracks: ["Clients"],
+    page: "Clients",
+    clientTab: "Propriétaires",
+    target: "owner-workspace",
+    title: "Créer un propriétaire",
+    body: "Dans Clients → Propriétaires, cliquez sur Nouveau propriétaire, complétez ou validez les informations, puis enregistrez.",
+    task: "Action attendue : créer un propriétaire.",
+    waitFor: "save:owner",
+    success: "Propriétaire créé et disponible dans la liste clients.",
+  },
+  {
+    key: "tenant-create",
+    tracks: ["Clients"],
+    page: "Clients",
+    clientTab: "Locataires",
+    target: "client-tabs",
+    title: "Créer un locataire",
+    body: "Passez au sous-onglet Locataires, utilisez Nouveau locataire, rattachez-le à un bien, puis enregistrez.",
+    task: "Action attendue : créer un locataire.",
+    waitFor: "save:tenant",
+    success: "Locataire enregistré et rattaché au portefeuille.",
+  },
+  {
+    key: "prospect-create",
+    tracks: ["Clients"],
+    page: "Clients",
+    clientTab: "Prospects",
+    target: "prospect-workspace",
+    title: "Créer un prospect",
+    body: "Dans Prospects, cliquez sur Nouveau prospect, renseignez le besoin immobilier, puis enregistrez.",
+    task: "Action attendue : créer un prospect.",
+    waitFor: "save:prospect",
+    success: "Prospect créé avec son besoin et sa prochaine action.",
+  },
+  {
+    key: "prospect-visit",
+    tracks: ["Clients"],
+    page: "Clients",
+    clientTab: "Visites",
+    target: "visits-workspace",
+    title: "Planifier une visite",
+    body: "Dans Visites, cliquez sur Planifier visite, choisissez le prospect, le bien, la date, l’agent et validez.",
+    task: "Action attendue : planifier une visite.",
+    waitFor: "save:visit",
+    success: "Visite ajoutée au planning, à la fiche prospect et à la fiche bien.",
+  },
+  {
+    key: "docs-generate",
+    tracks: ["Contrats"],
+    page: "Contrats",
+    contractTab: "Génération de document",
+    target: "document-generation",
+    title: "Générer puis archiver un document",
+    body: "Dans Docs → Génération de document, choisissez un modèle, contrôlez les champs et utilisez Archiver pour le conserver.",
+    task: "Action attendue : archiver un document généré.",
+    waitFor: "save:generated-document",
+    success: "Document archivé dans Docs → Archives.",
+  },
+  {
+    key: "contract-deadline",
+    tracks: ["Contrats"],
+    page: "Contrats",
+    contractTab: "Contrats",
+    target: "contracts-workspace",
+    title: "Gérer une échéance de contrat",
+    body: "Ouvrez une fiche contrat, utilisez Gérer les échéances et ajoutez un rappel de fin, révision ou prochain loyer.",
+    task: "Action attendue : enregistrer une échéance.",
+    waitFor: "save:contract-deadline",
+    success: "Échéance ajoutée à la timeline du contrat.",
+  },
+  {
+    key: "contract-pdf",
+    tracks: ["Contrats"],
+    page: "Contrats",
+    contractTab: "Contrats",
+    target: "contracts-workspace",
+    title: "Générer le PDF du contrat",
+    body: "Depuis la fiche contrat, utilisez le bouton PDF, choisissez Prévisualiser, Télécharger, Archiver ou Générer une nouvelle version.",
+    task: "Action attendue : lancer une action PDF sur le contrat.",
+    waitFor: "save:contract-pdf",
+    success: "PDF du contrat généré ou archivé.",
+  },
+  {
+    key: "contract-signed",
+    tracks: ["Contrats"],
+    page: "Contrats",
+    contractTab: "Contrats",
+    target: "contracts-workspace",
+    title: "Ajouter le contrat signé",
+    body: "Cliquez sur Contrat signé, importez un PDF ou une image, puis archivez le document signé.",
+    task: "Action attendue : importer un contrat signé.",
+    waitFor: "save:contract-signed",
+    success: "Document signé enregistré dans la fiche contrat.",
+  },
+  {
+    key: "contract-renewal",
+    tracks: ["Contrats"],
+    page: "Contrats",
+    contractTab: "Contrats",
+    target: "contracts-workspace",
+    title: "Renouveler un contrat",
+    body: "Utilisez Renouveler, contrôlez les nouvelles dates, le loyer, la caution et choisissez si un avenant doit être généré.",
+    task: "Action attendue : confirmer un renouvellement.",
+    waitFor: "save:contract-renewal",
+    success: "Contrat renouvelé et timeline mise à jour.",
+  },
+  {
+    key: "contract-termination",
+    tracks: ["Contrats"],
+    page: "Contrats",
+    contractTab: "Contrats",
+    target: "contracts-workspace",
+    title: "Résilier un contrat",
+    body: "Utilisez Résilier, renseignez la date, le motif, la restitution de caution et le statut du bien après résiliation.",
+    task: "Action attendue : confirmer la résiliation.",
+    waitFor: "save:contract-termination",
+    success: "Contrat résilié, bien et locataire mis à jour.",
+  },
+  {
+    key: "contract-archive",
+    tracks: ["Contrats"],
+    page: "Contrats",
+    contractTab: "Contrats",
+    target: "contracts-workspace",
+    title: "Archiver un contrat",
+    body: "Utilisez Archiver, indiquez un motif et confirmez. Le contrat disparaît des vues actives mais reste dans les archives.",
+    task: "Action attendue : archiver le contrat.",
+    waitFor: "save:contract-archive",
+    success: "Contrat archivé avec son historique.",
+  },
+  {
+    key: "finance-payment",
+    tracks: ["Finance"],
+    page: "Finance",
+    financeTab: "Paiements",
+    target: "payment-workspace",
+    title: "Utiliser la fiche paiement",
+    body: "Dans Finance → Paiements, enregistrez un paiement ou générez un reçu depuis la fiche de droite.",
+    task: "Action attendue : enregistrer un paiement depuis Finance.",
+    waitFor: "save:payment",
+    success: "Paiement pris en compte dans le module Finance.",
+  },
+  {
+    key: "finance-charge",
+    tracks: ["Finance"],
+    page: "Finance",
+    financeTab: "Charges",
+    target: "charges-workspace",
+    title: "Valider une charge",
+    body: "Dans Finance → Charges, ouvrez une charge et cliquez sur Valider, puis confirmez l’impact agence/propriétaire/locataire.",
+    task: "Action attendue : valider une charge.",
+    waitFor: "save:charge-validation",
+    success: "Charge validée et prête pour déduction ou refacturation.",
+  },
+  {
+    key: "finance-reversal",
+    tracks: ["Finance"],
+    page: "Finance",
+    financeTab: "Reversements",
+    target: "reversals-workspace",
+    title: "Préparer un reversement propriétaire",
+    body: "Dans Reversements, cliquez sur Préparer un reversement, sélectionnez un propriétaire et enregistrez le reversement.",
+    task: "Action attendue : préparer un reversement.",
+    waitFor: "save:reversal",
+    success: "Reversement enregistré et situation propriétaire mise à jour.",
+  },
+  {
+    key: "reports-export",
+    tracks: ["Rapports"],
+    page: "Rapports",
+    target: "reports-layout",
+    title: "Exporter un rapport",
+    body: "Dans Rapports, sélectionnez un rapport et utilisez Exporter rapport en PDF, Excel ou impression.",
+    task: "Action attendue : lancer un export de rapport.",
+    waitFor: "action:exporter rapport",
+    success: "Export lancé pour le rapport affiché.",
+  },
+  {
+    key: "admin-user",
+    tracks: ["Plus"],
+    page: "Plus",
+    adminTab: "Utilisateurs",
+    target: "admin-workspace",
+    title: "Ajouter un utilisateur",
+    body: "Dans Plus → Utilisateurs, cliquez sur Ajouter utilisateur, définissez le rôle, puis créez l’utilisateur.",
+    task: "Action attendue : créer un utilisateur.",
+    waitFor: "save:user",
+    success: "Utilisateur créé dans l’administration.",
+  },
+  {
+    key: "end",
+    page: "Dashboard",
+    target: "demo-button",
+    title: "Tutoriel terminé",
+    body: "Vous avez parcouru les actions principales : biens, clients, documents, finances, rapports et administration. Vous pouvez relancer un module précis depuis le Mode DEMO.",
+    task: "Cliquez Terminer pour quitter la visite.",
   },
 ];
 
@@ -250,6 +589,8 @@ const ekimmoAssets = {
   bailDocx: "/assets/ekimmo/exemple-contrat-de-bail.docx",
   factureDocx: "/assets/ekimmo/facture-lafia-t1-2026.docx",
   courrierCommissionDocx: "/assets/ekimmo/courrier-commission-lafia-t1-2026.docx",
+  etatLieuHabitationDocx: "/assets/ekimmo/etat-lieu-maison-appart-immeuble.docx",
+  etatLieuCommercialDocx: "/assets/ekimmo/etat-lieu-bail-commercial.docx",
 };
 
 const documentTemplates = [
@@ -275,6 +616,27 @@ const documentTemplates = [
     format: "PDF",
   },
   {
+    key: "courrierCommission",
+    label: "Courrier commission",
+    source: "COURRIER COMMISSION LAFIA T1 2026.docx",
+    file: ekimmoAssets.courrierCommissionDocx,
+    format: "DOCX",
+  },
+  {
+    key: "etatLieuHabitation",
+    label: "État des lieux habitation",
+    source: "ETAT DE LIEU MAISON_APPART_IMMEUBLE.docx",
+    file: ekimmoAssets.etatLieuHabitationDocx,
+    format: "DOCX",
+  },
+  {
+    key: "etatLieuCommercial",
+    label: "État des lieux bail commercial",
+    source: "ETAT DES LIEU BAIL COMMERCIAL.docx",
+    file: ekimmoAssets.etatLieuCommercialDocx,
+    format: "DOCX",
+  },
+  {
     key: "bail",
     label: "Contrat de bail",
     source: "EXEMPLE_CONTRAT_DE_BAIL.docx",
@@ -291,6 +653,8 @@ function getDocumentPrefix(type) {
   if (type === "Reçu") return "REC";
   if (type === "Quittance") return "QUI";
   if (type === "Bordereau") return "BOR";
+  if (type === "Courrier commission") return "COU";
+  if (type?.includes("État des lieux")) return "EDL";
   if (type === "Contrat") return "CON";
   return "FAC";
 }
@@ -1722,31 +2086,31 @@ function uniqueValues(values) {
   return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
 }
 
-function getPropertyByName(name) {
-  return properties.find((property) => property.name === name);
+function getPropertyByName(name, propertiesList = properties) {
+  return propertiesList.find((property) => property.name === name);
 }
 
-function getPropertyByCode(code) {
-  return properties.find((property) => property.code === code);
+function getPropertyByCode(code, propertiesList = properties) {
+  return propertiesList.find((property) => property.code === code);
 }
 
 function isBuildingProperty(property) {
   return property?.structure?.kind === "building";
 }
 
-function getPropertyChildren(property) {
+function getPropertyChildren(property, propertiesList = properties) {
   if (!property) return [];
-  return properties.filter((item) => item.parentCode === property.code);
+  return propertiesList.filter((item) => item.parentCode === property.code);
 }
 
-function getPropertyParent(property) {
-  return property?.parentCode ? getPropertyByCode(property.parentCode) : null;
+function getPropertyParent(property, propertiesList = properties) {
+  return property?.parentCode ? getPropertyByCode(property.parentCode, propertiesList) : null;
 }
 
-function getPropertyRelationLabel(property) {
-  const parent = getPropertyParent(property);
+function getPropertyRelationLabel(property, propertiesList = properties) {
+  const parent = getPropertyParent(property, propertiesList);
   if (parent) return `Rattaché à ${parent.name}`;
-  const children = getPropertyChildren(property);
+  const children = getPropertyChildren(property, propertiesList);
   if (children.length > 0) return `${children.length} lots rattachés`;
   return "";
 }
@@ -1769,8 +2133,8 @@ function isMaintenanceOnlyProperty(property) {
   return property?.status === "Entretien seul" || property?.financialMode?.includes("entretien seul");
 }
 
-function isAgencyCollectedProperty(name) {
-  const property = getPropertyByName(name);
+function isAgencyCollectedProperty(name, propertiesList = properties) {
+  const property = getPropertyByName(name, propertiesList);
   return !property || (!property.financialMode.includes("direct par le propriétaire") && !property.financialMode.includes("entretien seul"));
 }
 
@@ -1908,7 +2272,7 @@ function makeMaintenanceCharge(maintenance, sequence = 1) {
     modifiedBy: maintenance.manager,
     validatedBy: "À confirmer",
     validationDate: "À valider",
-    history: [`Créée automatiquement depuis l'entretien ${maintenance.reference}`],
+    history: [`Créée depuis l'entretien ${maintenance.reference}`],
   };
 }
 
@@ -1953,11 +2317,16 @@ function getLinkedCommissionContract(commission, contractsList = contracts) {
     ?? null;
 }
 
-function getDocumentDataForProperty(property, paymentsList = paymentRecords) {
-  const owner = owners.find((item) => item.name === property.owner) ?? owners[0];
-  const tenant = tenants.find((item) => item.name === property.tenant) ?? tenants[0];
-  const payment = paymentsList.find((item) => item.property === property.name) ?? paymentRecords.find((item) => item.property === property.name) ?? paymentRecords[0];
-  const invoice = invoices.find((item) => item.property === property.name) ?? {
+function getDocumentDataForProperty(property, paymentsList = paymentRecords, includeDemoRecords = true) {
+  const owner = includeDemoRecords
+    ? owners.find((item) => item.name === property.owner) ?? owners[0]
+    : { name: property.owner || "Propriétaire à renseigner", phone: "", email: "", charges: "0 FCFA", commission: "0 FCFA", balance: "0 FCFA" };
+  const tenant = includeDemoRecords
+    ? tenants.find((item) => item.name === property.tenant) ?? tenants[0]
+    : { name: property.tenant || "Locataire à renseigner", phone: "", email: "", rent: property.price ?? "0 FCFA", deposit: property.deposit ?? "0 FCFA", property: property.name };
+  const payment = paymentsList.find((item) => item.property === property.name)
+    ?? (includeDemoRecords ? paymentRecords.find((item) => item.property === property.name) ?? paymentRecords[0] : null);
+  const invoice = (includeDemoRecords ? invoices.find((item) => item.property === property.name) : null) ?? {
     number: makeDocumentNumber("FAC", 90),
     type: "Facture",
     client: tenant.name,
@@ -1966,11 +2335,17 @@ function getDocumentDataForProperty(property, paymentsList = paymentRecords) {
     date: "18/06/2026",
     status: "Brouillon",
   };
-  const commission = commissions.find((item) => item.property === property.name || item.owner === owner.name) ?? commissions[0];
+  const commission = (includeDemoRecords ? commissions.find((item) => item.property === property.name || item.owner === owner.name) : null) ?? {
+    operation: "Commission à renseigner",
+    property: property.name,
+    owner: owner.name,
+    commission: "0 FCFA",
+    rate: "0%",
+  };
 
   return {
     invoice,
-    payment: payment ?? paymentRecords[0],
+    payment: payment ?? { reference: "", receipt: "", tenant: tenant.name, property: property.name, paid: "0 FCFA", balance: "0 FCFA", date: "" },
     commission,
     property,
     owner,
@@ -2010,8 +2385,15 @@ function isSensitiveAction(title) {
   ].some((keyword) => text.includes(keyword));
 }
 
-function getSearchEntries() {
-  const propertyEntries = properties.flatMap((property) => [
+function getSearchEntries({
+  propertiesList = properties,
+  ownersList = owners,
+  tenantsList = tenants,
+  prospectsList = prospects,
+  rentRowsList = rentRows,
+  invoicesList = invoices,
+} = {}) {
+  const propertyEntries = propertiesList.flatMap((property) => [
     {
       type: "Bien",
       match: property.name,
@@ -2038,7 +2420,7 @@ function getSearchEntries() {
     },
   ]);
 
-  const ownerEntries = owners.flatMap((owner) => [
+  const ownerEntries = ownersList.flatMap((owner) => [
     {
       type: "Nom",
       match: owner.name,
@@ -2059,7 +2441,7 @@ function getSearchEntries() {
     },
   ]);
 
-  const tenantEntries = tenants.flatMap((tenant) => [
+  const tenantEntries = tenantsList.flatMap((tenant) => [
     {
       type: "Nom",
       match: tenant.name,
@@ -2080,7 +2462,7 @@ function getSearchEntries() {
     },
   ]);
 
-  const prospectEntries = prospects.flatMap((prospect) => [
+  const prospectEntries = prospectsList.flatMap((prospect) => [
     {
       type: "Nom",
       match: prospect.name,
@@ -2101,7 +2483,7 @@ function getSearchEntries() {
     },
   ]);
 
-  const financeEntries = rentRows.flatMap((row) => [
+  const financeEntries = rentRowsList.flatMap((row) => [
     {
       type: "Montant",
       match: row.expected,
@@ -2116,7 +2498,7 @@ function getSearchEntries() {
     },
   ]);
 
-  const documentEntries = invoices.flatMap((invoice) => [
+  const documentEntries = invoicesList.flatMap((invoice) => [
     {
       type: "Document",
       match: invoice.number,
@@ -2139,8 +2521,6 @@ function getSearchEntries() {
       haystack: normalizeSearch(`${entry.type} ${entry.match} ${entry.detail}`),
     }));
 }
-
-const searchEntries = getSearchEntries();
 
 const notificationAlerts = [
   {
@@ -2177,9 +2557,10 @@ const notificationAlerts = [
   },
 ];
 
-function getSearchResults(query) {
+function getSearchResults(query, dataset) {
   const normalizedQuery = normalizeSearch(query).trim();
   if (!normalizedQuery) return [];
+  const searchEntries = getSearchEntries(dataset);
 
   return searchEntries
     .filter((entry) => entry.haystack.includes(normalizedQuery))
@@ -2371,23 +2752,27 @@ function App() {
   const [showLogin, setShowLogin] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(() => window.sessionStorage.getItem("ekimmo-session") !== "logged-out");
   const [modal, setModal] = useState(null);
+  const [demoDataLoaded, setDemoDataLoaded] = useState(false);
+  const [demoTrack, setDemoTrack] = useState("complete");
   const [demoActive, setDemoActive] = useState(false);
   const [demoIndex, setDemoIndex] = useState(0);
   const [demoRect, setDemoRect] = useState(null);
+  const [demoStepStatus, setDemoStepStatus] = useState(null);
   const [globalQuery, setGlobalQuery] = useState("");
-  const [selectedProperty, setSelectedProperty] = useState(properties[0]);
+  const [selectedProperty, setSelectedProperty] = useState(null);
   const [propertyView, setPropertyView] = useState("list");
   const [propertyDisplay, setPropertyDisplay] = useState("cartes");
   const [propertyTab, setPropertyTab] = useState("Résumé");
   const [propertyReturnContext, setPropertyReturnContext] = useState(null);
+  const [createdProperties, setCreatedProperties] = useState([]);
   const [propertyOverrides, setPropertyOverrides] = useState({});
   const [clientTab, setClientTab] = useState("Propriétaires");
-  const [selectedOwner, setSelectedOwner] = useState(owners[0]);
+  const [selectedOwner, setSelectedOwner] = useState(null);
   const [createdOwners, setCreatedOwners] = useState([]);
   const [ownerOverrides, setOwnerOverrides] = useState({});
   const [ownerActionContext, setOwnerActionContext] = useState(null);
   const [ownerReversements, setOwnerReversements] = useState([]);
-  const [selectedTenant, setSelectedTenant] = useState(tenants[0]);
+  const [selectedTenant, setSelectedTenant] = useState(null);
   const [createdTenants, setCreatedTenants] = useState([]);
   const [tenantOverrides, setTenantOverrides] = useState({});
   const [tenantActionContext, setTenantActionContext] = useState(null);
@@ -2459,54 +2844,68 @@ function App() {
   const [userHistories, setUserHistories] = useState({});
   const [userActionContext, setUserActionContext] = useState(null);
   const [reportType, setReportType] = useState(reports[0][0]);
-  const demoStep = demoSteps[demoIndex];
+  const demoBaseProperties = demoDataLoaded ? properties : [];
+  const demoBaseOwners = demoDataLoaded ? owners : [];
+  const demoBaseTenants = demoDataLoaded ? tenants : [];
+  const demoBaseProspects = demoDataLoaded ? prospects : [];
+  const demoBaseVisits = demoDataLoaded ? visits : [];
+  const demoBaseContracts = demoDataLoaded ? contracts : [];
+  const demoBasePayments = demoDataLoaded ? paymentRecords : [];
+  const demoBaseRentRows = demoDataLoaded ? rentRows : [];
+  const demoBaseCommissions = demoDataLoaded ? commissions : [];
+  const demoBaseCharges = demoDataLoaded ? charges : [];
+  const demoBaseMaintenances = demoDataLoaded ? maintenances : [];
+  const demoBaseReversals = demoDataLoaded ? reversals : [];
+  const demoBaseUsers = demoDataLoaded ? users : [];
+  const activeDemoSteps = useMemo(() => getDemoStepsForTrack(demoTrack), [demoTrack]);
+  const demoStep = activeDemoSteps[demoIndex];
   const allContracts = useMemo(() => {
     const applyOverride = (contract) => ({ ...contract, ...(contractOverrides[getContractKey(contract)] ?? {}) });
-    return [...generatedContracts.map(applyOverride), ...contracts.map(applyOverride)];
-  }, [generatedContracts, contractOverrides]);
-  const allPayments = useMemo(() => mergePaymentRecords(paymentRecords, recordedPayments).map((payment) => ({
+    return [...generatedContracts.map(applyOverride), ...demoBaseContracts.map(applyOverride)];
+  }, [demoBaseContracts, generatedContracts, contractOverrides]);
+  const allPayments = useMemo(() => mergePaymentRecords(demoBasePayments, recordedPayments).map((payment) => ({
     ...payment,
     ...(paymentProofs[payment.reference] ? { proof: paymentProofs[payment.reference] } : {}),
     history: paymentHistories[payment.reference] ?? payment.history ?? [],
-  })), [paymentHistories, paymentProofs, recordedPayments]);
-  const allCommissions = useMemo(() => commissions.map((commission) => ({
+  })), [demoBasePayments, paymentHistories, paymentProofs, recordedPayments]);
+  const allCommissions = useMemo(() => demoBaseCommissions.map((commission) => ({
     ...commission,
     ...(commissionOverrides[getCommissionKey(commission)] ?? {}),
-  })), [commissionOverrides]);
-  const allRentRows = useMemo(() => mergeRentRowsWithPayments(rentRows, recordedPayments), [recordedPayments]);
-  const allMaintenances = useMemo(() => [...scheduledMaintenances, ...maintenances].map((maintenance) => ({
+  })), [demoBaseCommissions, commissionOverrides]);
+  const allRentRows = useMemo(() => mergeRentRowsWithPayments(demoBaseRentRows, recordedPayments), [demoBaseRentRows, recordedPayments]);
+  const allMaintenances = useMemo(() => [...scheduledMaintenances, ...demoBaseMaintenances].map((maintenance) => ({
     ...maintenance,
     ...(maintenanceOverrides[getMaintenanceKey(maintenance)] ?? {}),
     history: maintenanceOverrides[getMaintenanceKey(maintenance)]?.history ?? maintenance.history ?? [],
-  })), [maintenanceOverrides, scheduledMaintenances]);
+  })), [demoBaseMaintenances, maintenanceOverrides, scheduledMaintenances]);
   const allCharges = useMemo(() => {
     const dynamicChargeIds = new Set(maintenanceCharges.map((charge) => charge.id));
-    return [...maintenanceCharges, ...charges.filter((charge) => !dynamicChargeIds.has(charge.id))].map((charge) => ({
+    return [...maintenanceCharges, ...demoBaseCharges.filter((charge) => !dynamicChargeIds.has(charge.id))].map((charge) => ({
       ...charge,
       ...(chargeOverrides[getChargeKey(charge)] ?? {}),
       history: chargeOverrides[getChargeKey(charge)]?.history ?? charge.history ?? [],
     }));
-  }, [chargeOverrides, maintenanceCharges]);
+  }, [chargeOverrides, demoBaseCharges, maintenanceCharges]);
   const allPropertyDocumentArchives = useMemo(
     () => [...propertyDocumentArchives, ...propertyPdfArchives],
     [propertyDocumentArchives, propertyPdfArchives]
   );
   const allOwners = useMemo(() => {
     const applyOverride = (owner) => ({ ...owner, ...(ownerOverrides[owner.id] ?? {}) });
-    return [...createdOwners.map(applyOverride), ...owners.map(applyOverride)];
-  }, [createdOwners, ownerOverrides]);
+    return [...createdOwners.map(applyOverride), ...demoBaseOwners.map(applyOverride)];
+  }, [createdOwners, demoBaseOwners, ownerOverrides]);
   const allTenants = useMemo(() => {
     const applyOverride = (tenant) => ({ ...tenant, ...(tenantOverrides[tenant.id] ?? {}) });
-    return [...createdTenants.map(applyOverride), ...tenants.map(applyOverride)];
-  }, [createdTenants, tenantOverrides]);
+    return [...createdTenants.map(applyOverride), ...demoBaseTenants.map(applyOverride)];
+  }, [createdTenants, demoBaseTenants, tenantOverrides]);
   const allProspects = useMemo(() => {
     const applyOverride = (prospect) => ({ ...prospect, ...(prospectOverrides[getProspectKey(prospect)] ?? {}) });
-    return [...createdProspects.map(applyOverride), ...prospects.map(applyOverride)];
-  }, [createdProspects, prospectOverrides]);
+    return [...createdProspects.map(applyOverride), ...demoBaseProspects.map(applyOverride)];
+  }, [createdProspects, demoBaseProspects, prospectOverrides]);
   const allVisits = useMemo(() => {
     const applyOverride = (visit) => ({ ...visit, ...(visitOverrides[getVisitKey(visit)] ?? {}) });
-    return [...scheduledProspectVisits.map(applyOverride), ...visits.map(applyOverride)];
-  }, [scheduledProspectVisits, visitOverrides]);
+    return [...scheduledProspectVisits.map(applyOverride), ...demoBaseVisits.map(applyOverride)];
+  }, [demoBaseVisits, scheduledProspectVisits, visitOverrides]);
   const topbarNotifications = useMemo(() => {
     const visitNotifications = allVisits
       .filter((visit) => visit.notifyReminder && visitMatchesPeriod(visit, "Aujourd'hui"))
@@ -2519,18 +2918,18 @@ function App() {
         page: "Clients",
       }));
 
-    return [...notificationAlerts, ...visitNotifications];
-  }, [allVisits]);
-  const allReversals = useMemo(() => [...ownerReversements, ...reversals].map((reversal) => ({
+    return [...(demoDataLoaded ? notificationAlerts : []), ...visitNotifications];
+  }, [allVisits, demoDataLoaded]);
+  const allReversals = useMemo(() => [...ownerReversements, ...demoBaseReversals].map((reversal) => ({
     ...reversal,
     ...(reversalOverrides[getReversalKey(reversal)] ?? {}),
     history: reversalOverrides[getReversalKey(reversal)]?.history ?? reversal.history ?? [],
-  })), [ownerReversements, reversalOverrides]);
+  })), [demoBaseReversals, ownerReversements, reversalOverrides]);
   const allUsers = useMemo(() => {
     const applyOverride = (user) => ({ ...user, ...(userOverrides[getUserKey(user)] ?? {}) });
-    return [...createdUsers.map(applyOverride), ...users.map(applyOverride)];
-  }, [createdUsers, userOverrides]);
-  const propertiesWithArchiveState = useMemo(() => properties.map((property) => {
+    return [...createdUsers.map(applyOverride), ...demoBaseUsers.map(applyOverride)];
+  }, [createdUsers, demoBaseUsers, userOverrides]);
+  const propertiesWithArchiveState = useMemo(() => [...createdProperties, ...demoBaseProperties].map((property) => {
     const propertyWithOverride = { ...property, ...(propertyOverrides[property.code] ?? {}) };
     const archive = archivedProperties[property.code];
     if (!archive) return propertyWithOverride;
@@ -2542,14 +2941,70 @@ function App() {
       archiveDate: archive.date,
       lastAction: `Archivé : ${archive.reason}`,
     };
-  }), [archivedProperties, propertyOverrides]);
+  }), [archivedProperties, createdProperties, demoBaseProperties, propertyOverrides]);
   const activeProperties = useMemo(
     () => propertiesWithArchiveState.filter((property) => !property.archived),
     [propertiesWithArchiveState]
   );
 
+  useEffect(() => {
+    setSelectedProperty((current) => {
+      if (current && propertiesWithArchiveState.some((property) => property.code === current.code)) {
+        return propertiesWithArchiveState.find((property) => property.code === current.code) ?? current;
+      }
+      return propertiesWithArchiveState[0] ?? null;
+    });
+  }, [propertiesWithArchiveState]);
+
+  useEffect(() => {
+    setSelectedOwner((current) => {
+      if (current && allOwners.some((owner) => owner.id === current.id)) return allOwners.find((owner) => owner.id === current.id) ?? current;
+      return allOwners[0] ?? null;
+    });
+  }, [allOwners]);
+
+  useEffect(() => {
+    setSelectedTenant((current) => {
+      if (current && allTenants.some((tenant) => tenant.id === current.id)) return allTenants.find((tenant) => tenant.id === current.id) ?? current;
+      return allTenants[0] ?? null;
+    });
+  }, [allTenants]);
+
+  const advanceDemoStep = () => {
+    setDemoIndex((index) => {
+      if (index >= activeDemoSteps.length - 1) {
+        setDemoActive(false);
+        setDemoRect(null);
+        return index;
+      }
+      return index + 1;
+    });
+  };
+
+  const completeDemoEvent = (eventName) => {
+    if (!demoActive || !demoStep?.waitFor) return false;
+    const expectedEvents = Array.isArray(demoStep.waitFor) ? demoStep.waitFor : [demoStep.waitFor];
+    const normalizedEvent = normalizeSearch(eventName);
+    const matched = expectedEvents.some((event) => normalizeSearch(event) === normalizedEvent);
+    if (!matched || demoStepStatus?.key === demoStep.key) return false;
+
+    setDemoStepStatus({
+      key: demoStep.key,
+      message: demoStep.success ?? "Étape validée.",
+    });
+    window.setTimeout(advanceDemoStep, 850);
+    return true;
+  };
+
   const openAction = (label, context = {}) => {
     const normalizedAction = normalizeSearch(label);
+
+    if (normalizedAction === "exporter rapport") {
+      completeDemoEvent("action:exporter rapport");
+      return;
+    }
+
+    completeDemoEvent(`action:${normalizedAction}`);
 
     if (normalizedAction === "mon profil") {
       setModal("Mon profil");
@@ -2898,7 +3353,7 @@ function App() {
       return;
     }
 
-    if (normalizedAction === "proposer un bien") {
+    if (["proposer un bien", "proposer bien"].includes(normalizedAction)) {
       setProspectProposalContext(context.prospect ?? prospectProposalContext ?? prospects[0]);
       setModal("Proposer un bien prospect");
       return;
@@ -2954,9 +3409,10 @@ function App() {
       "retour client visite",
       "creer relance visite",
       "reporter visite",
+      "reporter",
     ].includes(normalizedAction)) {
       setVisitActionContext({ visit: context.visit ?? allVisits[0] ?? visits[0] });
-      setModal(label);
+      setModal(normalizedAction === "reporter" ? "Reporter visite" : label);
       return;
     }
 
@@ -3088,6 +3544,15 @@ function App() {
 
     if (["ouvrir archive", "reprendre brouillon"].includes(normalizedAction) && context.archive) {
       const archiveRecord = context.archive;
+      if (archiveRecord.templateKey === "propertyDraft" && (archiveRecord.status === "Brouillon" || normalizedAction === "reprendre brouillon")) {
+        const draftProperty = archiveRecord.values?.property ?? selectedProperty;
+        setSelectedProperty(draftProperty);
+        setPropertyOwnerPrefill(draftProperty.owner ?? "");
+        setPropertyView("list");
+        setActivePage("Biens");
+        setModal(archiveRecord.values?.mode === "edit" ? "Modifier le bien" : "Ajouter un bien");
+        return;
+      }
       const linkedContract = archiveRecord.contractKey
         ? allContracts.find((contract) => getContractKey(contract) === archiveRecord.contractKey)
         : allContracts.find((contract) => archiveRecord.reference === contract.number || archiveRecord.reference === contract.pdfReference || archiveRecord.title?.includes(contract.number));
@@ -3451,9 +3916,27 @@ function App() {
     setModal(label);
   };
 
-  const startDemo = () => {
+  const openDemoMenu = () => {
+    setModal("Mode DEMO");
+  };
+
+  const loadDemoData = () => {
+    setDemoDataLoaded(true);
+    setSelectedProperty((current) => current ?? properties[0]);
+    setSelectedOwner((current) => current ?? owners[0]);
+    setSelectedTenant((current) => current ?? tenants[0]);
+  };
+
+  const startDemo = (track = "complete") => {
+    loadDemoData();
+    setDemoTrack(track);
     setDemoIndex(0);
     setDemoActive(true);
+    setModal(null);
+    const firstPageStep = getDemoStepsForTrack(track).find((step) => step.page && step.page !== "Dashboard");
+    if (firstPageStep?.page && track !== "complete") {
+      setActivePage(firstPageStep.page);
+    }
   };
 
   const stopDemo = () => {
@@ -3466,14 +3949,7 @@ function App() {
   };
 
   const nextDemoStep = () => {
-    setDemoIndex((index) => {
-      if (index >= demoSteps.length - 1) {
-        setDemoActive(false);
-        setDemoRect(null);
-        return index;
-      }
-      return index + 1;
-    });
+    advanceDemoStep();
   };
 
   const handleNav = (item) => {
@@ -3543,6 +4019,7 @@ function App() {
       ],
     }));
     setUserActionContext(null);
+    completeDemoEvent("save:user");
     setModal(null);
   };
 
@@ -3684,6 +4161,7 @@ function App() {
     setSelectedOwner(owner);
     setClientTab("Propriétaires");
     setActivePage("Clients");
+    completeDemoEvent("save:owner");
 
     if (addProperty) {
       setPropertyOwnerPrefill(owner.name);
@@ -3719,6 +4197,7 @@ function App() {
     setSelectedOwner((current) => (current.id === owner.id ? { ...current, ...updatedOwner } : current));
     setClientTab("Propriétaires");
     setActivePage("Clients");
+    completeDemoEvent("save:reversal");
 
     if (generateStatement) {
       setOwnerActionContext({ owner: updatedOwner, activeOwnerTab: "Situation financière" });
@@ -3791,6 +4270,7 @@ function App() {
 
     setFinanceTab("Reversements");
     setActivePage("Finance");
+    completeDemoEvent("save:reversal");
 
     if (generateStatement) {
       setReversalActionContext({ reversal: reversement, intent: "preview" });
@@ -3913,6 +4393,7 @@ function App() {
     setSelectedTenant(tenant);
     setClientTab("Locataires");
     setActivePage("Clients");
+    completeDemoEvent("save:tenant");
     setModal(null);
     setTenantActionContext(null);
   };
@@ -3938,6 +4419,7 @@ function App() {
     setSelectedTenant(savedTenant);
     setClientTab("Locataires");
     setActivePage("Clients");
+    completeDemoEvent("save:tenant");
 
     const nextProperty = {
       ...targetProperty,
@@ -3982,6 +4464,7 @@ function App() {
     ]);
     setClientTab("Prospects");
     setActivePage("Clients");
+    completeDemoEvent("save:prospect");
 
     if (proposeProperty) {
       setProspectProposalContext(prospect);
@@ -4060,6 +4543,7 @@ function App() {
       title: "Proposition envoyée",
       text: `${proposedItems.length} bien${proposedItems.length > 1 ? "s" : ""} proposé${proposedItems.length > 1 ? "s" : ""} · ${comment || "Sans commentaire"}`,
     });
+    completeDemoEvent("save:prospect-proposal");
     setModal(null);
     setProspectProposalContext(null);
   };
@@ -4157,6 +4641,7 @@ function App() {
     });
     setClientTab("Visites");
     setActivePage("Clients");
+    completeDemoEvent("save:visit");
     setModal(null);
     setProspectActionContext(null);
   };
@@ -4402,6 +4887,7 @@ function App() {
     } : current));
     setClientTab("Locataires");
     setActivePage("Clients");
+    completeDemoEvent("save:relance");
     setModal(null);
     setTenantActionContext(null);
   };
@@ -4460,6 +4946,7 @@ function App() {
     });
 
     setFinanceTab("Impayés");
+    completeDemoEvent("save:dashboard-relance");
     setModal(null);
   };
 
@@ -4558,6 +5045,7 @@ function App() {
     setPropertyTab("Locataire");
     setPropertyView("detail");
     setActivePage("Biens");
+    completeDemoEvent("save:tenant-attachment");
     setModal(createContract ? "Créer contrat" : null);
   };
 
@@ -4582,6 +5070,45 @@ function App() {
     }));
     setPropertyTab("Contrats");
     setContractTab("Archives");
+    completeDemoEvent("save:contract-generation");
+  };
+
+  const handleContractDraftSave = ({ values, property, owner, tenant }) => {
+    const reference = values.contratNo || makeDocumentNumber("CON", allContracts.length + propertyDocumentArchives.length + 1);
+    const draftArchive = {
+      id: `contract-draft-${reference}`,
+      category: "Brouillons",
+      reference,
+      title: `Brouillon contrat - ${property.name}`,
+      linked: `${property.name} · ${tenant.name}`,
+      date: values.souscritLe || "27/06/2026",
+      status: "Brouillon",
+      module: "Docs",
+      owner: owner.name,
+      property: property.name,
+      propertyCode: property.code,
+      tenant: tenant.name,
+      documentType: "Contrat de bail",
+      templateKey: "bail",
+      comment: "Contrat préparé et conservé comme brouillon.",
+      values: { ...values, contratNo: reference },
+    };
+
+    setPropertyDocumentArchives((current) => [
+      draftArchive,
+      ...current.filter((item) => item.reference !== draftArchive.reference || item.id !== draftArchive.id),
+    ]);
+    setPropertyHistoryOverrides((current) => ({
+      ...current,
+      [property.name]: [
+        ["Brouillon contrat", `${reference} préparé pour ${tenant.name}.`, "27/06/2026"],
+        ...(current[property.name] ?? []),
+      ],
+    }));
+    setContractTab("Archives");
+    setActivePage("Contrats");
+    completeDemoEvent("save:contract-draft");
+    setModal(null);
   };
 
   const addContractTimeline = (contract, entry) => {
@@ -4638,6 +5165,7 @@ function App() {
       action: "Échéance ajoutée",
       comment: `${values.type} le ${values.date} - rappel ${values.reminder}.`,
     });
+    completeDemoEvent("save:contract-deadline");
     setModal(null);
     setContractActionContext(null);
   };
@@ -4733,6 +5261,7 @@ function App() {
     }
 
     setPropertyTab("Contrats");
+    completeDemoEvent("save:contract-renewal");
     setModal(null);
     setContractActionContext(null);
   };
@@ -4823,6 +5352,7 @@ function App() {
     }
 
     setPropertyTab("Historique");
+    completeDemoEvent("save:contract-termination");
     setModal(null);
     setContractActionContext(null);
   };
@@ -4862,6 +5392,7 @@ function App() {
       contract: nextContract,
       documentAction: mode === "replace" ? "Document signé remplacé" : "Signature ajoutée",
     }));
+    completeDemoEvent("save:contract-signed");
     return nextContract;
   };
 
@@ -4985,6 +5516,7 @@ function App() {
       pdfAction: action,
       pdfNotice: actionMeta.comment,
     }));
+    completeDemoEvent("save:contract-pdf");
     return nextContract;
   };
 
@@ -5001,6 +5533,7 @@ function App() {
       action: "Document imprimé",
       comment: `${targetLabel} imprimé ${deadlineLabel}.`,
     });
+    completeDemoEvent("save:contract-print");
     setContractActionContext(null);
     setModal(null);
     window.setTimeout(() => window.print(), 0);
@@ -5017,6 +5550,7 @@ function App() {
       comment: `${contract.number} archivé. Motif : ${values.reason}. ${values.comment}`,
     });
     setContractTab("Archives");
+    completeDemoEvent("save:contract-archive");
     setContractActionContext(null);
     setModal(null);
   };
@@ -5064,6 +5598,7 @@ function App() {
 
     setPropertyTab("Paiements");
     setFinanceTab("Paiements");
+    completeDemoEvent("save:payment");
     if (payment.receipt && payment.receipt !== "Non généré") {
       setReceiptPreviewValues(getPaymentReceiptValues(payment));
       setContractTab("Archives");
@@ -5416,6 +5951,7 @@ function App() {
 
       setMaintenanceContext(null);
       setFinanceTab(createCharge ? "Charges" : "Entretiens");
+      completeDemoEvent("save:maintenance");
       setModal(null);
       return;
     }
@@ -5449,6 +5985,7 @@ function App() {
     setPropertyTab("Charges & entretiens");
     setFinanceTab(createCharge ? "Charges" : "Entretiens");
     setMaintenanceContext(null);
+    completeDemoEvent("save:maintenance");
     setModal(null);
   };
 
@@ -5508,7 +6045,7 @@ function App() {
       payer: values.payer,
       proof: values.proof || maintenance.proof,
       costObservation: values.observation,
-    }, `Coût : estimation ${values.estimatedCost}, réel ${values.realCost || "à confirmer"}.`);
+    }, `Coût : estimation ${values.estimatedCost}, réel ${values.realCost || "non renseigné"}.`);
 
     if (values.createCharge === "Oui") {
       setMaintenanceCharges((current) => [makeMaintenanceCharge(nextMaintenance, current.length + 1), ...current]);
@@ -5552,7 +6089,7 @@ function App() {
       validationDate: "25/06/2026",
       realCost: values.realCost || maintenance.realCost,
       payer: values.payer,
-    }, `Validation : ${values.comment || "Entretien validé après contrôle."}`);
+    }, `Validation : ${values.comment || "Entretien validé."}`);
     closeMaintenanceAction();
   };
 
@@ -5669,6 +6206,7 @@ function App() {
     setPropertyTab("Charges & entretiens");
     setFinanceTab("Charges");
     setChargeContext(null);
+    completeDemoEvent(validate ? "save:charge-validation" : "save:charge");
     setModal(null);
   };
 
@@ -5712,7 +6250,8 @@ function App() {
       validationDate: "25/06/2026",
       validationComment: values.comment,
       impact: getChargeImpactForPayer(charge.payer),
-    }, `Validation : ${values.comment || "Charge validée après contrôle."}`);
+    }, `Validation : ${values.comment || "Charge validée."}`);
+    completeDemoEvent("save:charge-validation");
     setChargeActionContext(null);
     setModal(null);
   };
@@ -5788,7 +6327,7 @@ function App() {
         description: charge.description,
         date: "26/06/2026",
         manager: charge.agent,
-        provider: "Prestataire à confirmer",
+        provider: "Prestataire non confirmé",
         cost: charge.amount,
         payer: charge.payer,
       },
@@ -5802,7 +6341,7 @@ function App() {
     setDocumentDraft({
       templateKey,
       property,
-      data: getDocumentDataForProperty(property, allPayments),
+      data: getDocumentDataForProperty(property, allPayments, demoDataLoaded),
     });
     setActivePage("Contrats");
     setContractTab("Génération de document");
@@ -5823,6 +6362,7 @@ function App() {
       ],
     }));
     setPropertyTab("Documents");
+    completeDemoEvent("save:property-pdf");
   };
 
   const handlePropertyDocumentImport = ({ document, open = false }) => {
@@ -5857,9 +6397,98 @@ function App() {
       setContractTab("Archives");
       setArchiveOpenContext(nextDocument);
       setModal("Aperçu archive");
+      completeDemoEvent("save:document-import");
       return;
     }
 
+    completeDemoEvent("save:document-import");
+    setModal(null);
+  };
+
+  const handlePropertySave = ({ property, mode = "create", draft = false }) => {
+    const fallbackCode = makeDocumentNumber("BIE", properties.length + createdProperties.length + 1);
+    const nextProperty = {
+      ...property,
+      code: property.code?.trim() || fallbackCode,
+      status: draft ? "Brouillon" : property.status,
+      archived: false,
+      lastAction: draft
+        ? "Brouillon de fiche bien enregistré"
+        : mode === "edit"
+          ? "Fiche bien modifiée"
+          : "Nouveau bien ajouté",
+      history: [
+        ...(property.history ?? []),
+        [
+          draft ? "Brouillon enregistré" : mode === "edit" ? "Fiche modifiée" : "Fiche créée",
+          draft
+            ? "La fiche a été conservée dans les archives pour reprise."
+            : "Les informations du bien ont été mises à jour dans l'application.",
+          "27/06/2026",
+        ],
+      ],
+    };
+
+    if (draft) {
+      const draftArchive = {
+        id: `property-draft-${nextProperty.code}`,
+        category: "Brouillons",
+        reference: nextProperty.code,
+        title: `Brouillon fiche bien - ${nextProperty.name}`,
+        linked: `${nextProperty.owner} · ${nextProperty.district}`,
+        date: "27/06/2026",
+        status: "Brouillon",
+        module: "Biens",
+        owner: nextProperty.owner,
+        property: nextProperty.name,
+        propertyCode: nextProperty.code,
+        documentType: "Fiche bien",
+        templateKey: "propertyDraft",
+        comment: "Brouillon de création ou modification de bien.",
+        values: { property: nextProperty, mode },
+      };
+
+      setPropertyDocumentArchives((current) => [
+        draftArchive,
+        ...current.filter((item) => item.reference !== draftArchive.reference || item.id !== draftArchive.id),
+      ]);
+      setContractTab("Archives");
+      setActivePage("Contrats");
+      setPropertyOwnerPrefill("");
+      completeDemoEvent("save:property-draft");
+      setModal(null);
+      return;
+    }
+
+    if (mode === "edit") {
+      setPropertyOverrides((current) => ({
+        ...current,
+        [nextProperty.code]: nextProperty,
+      }));
+    } else {
+      setCreatedProperties((current) => [
+        nextProperty,
+        ...current.filter((item) => item.code !== nextProperty.code),
+      ]);
+    }
+
+    setPropertyHistoryOverrides((current) => ({
+      ...current,
+      [nextProperty.name]: [
+        [
+          mode === "edit" ? "Fiche bien modifiée" : "Fiche bien créée",
+          `${nextProperty.code} · ${nextProperty.owner} · ${nextProperty.status}.`,
+          "27/06/2026",
+        ],
+        ...(current[nextProperty.name] ?? []),
+      ],
+    }));
+    setSelectedProperty(nextProperty);
+    setPropertyView("detail");
+    setPropertyTab("Résumé");
+    setActivePage("Biens");
+    setPropertyOwnerPrefill("");
+    completeDemoEvent(mode === "edit" ? "save:property-edit" : "save:property");
     setModal(null);
   };
 
@@ -5891,6 +6520,7 @@ function App() {
     }
 
     setContractTab("Archives");
+    completeDemoEvent("save:generated-document");
   };
 
   const handlePropertyArchive = ({ property, reason }) => {
@@ -5944,14 +6574,16 @@ function App() {
   useEffect(() => {
     if (!demoActive) return;
 
-    const step = demoSteps[demoIndex];
+    const step = activeDemoSteps[demoIndex];
+    if (!step) return;
+    setDemoStepStatus(null);
     setModal(null);
     setGlobalQuery("");
 
     if (step.page) setActivePage(step.page);
     if (step.page === "Biens") {
       setPropertyView(step.propertyView ?? "list");
-      setSelectedProperty(properties[1]);
+      setSelectedProperty((current) => current ?? propertiesWithArchiveState[0] ?? properties[1]);
       setPropertyTab(step.propertyTab ?? "Résumé");
     }
     if (step.clientTab) setClientTab(step.clientTab);
@@ -5959,7 +6591,7 @@ function App() {
     if (step.financeTab) setFinanceTab(step.financeTab);
     if (step.adminTab) setAdminTab(step.adminTab);
     if (step.reportType) setReportType(step.reportType);
-  }, [demoActive, demoIndex]);
+  }, [activeDemoSteps, demoActive, demoIndex, propertiesWithArchiveState]);
 
   useEffect(() => {
     if (!demoActive) return undefined;
@@ -6028,9 +6660,17 @@ function App() {
         onNav={handleNav}
         onAction={openAction}
         onLogout={handleLogout}
-        onStartDemo={startDemo}
+        onStartDemo={openDemoMenu}
         demoActive={demoActive}
         notifications={topbarNotifications}
+        searchDataset={{
+          propertiesList: propertiesWithArchiveState,
+          ownersList: allOwners,
+          tenantsList: allTenants,
+          prospectsList: allProspects,
+          rentRowsList: allRentRows,
+          invoicesList: demoDataLoaded ? invoices : [],
+        }}
       />
 
       <main className={activePage === "Dashboard" ? "page-shell dashboard-shell" : "page-shell"}>
@@ -6058,6 +6698,8 @@ function App() {
             propertyPdfArchives={allPropertyDocumentArchives}
             missingDocumentRequests={missingDocumentRequests}
             propertiesList={propertiesWithArchiveState}
+            ownerRecords={allOwners}
+            tenantRecords={allTenants}
             visitsList={allVisits}
           />
         )}
@@ -6096,6 +6738,7 @@ function App() {
             activeTab={contractTab}
             onTab={setContractTab}
             onAction={openAction}
+            demoDataLoaded={demoDataLoaded}
             contractsList={allContracts}
             paymentsList={allPayments}
             documentDraft={documentDraft}
@@ -6137,14 +6780,22 @@ function App() {
         <DemoTour
           step={demoStep}
           index={demoIndex}
-          total={demoSteps.length}
+          total={activeDemoSteps.length}
           rect={demoRect}
+          status={demoStepStatus}
           onNext={nextDemoStep}
           onPrevious={previousDemoStep}
           onStop={stopDemo}
         />
       )}
-      {modal && (["Ajouter une charge"].includes(modal) || modal.startsWith("Modifier charge") ? (
+      {modal && (modal === "Mode DEMO" ? (
+        <DemoModeModal
+          dataLoaded={demoDataLoaded}
+          onLoadData={loadDemoData}
+          onStartTrack={startDemo}
+          onClose={() => setModal(null)}
+        />
+      ) : ["Ajouter une charge"].includes(modal) || modal.startsWith("Modifier charge") ? (
         <ChargeFormModal
           title={modal}
           context={chargeContext}
@@ -6228,9 +6879,12 @@ function App() {
       ) : ["Ajouter un bien", "Modifier le bien"].includes(modal) ? (
         <PropertyFormModal
           title={modal}
-          property={selectedProperty}
+          property={modal === "Modifier le bien" ? selectedProperty : null}
+          propertiesList={propertiesWithArchiveState}
           ownersList={allOwners}
+          tenantsList={allTenants}
           ownerPrefill={propertyOwnerPrefill}
+          onSave={handlePropertySave}
           onClose={() => {
             setPropertyOwnerPrefill("");
             setModal(null);
@@ -6699,7 +7353,16 @@ function App() {
       ) : modal === "Ajouter locataire" ? (
         <AttachTenantModal property={selectedProperty} onClose={() => setModal(null)} onAttach={handleTenantAttachment} />
       ) : modal === "Créer contrat" ? (
-        <ContractFormModal property={selectedProperty} tenant={selectedProperty.attachedTenant} onGenerate={handleContractGeneration} onClose={() => setModal(null)} />
+        <ContractFormModal
+          property={selectedProperty}
+          tenant={selectedProperty.attachedTenant}
+          propertiesList={propertiesWithArchiveState}
+          ownersList={allOwners}
+          tenantsList={allTenants}
+          onGenerate={handleContractGeneration}
+          onDraft={handleContractDraftSave}
+          onClose={() => setModal(null)}
+        />
       ) : modal === "Gerer echeances contrat" ? (
         <ContractDeadlineModal contract={contractActionContext?.contract ?? allContracts[0]} onSave={handleContractDeadlineSave} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "Actions echeance contrat" ? (
@@ -6893,7 +7556,52 @@ function getDemoCardPosition(rect) {
   };
 }
 
-function DemoTour({ step, index, total, rect, onNext, onPrevious, onStop }) {
+function DemoModeModal({ dataLoaded, onLoadData, onStartTrack, onClose }) {
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal demo-mode-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="modal-title-row">
+          <div className="round-icon large">
+            <Sparkles size={22} />
+          </div>
+          <span>
+            <h2>Mode DEMO</h2>
+            <p>Choisissez un tutoriel guidé. Le client réalise les actions, puis l’étape suivante se débloque.</p>
+          </span>
+        </div>
+
+        <Panel title="Données de démonstration">
+          <div className="demo-data-row">
+            <span>
+              <strong>{dataLoaded ? "Données de démonstration chargées" : "Application vide par défaut"}</strong>
+              <small>
+                {dataLoaded
+                  ? "Les biens, clients, montants et archives de démonstration sont disponibles."
+                  : "Aucun bien, client ou montant fictif n'est affiché tant que vous ne chargez pas les données."}
+              </small>
+            </span>
+            <Button variant={dataLoaded ? "secondary" : "primary"} onClick={onLoadData}>
+              <Sparkles size={17} /> {dataLoaded ? "Recharger les données" : "Charger les données de démonstration"}
+            </Button>
+          </div>
+        </Panel>
+
+        <div className="demo-track-grid">
+          {demoTrackOptions.map((track) => (
+            <button className="demo-track-card" key={track.key} onClick={() => onStartTrack(track.key)}>
+              <strong>{track.label}</strong>
+              <span>{track.description}</span>
+              <small>{track.key === "complete" ? "Tutoriel complet" : "Tutoriel ciblé"}</small>
+            </button>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function DemoTour({ step, index, total, rect, status, onNext, onPrevious, onStop }) {
   const position = getDemoCardPosition(rect);
   const spotlightStyle = rect
     ? {
@@ -6904,6 +7612,8 @@ function DemoTour({ step, index, total, rect, onNext, onPrevious, onStop }) {
       }
     : undefined;
   const isLast = index === total - 1;
+  const waitsForAction = Boolean(step.waitFor);
+  const completed = status?.key === step.key;
 
   return (
     <div className="demo-tour" role="dialog" aria-label="Mode démonstration E.K immo">
@@ -6934,6 +7644,12 @@ function DemoTour({ step, index, total, rect, onNext, onPrevious, onStop }) {
         </div>
         <h2>{step.title}</h2>
         <p>{step.body}</p>
+        {step.task && (
+          <div className={completed ? "demo-task done" : waitsForAction ? "demo-task waiting" : "demo-task"}>
+            <strong>{completed ? "Validé" : waitsForAction ? "Objectif à réaliser" : "À faire"}</strong>
+            <span>{completed ? status.message : step.task}</span>
+          </div>
+        )}
         <div className="demo-progress" aria-label={`Étape ${index + 1} sur ${total}`}>
           <span>Étape {index + 1} / {total}</span>
           <div>
@@ -6944,10 +7660,14 @@ function DemoTour({ step, index, total, rect, onNext, onPrevious, onStop }) {
           <button className="button secondary compact" onClick={onPrevious} disabled={index === 0}>
             <ArrowLeft size={15} /> Précédent
           </button>
-          <button className="button primary compact" onClick={onNext}>
+          <button className={waitsForAction && !completed ? "button secondary compact" : "button primary compact"} onClick={onNext}>
             {isLast ? (
               <>
                 <CheckCircle2 size={15} /> Terminer
+              </>
+            ) : waitsForAction && !completed ? (
+              <>
+                Passer <ArrowRight size={15} />
               </>
             ) : (
               <>
@@ -6961,12 +7681,12 @@ function DemoTour({ step, index, total, rect, onNext, onPrevious, onStop }) {
   );
 }
 
-function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onLogout, onStartDemo, demoActive, notifications = notificationAlerts }) {
+function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onLogout, onStartDemo, demoActive, notifications = notificationAlerts, searchDataset }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [readNotificationIds, setReadNotificationIds] = useState([]);
-  const results = useMemo(() => getSearchResults(globalQuery), [globalQuery]);
+  const results = useMemo(() => getSearchResults(globalQuery, searchDataset), [globalQuery, searchDataset]);
   const hasQuery = globalQuery.trim().length > 0;
   const unreadCount = notifications.filter((item) => !readNotificationIds.includes(item.id)).length;
 
@@ -7147,6 +7867,8 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onLog
 function DashboardPage({ onAction, onOpenProperty, propertiesList = properties }) {
   const [kpiPeriod, setKpiPeriod] = useState("Mois");
   const [dashboardState, setDashboardState] = useState("Données");
+  const hasDashboardData = propertiesList.length > 0;
+  const effectiveDashboardState = hasDashboardData || ["Chargement", "Erreur"].includes(dashboardState) ? dashboardState : "Vide";
   const kpiValues = dashboardKpisByPeriod[kpiPeriod] ?? dashboardKpisByPeriod.Mois;
   const kpiDetails = dashboardKpiDetailsByPeriod[kpiPeriod] ?? dashboardKpiDetailsByPeriod.Mois;
   const selectedPipeline = getPipelineData("Commercial & visites", kpiPeriod);
@@ -7186,20 +7908,20 @@ function DashboardPage({ onAction, onOpenProperty, propertiesList = properties }
         }
       />
 
-      {dashboardState === "Chargement" && <DashboardLoadingState />}
+      {effectiveDashboardState === "Chargement" && <DashboardLoadingState />}
 
-      {dashboardState === "Vide" && (
+      {effectiveDashboardState === "Vide" && (
         <DashboardEmptyState
           onAddProperty={() => onAction("Ajouter un bien")}
           onAddPayment={() => onAction("Enregistrer un paiement")}
         />
       )}
 
-      {dashboardState === "Erreur" && (
+      {effectiveDashboardState === "Erreur" && (
         <DashboardErrorState onRetry={() => setDashboardState("Données")} />
       )}
 
-      {dashboardState === "Données" && (
+      {effectiveDashboardState === "Données" && (
         <>
       <section className="kpi-grid" data-demo="dashboard-kpis">
         {kpis.map((item) => (
@@ -7291,6 +8013,8 @@ function PropertiesPage({
   propertyPdfArchives = [],
   missingDocumentRequests = [],
   propertiesList = properties,
+  ownerRecords = owners,
+  tenantRecords = tenants,
   visitsList = visits,
 }) {
   const [statusFilter, setStatusFilter] = useState("Tous statuts");
@@ -7373,7 +8097,7 @@ function PropertiesPage({
   const filteredProperties = useMemo(() => {
     return propertiesList.filter((property) => {
       const haystack = normalizeSearch(
-        `${property.code} ${property.name} ${property.type} ${property.district} ${property.address} ${property.owner} ${property.tenant} ${property.price} ${property.block ?? ""} ${property.unitNumber ?? ""} ${getPropertyRelationLabel(property)} ${property.tags.join(" ")}`
+        `${property.code} ${property.name} ${property.type} ${property.district} ${property.address} ${property.owner} ${property.tenant} ${property.price} ${property.block ?? ""} ${property.unitNumber ?? ""} ${getPropertyRelationLabel(property, propertiesList)} ${property.tags.join(" ")}`
       );
       const queryMatch = !query || haystack.includes(normalizeSearch(query));
       const archiveFilter = statusFilter === "Archivés";
@@ -7424,6 +8148,19 @@ function PropertiesPage({
   }, [advancedFilters, propertiesList, query, statusFilter, typeFilter]);
 
   if (view === "detail") {
+    if (!displayedSelectedProperty) {
+      return (
+        <Panel>
+          <div className="empty-state compact-empty">
+            <Building2 size={24} />
+            <h3>Aucune fiche bien ouverte</h3>
+            <p>Ajoutez un bien ou chargez les données de démonstration pour ouvrir une fiche.</p>
+            <Button variant="primary" onClick={() => onAction("Ajouter un bien")}><Plus size={17} /> Ajouter un bien</Button>
+          </div>
+        </Panel>
+      );
+    }
+
     return (
       <PropertyDetail
         property={displayedSelectedProperty}
@@ -7440,6 +8177,9 @@ function PropertiesPage({
         historyItems={propertyHistoryOverrides[displayedSelectedProperty.name] ?? []}
         propertyPdfArchives={propertyPdfArchives}
         missingDocumentRequests={missingDocumentRequests}
+        propertiesList={propertiesList}
+        ownerRecords={ownerRecords}
+        tenantRecords={tenantRecords}
         visitsList={visitsList}
       />
     );
@@ -7532,10 +8272,19 @@ function PropertiesPage({
         )}
       </Panel>
 
-      {display === "cartes" ? (
+      {filteredProperties.length === 0 ? (
+        <Panel>
+          <div className="empty-state compact-empty">
+            <Building2 size={24} />
+            <h3>Aucun bien enregistré</h3>
+            <p>Ajoutez un premier bien ou chargez les données de démonstration depuis le mode DEMO.</p>
+            <Button variant="primary" onClick={() => onAction("Ajouter un bien")}><Plus size={17} /> Ajouter un bien</Button>
+          </div>
+        </Panel>
+      ) : display === "cartes" ? (
         <section className="property-grid" data-demo="property-grid">
           {filteredProperties.map((property) => (
-            <PropertyCard property={property} onSelect={onSelect} key={property.code} />
+            <PropertyCard property={property} propertiesList={propertiesList} onSelect={onSelect} key={property.code} />
           ))}
         </section>
       ) : (
@@ -7564,8 +8313,8 @@ function PropertiesPage({
   );
 }
 
-function PropertyCard({ property, onSelect }) {
-  const relationLabel = getPropertyRelationLabel(property);
+function PropertyCard({ property, propertiesList = properties, onSelect }) {
+  const relationLabel = getPropertyRelationLabel(property, propertiesList);
 
   return (
     <article className="property-card" data-demo="property-card">
@@ -7596,11 +8345,11 @@ function PropertyCard({ property, onSelect }) {
   );
 }
 
-function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, chargesList = charges, maintenancesList = maintenances, historyItems = [], propertyPdfArchives = [], missingDocumentRequests = [], visitsList = visits }) {
+function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, chargesList = charges, maintenancesList = maintenances, historyItems = [], propertyPdfArchives = [], missingDocumentRequests = [], propertiesList = properties, ownerRecords = owners, tenantRecords = tenants, visitsList = visits }) {
   const hasHierarchy = isBuildingProperty(property) || Boolean(property.parentCode);
   const tabs = ["Résumé", ...(hasHierarchy ? ["Lots & blocs"] : []), "Propriétaire", "Locataire", "Contrats", "Paiements", "Charges & entretiens", "Documents", "Historique"];
   const effectiveTab = tabs.includes(activeTab) ? activeTab : "Résumé";
-  const relationLabel = getPropertyRelationLabel(property);
+  const relationLabel = getPropertyRelationLabel(property, propertiesList);
   const isArchived = property.archived || property.status === "Archivé";
 
   return (
@@ -7651,7 +8400,7 @@ function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, on
           <Button onClick={() => onAction("Créer contrat")}>
             <FileText size={17} /> Créer contrat
           </Button>
-          {isAgencyCollectedProperty(property.name) ? (
+          {isAgencyCollectedProperty(property.name, propertiesList) ? (
             <Button onClick={() => onAction("Enregistrer paiement", { property })}>
               <Banknote size={17} /> Paiement
             </Button>
@@ -7691,12 +8440,12 @@ function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, on
       />
 
       <Tabs tabs={tabs} active={effectiveTab} onChange={onTab} demo="property-detail-tabs" />
-      {effectiveTab === "Résumé" && <PropertySummary property={property} onOpenProperty={onOpenProperty} visitsList={visitsList} />}
-      {effectiveTab === "Lots & blocs" && <PropertyHierarchy property={property} onOpenProperty={onOpenProperty} />}
-      {effectiveTab === "Propriétaire" && <PropertyOwner property={property} />}
-      {effectiveTab === "Locataire" && <PropertyTenant property={property} />}
+      {effectiveTab === "Résumé" && <PropertySummary property={property} propertiesList={propertiesList} onOpenProperty={onOpenProperty} visitsList={visitsList} />}
+      {effectiveTab === "Lots & blocs" && <PropertyHierarchy property={property} propertiesList={propertiesList} onOpenProperty={onOpenProperty} />}
+      {effectiveTab === "Propriétaire" && <PropertyOwner property={property} ownersList={ownerRecords} propertiesList={propertiesList} />}
+      {effectiveTab === "Locataire" && <PropertyTenant property={property} tenantsList={tenantRecords} />}
       {effectiveTab === "Contrats" && <PropertyContracts property={property} contractsList={contractsList} onAction={onAction} />}
-      {effectiveTab === "Paiements" && <PropertyPayments property={property} rentRowsList={rentRowsList} />}
+      {effectiveTab === "Paiements" && <PropertyPayments property={property} propertiesList={propertiesList} rentRowsList={rentRowsList} />}
       {effectiveTab === "Charges & entretiens" && <PropertyMaintenance property={property} chargesList={chargesList} maintenancesList={maintenancesList} />}
       {effectiveTab === "Documents" && <PropertyDocuments property={property} onAction={onAction} propertyPdfArchives={propertyPdfArchives} missingDocumentRequests={missingDocumentRequests} contractsList={contractsList} />}
       {effectiveTab === "Historique" && <PropertyHistory property={property} historyItems={historyItems} />}
@@ -7704,9 +8453,9 @@ function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, on
   );
 }
 
-function PropertySummary({ property, onOpenProperty, visitsList = visits }) {
-  const children = getPropertyChildren(property);
-  const parent = getPropertyParent(property);
+function PropertySummary({ property, propertiesList = properties, onOpenProperty, visitsList = visits }) {
+  const children = getPropertyChildren(property, propertiesList);
+  const parent = getPropertyParent(property, propertiesList);
   const propertyVisits = visitsList.filter((visit) => visit.property === property.name || visit.propertyCode === property.code);
 
   return (
@@ -7882,10 +8631,10 @@ function MaintenanceProviderCard({ provider, compact = false }) {
   );
 }
 
-function PropertyHierarchy({ property, onOpenProperty }) {
-  const children = getPropertyChildren(property);
-  const parent = getPropertyParent(property);
-  const siblings = parent ? getPropertyChildren(parent) : [];
+function PropertyHierarchy({ property, propertiesList = properties, onOpenProperty }) {
+  const children = getPropertyChildren(property, propertiesList);
+  const parent = getPropertyParent(property, propertiesList);
+  const siblings = parent ? getPropertyChildren(parent, propertiesList) : [];
 
   if (isBuildingProperty(property)) {
     return (
@@ -7980,8 +8729,20 @@ function PropertyHierarchy({ property, onOpenProperty }) {
   );
 }
 
-function PropertyOwner({ property }) {
-  const owner = owners.find((item) => item.name === property.owner) ?? owners[0];
+function PropertyOwner({ property, ownersList = owners, propertiesList = properties }) {
+  const owner = ownersList.find((item) => item.name === property.owner) ?? {
+    name: property.owner || "Propriétaire à renseigner",
+    id: "PRO-A-RENSEIGNER",
+    status: "À compléter",
+    phone: "Non renseigné",
+    email: "Non renseigné",
+    properties: 0,
+    rent: "0 FCFA",
+    charges: "0 FCFA",
+    commission: property.commission ?? "0%",
+    balance: "0 FCFA",
+    lastPayment: "Aucun reversement",
+  };
   return (
     <section className="detail-grid">
       <Panel title="Fiche propriétaire" className="detail-main">
@@ -8008,9 +8769,9 @@ function PropertyOwner({ property }) {
       </Panel>
       <Panel title="Autres biens du propriétaire" className="detail-side">
         <div className="mini-list">
-          {properties
+          {propertiesList
             .filter((item) => item.owner === owner.name)
-            .concat(properties.slice(1, 3))
+            .concat(propertiesList.slice(1, 3))
             .slice(0, 4)
             .map((item) => (
               <p key={item.code}>
@@ -8024,8 +8785,19 @@ function PropertyOwner({ property }) {
   );
 }
 
-function PropertyTenant({ property }) {
-  const tenant = property.attachedTenant ?? tenants.find((item) => property.tenant.includes(item.name)) ?? tenants[0];
+function PropertyTenant({ property, tenantsList = tenants }) {
+  const tenant = property.attachedTenant ?? tenantsList.find((item) => property.tenant.includes(item.name)) ?? {
+    name: property.tenant || "Locataire à renseigner",
+    id: "LOC-A-RATTACHER",
+    status: "À compléter",
+    paymentStatus: "Non renseigné",
+    phone: "Non renseigné",
+    email: "Non renseigné",
+    contract: "Aucun contrat",
+    rent: property.price ?? "0 FCFA",
+    deposit: property.deposit ?? "0 FCFA",
+    entryDate: "Non renseignée",
+  };
   return (
     <section className="detail-grid">
       <Panel title="Locataire actuel" className="detail-main">
@@ -8090,8 +8862,8 @@ function PropertyContracts({ property, contractsList = contracts, onAction }) {
   );
 }
 
-function PropertyPayments({ property, rentRowsList = rentRows }) {
-  if (!isAgencyCollectedProperty(property.name)) {
+function PropertyPayments({ property, propertiesList = properties, rentRowsList = rentRows }) {
+  if (!isAgencyCollectedProperty(property.name, propertiesList)) {
     return (
       <Panel title="Paiements liés au bien">
         <div className="notice">
@@ -8808,7 +9580,7 @@ function buildClientReportHtml(payload, mode) {
     <thead><tr>${headerCells}</tr></thead>
     <tbody>${rows}</tbody>
   </table>
-  <footer>© 2026 E.K immo · Rapport généré depuis le module Clients.</footer>
+  <footer>© 2026 E.K immo · Rapport clients.</footer>
 </body>
 </html>`;
 }
@@ -8981,12 +9753,21 @@ function OwnersView({ ownersList = owners, selected, onOpenDetail }) {
             <span>Biens</span>
             <span>Solde</span>
             <span>Statut</span>
+            <span>Action</span>
           </div>
           {ownersList.map((owner) => (
-            <button
+            <article
               className={selected.id === owner.id ? "owner-row active" : "owner-row"}
               key={owner.id}
+              role="button"
+              tabIndex={0}
               onClick={() => onOpenDetail(owner)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onOpenDetail(owner);
+                }
+              }}
             >
               <Avatar name={owner.name} image={owner.avatar} initials={owner.initials} />
               <span>
@@ -9000,7 +9781,11 @@ function OwnersView({ ownersList = owners, selected, onOpenDetail }) {
               <b>{owner.properties}</b>
               <strong>{owner.balance}</strong>
               <Badge label={owner.status} />
-            </button>
+              <Button compact onClick={(event) => {
+                event.stopPropagation();
+                onOpenDetail(owner);
+              }}><Eye size={15} /> Fiche</Button>
+            </article>
           ))}
         </div>
       </Panel>
@@ -9043,7 +9828,7 @@ function OwnerProfilePanel({ owner, initialTab = "Résumé", situationPeriod = n
             <p><span>Type</span><strong>{owner.type ?? "Personne physique"}</strong></p>
             <p><span>Téléphone</span><strong>{owner.phone}</strong></p>
             <p><span>Email</span><strong>{owner.email}</strong></p>
-            <p><span>Adresse</span><strong>{owner.address ?? "Adresse à compléter"}</strong></p>
+            <p><span>Adresse</span><strong>{owner.address ?? "Adresse non renseignée"}</strong></p>
             <p><span>Nombre de biens</span><strong>{owner.properties}</strong></p>
             <p><span>Conditions de gestion</span><strong>{owner.mandateType ?? "Mandat actif"}</strong></p>
             <p><span>Commission</span><strong>{owner.commission}</strong></p>
@@ -9059,7 +9844,7 @@ function OwnerProfilePanel({ owner, initialTab = "Résumé", situationPeriod = n
       {tab === "Biens" && (
         <DataTable
           columns={["Code", "Type", "Quartier", "Statut", "Locataire", "Loyer", "Action"]}
-          rows={(ownedProperties.length ? ownedProperties : properties.slice(0, 2)).map((property) => [
+          rows={ownedProperties.map((property) => [
             property.code,
             property.type,
             property.district,
@@ -9094,7 +9879,7 @@ function OwnerProfilePanel({ owner, initialTab = "Résumé", situationPeriod = n
       {tab === "Charges" && (
         <DataTable
           columns={["Date", "Type", "Bien", "Montant", "Prise en charge", "Statut"]}
-          rows={(ownerCharges.length ? ownerCharges : charges.filter((charge) => charge.owner === owner.name).slice(0, 2)).map((charge) => [
+          rows={ownerCharges.map((charge) => [
             charge.date,
             charge.type,
             charge.property,
@@ -9107,7 +9892,7 @@ function OwnerProfilePanel({ owner, initialTab = "Résumé", situationPeriod = n
       {tab === "Reversements" && (
         <DataTable
           columns={["Propriétaire", "Loyers", "Commission", "Charges", "Payé", "Solde", "Statut"]}
-          rows={(ownerReversals.length ? ownerReversals : reversalsList.slice(0, 2)).map((row) => [
+          rows={ownerReversals.map((row) => [
             row.owner,
             row.collected,
             row.commission,
@@ -9254,7 +10039,7 @@ function TenantProfilePanel({ tenant, onAction, contractsList = contracts, payme
       {tab === "Paiements" && (
         <DataTable
           columns={["Période", "Attendu", "Payé", "Solde", "Statut", "Reçu"]}
-          rows={(paymentRows.length ? paymentRows : rentRows.slice(0, 2)).map((row) => [
+          rows={paymentRows.map((row) => [
             row.period,
             row.expected,
             row.paid,
@@ -9408,13 +10193,14 @@ function ProspectProfilePanel({ prospect, proposals, activities, conversion, vis
       <div className="profile-section">
         <h3>Visites effectuées</h3>
         <div className="prospect-visit-list">
-          {(prospectVisits.length ? prospectVisits : visits.slice(0, 1)).map((visit) => (
+          {prospectVisits.map((visit) => (
             <article key={`${visit.client}-${visit.date}-${visit.property}`}>
               <strong>{visit.date} · {visit.property}</strong>
               <span>{visit.feedback}</span>
               <Badge label={visit.status} />
             </article>
           ))}
+          {!prospectVisits.length && <p className="empty-state-inline">Aucune visite enregistrée.</p>}
         </div>
       </div>
       <div className="timeline compact-timeline">
@@ -9541,16 +10327,16 @@ function VisitDateModal({ visit, report = false, onSave, onClose }) {
   const [values, setValues] = useState({
     newDate: toInputDate(visit.date),
     newTime: visit.time ?? "10:00",
-    reason: report ? "Client indisponible, nouvelle date à confirmer." : "Ajustement de planning.",
+    reason: report ? "Client indisponible, nouvelle date à fixer." : "Ajustement de planning.",
     notify: "Oui",
   });
   const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
 
   return (
-    <div className="modal-backdrop">
-      <section className="modal-card prospect-form-modal">
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card prospect-form-modal" role="dialog" aria-modal="true" aria-labelledby="visit-date-modal-title" onMouseDown={(event) => event.stopPropagation()}>
         <button className="modal-close" onClick={onClose}>×</button>
-        <h2>{report ? "Reporter visite" : "Modifier date"}</h2>
+        <h2 id="visit-date-modal-title">{report ? "Reporter visite" : "Modifier date"}</h2>
         <p>{visit.client} · {visit.property}</p>
         <div className="form-section">
           <div className="form-grid compact-form">
@@ -9668,9 +10454,9 @@ function VisitCloseModal({ visit, onSave, onClose }) {
 
 function VisitFeedbackModal({ visit, onSave, onClose }) {
   const [values, setValues] = useState({
-    feedback: visit.feedback ?? "Retour à compléter",
+    feedback: visit.feedback ?? "Retour non renseigné",
     positivePoints: "Emplacement, luminosité, sécurité",
-    negativePoints: "Budget à confirmer",
+    negativePoints: "Budget non confirmé",
     interest: visit.interest ?? "Moyen",
     decision: visit.decision ?? "Relancer après visite",
     comment: "Retour client saisi depuis la fiche visite.",
@@ -9738,6 +10524,7 @@ function ContractsPage({
   activeTab,
   onTab,
   onAction,
+  demoDataLoaded = true,
   contractsList = contracts,
   paymentsList = paymentRecords,
   documentDraft = null,
@@ -9774,8 +10561,8 @@ function ContractsPage({
           onFilterRequestConsumed={onFilterRequestConsumed}
         />
       )}
-      {effectiveTab === "Génération de document" && <DocumentGeneration onAction={onAction} documentDraft={documentDraft} onArchiveDocument={onArchiveDocument} documentArchiveSequence={documentArchiveSequence} />}
-      {effectiveTab === "Archives" && <ArchivesView onAction={onAction} contractsList={contractsList} paymentsList={paymentsList} propertyPdfArchives={propertyPdfArchives} />}
+      {effectiveTab === "Génération de document" && <DocumentGeneration onAction={onAction} documentDraft={documentDraft} demoDataLoaded={demoDataLoaded} onArchiveDocument={onArchiveDocument} documentArchiveSequence={documentArchiveSequence} />}
+      {effectiveTab === "Archives" && <ArchivesView onAction={onAction} contractsList={contractsList} paymentsList={paymentsList} propertyPdfArchives={propertyPdfArchives} includeDemoRecords={demoDataLoaded} />}
     </>
   );
 }
@@ -10069,7 +10856,7 @@ function ContractProfilePanel({ contract, onAction, timelineEntries = [], custom
 function getContractDeadlines(contract, financials, customDeadlines = []) {
   const base = [
     { type: "Prochain loyer", date: contract.nextDueDate ?? "05/07/2026", comment: financials.amount },
-    { type: "Prochaine révision", date: contract.revisionDate ?? "01/01/2027", comment: "Indexation annuelle à confirmer" },
+    { type: "Prochaine révision", date: contract.revisionDate ?? "01/01/2027", comment: "Indexation annuelle à valider" },
     { type: "Fin du contrat", date: contract.end, comment: "Contrôler renouvellement ou sortie" },
     { type: "Alerte planifiée", date: contract.number === "CON-2025-088" ? "Dans 32 jours" : "30 jours avant", comment: "Notification agent et manager" },
     { type: "Renouvellement prévu", date: contract.renewalDate ?? "À confirmer", comment: contract.status === "Renouvelé" ? "Renouvellement enregistré" : "Option à valider" },
@@ -10157,7 +10944,7 @@ function getContractDisplayState(contract = {}) {
     return { label: "Actif", description: "Contrat actif et suivi normalement.", daysUntilEnd };
   }
 
-  return { label: status || "À qualifier", description: "Statut à contrôler.", daysUntilEnd };
+  return { label: status || "À qualifier", description: "Suivi requis.", daysUntilEnd };
 }
 
 function getContractDueLabel(contract) {
@@ -10172,15 +10959,39 @@ function getContractDueLabel(contract) {
   return "En cours";
 }
 
-function DocumentGeneration({ onAction, documentDraft = null, onArchiveDocument, documentArchiveSequence = 1 }) {
-  const defaultData = documentDraft?.data ?? {
+function DocumentGeneration({ onAction, documentDraft = null, demoDataLoaded = true, onArchiveDocument, documentArchiveSequence = 1 }) {
+  const neutralProperty = {
+    code: "",
+    name: "Bien à renseigner",
+    type: "Bien immobilier",
+    district: "Quartier à renseigner",
+    address: "Adresse à renseigner",
+    owner: "Propriétaire à renseigner",
+    tenant: "Locataire à renseigner",
+    price: "0 FCFA",
+    period: "",
+    deposit: "0 FCFA",
+    commission: "0%",
+    financialMode: "Mode financier à renseigner",
+    tags: [],
+  };
+  const neutralOwner = { name: "Propriétaire à renseigner", phone: "", email: "", charges: "0 FCFA", commission: "0 FCFA", balance: "0 FCFA" };
+  const neutralTenant = { name: "Locataire à renseigner", phone: "", email: "", rent: "0 FCFA", deposit: "0 FCFA", property: "" };
+  const defaultData = documentDraft?.data ?? (demoDataLoaded ? {
     invoice: invoices[0],
     payment: paymentRecords[0],
     commission: commissions[0],
     property: properties[0],
     owner: owners[0],
     tenant: tenants[0],
-  };
+  } : {
+    invoice: { number: "", type: "Facture", client: "", property: "", amount: "0 FCFA", date: "" },
+    payment: { reference: "", receipt: "", tenant: "", property: "", paid: "0 FCFA", balance: "0 FCFA", date: "" },
+    commission: { operation: "", property: "", owner: "", commission: "0 FCFA", rate: "0%" },
+    property: neutralProperty,
+    owner: neutralOwner,
+    tenant: neutralTenant,
+  });
   const draftTitle = documentDraft?.data?.draftStatus === "Brouillon"
     ? `Reprendre le brouillon - ${documentDraft.data.draftReference}`
     : null;
@@ -10260,6 +11071,10 @@ function InvoicesView({ onAction }) {
 function getArchiveTemplateKey(record = {}) {
   if (record.templateKey) return record.templateKey;
   const haystack = normalizeSearch(`${record.reference} ${record.title} ${record.documentType}`);
+  if (haystack.includes("etat") && haystack.includes("lieu")) {
+    return haystack.includes("commercial") ? "etatLieuCommercial" : "etatLieuHabitation";
+  }
+  if (haystack.includes("courrier")) return "courrierCommission";
   if (haystack.includes("recu") || haystack.includes("quittance")) return "recu";
   if (haystack.includes("bordereau") || haystack.includes("commission")) return "bordereau";
   if (haystack.includes("contrat") || haystack.includes("bail") || haystack.includes("mandat")) return "bail";
@@ -10291,13 +11106,14 @@ function makeArchiveDocumentDraft(record = {}) {
       draftReference: record.reference,
       draftTitle: record.title,
       draftText: record.comment ?? record.description ?? record.linked ?? "",
+      draftValues: record.values ?? null,
       amount: record.amount ?? record.linked?.split("·").slice(-1)[0]?.trim() ?? "",
       specialConditions: record.specialConditions ?? record.comment ?? "",
     },
   };
 }
 
-function getArchiveRecords(contractsList = contracts, paymentsList = paymentRecords, propertyPdfArchives = []) {
+function getArchiveRecords(contractsList = contracts, paymentsList = paymentRecords, propertyPdfArchives = [], includeDemoRecords = true) {
   const contractArchives = contractsList
     .filter((contract) => contract.generated || contract.pdfGenerated || contract.pdfArchived || ["Archivé", "Expiré"].includes(contract.status))
     .map((contract) => ({
@@ -10331,7 +11147,7 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
       templateKey: "bail",
     }));
 
-  const invoiceArchives = invoices.map((invoice) => ({
+  const invoiceArchives = includeDemoRecords ? invoices.map((invoice) => ({
     id: `invoice-${invoice.number}`,
     category: "Factures, reçus et quittances",
     reference: invoice.number,
@@ -10343,7 +11159,7 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
     owner: invoice.client,
     documentType: invoice.type,
     templateKey: invoice.type === "Reçu" || invoice.type === "Quittance" ? "recu" : "facture",
-  }));
+  })) : [];
 
   const receiptArchives = paymentsList
     .filter((payment) => payment.receipt && payment.receipt !== "Non généré")
@@ -10361,7 +11177,7 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
       templateKey: "recu",
     }));
 
-  const chargeArchives = charges
+  const chargeArchives = includeDemoRecords ? charges
     .filter((charge) => charge.status !== "Brouillon")
     .map((charge) => ({
       id: `charge-${charge.id}`,
@@ -10374,9 +11190,9 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
       module: "Finance",
       owner: charge.owner,
       documentType: "Justificatif",
-    }));
+    })) : [];
 
-  const maintenanceArchives = maintenances.map((maintenance, index) => ({
+  const maintenanceArchives = includeDemoRecords ? maintenances.map((maintenance, index) => ({
     id: `maintenance-${index}`,
     category: "Charges et entretiens",
     reference: `ENT-2026-${String(index + 21).padStart(3, "0")}`,
@@ -10387,9 +11203,9 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
     module: "Biens",
     owner: maintenance.manager,
     documentType: "Rapport d’entretien",
-  }));
+  })) : [];
 
-  const draftArchives = [
+  const draftArchives = includeDemoRecords ? [
     ...charges
       .filter((charge) => charge.status === "Brouillon")
       .map((charge) => ({
@@ -10444,9 +11260,9 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
       templateKey: "facture",
       documentType: "Rapport",
     },
-  ];
+  ] : [];
 
-  const propertyClientArchives = [
+  const propertyClientArchives = includeDemoRecords ? [
     {
       id: "property-owner-konaté",
       category: "Biens et clients",
@@ -10480,9 +11296,9 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
       module: "Biens",
       owner: "Issa Maïga",
     },
-  ];
+  ] : [];
 
-  const reportArchives = [
+  const reportArchives = includeDemoRecords ? [
     {
       id: "report-finance-may",
       category: "Rapports et exports",
@@ -10505,7 +11321,7 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
       module: "Rapports",
       owner: "Admin E.K immo",
     },
-  ];
+  ] : [];
 
   return [
     ...contractArchives,
@@ -10531,8 +11347,8 @@ function getArchiveCategoryIcon(category) {
   return Archive;
 }
 
-function ArchivesView({ onAction, contractsList = contracts, paymentsList = paymentRecords, propertyPdfArchives = [] }) {
-  const records = useMemo(() => getArchiveRecords(contractsList, paymentsList, propertyPdfArchives), [contractsList, paymentsList, propertyPdfArchives]);
+function ArchivesView({ onAction, contractsList = contracts, paymentsList = paymentRecords, propertyPdfArchives = [], includeDemoRecords = true }) {
+  const records = useMemo(() => getArchiveRecords(contractsList, paymentsList, propertyPdfArchives, includeDemoRecords), [contractsList, includeDemoRecords, paymentsList, propertyPdfArchives]);
   const [category, setCategory] = useState("Tous les éléments");
   const [status, setStatus] = useState("Tous statuts");
   const [query, setQuery] = useState("");
@@ -10561,6 +11377,20 @@ function ArchivesView({ onAction, contractsList = contracts, paymentsList = paym
     };
   });
 
+  if (records.length === 0) {
+    return (
+      <section className="archive-workspace" data-demo="document-archive">
+        <Panel>
+          <div className="empty-state compact-empty">
+            <Archive size={24} />
+            <h3>Aucune archive</h3>
+            <p>Les documents générés, brouillons et justificatifs archivés apparaîtront ici.</p>
+          </div>
+        </Panel>
+      </section>
+    );
+  }
+
   return (
     <section className="archive-workspace" data-demo="document-archive">
       <div className="summary-strip archive-summary">
@@ -10588,7 +11418,7 @@ function ArchivesView({ onAction, contractsList = contracts, paymentsList = paym
             })}
           </div>
           <div className="archive-rules">
-            <p><span>Classement</span><strong>Par module métier</strong></p>
+            <p><span>Classement</span><strong>Par catégorie</strong></p>
             <p><span>Brouillons</span><strong>Reprise possible</strong></p>
             <p><span>Archives</span><strong>Lecture et export</strong></p>
           </div>
@@ -10732,7 +11562,10 @@ function DocumentStudio({ initialTemplate = "facture", lockedTemplate, title, da
 
 function DocumentEditor({ compact = false, data, onAction, onArchiveDocument, documentArchiveSequence = 1, onBack, onArchiveTemplate, template, title }) {
   const relatedFiles = getRelatedDocumentFiles(template.key);
-  const defaults = useMemo(() => getDocumentDefaults(template.key, data), [template.key, data]);
+  const defaults = useMemo(() => ({
+    ...getDocumentDefaults(template.key, data),
+    ...(data?.draftValues ?? {}),
+  }), [template.key, data]);
   const [values, setValues] = useState(defaults);
   const [previewIntent, setPreviewIntent] = useState(null);
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -10891,7 +11724,8 @@ function getGeneratedPdfFileName(template, values = {}) {
 
 function getGeneratedDocumentCategory(template) {
   if (template.key === "bail") return "Contrats et mandats";
-  if (["facture", "recu", "bordereau"].includes(template.key)) return "Factures, reçus et quittances";
+  if (["etatLieuHabitation", "etatLieuCommercial"].includes(template.key)) return "Contrats et mandats";
+  if (["facture", "recu", "bordereau", "courrierCommission"].includes(template.key)) return "Factures, reçus et quittances";
   return "Biens et clients";
 }
 
@@ -11017,7 +11851,7 @@ function DocumentArchiveModal({ template, values, data = {}, sequence = 1, onCon
     owner: owner.name,
     tenant: tenant.name,
     contract: values.contratNo || "",
-    comment: "Archivage du document généré pour conservation dans le dossier.",
+    comment: "Document classé dans les archives du dossier.",
   });
   const update = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
   const canArchive = form.name.trim() && form.property.trim();
@@ -11030,7 +11864,7 @@ function DocumentArchiveModal({ template, values, data = {}, sequence = 1, onCon
           <div>
             <span>Archivage documentaire</span>
             <h2>Archiver ce document ?</h2>
-            <p>Le document sera conservé dans les archives et restera consultable ultérieurement.</p>
+            <p>Le document sera classé dans les archives et restera disponible depuis le dossier lié.</p>
           </div>
           <Badge label="Archivé" />
         </div>
@@ -11215,8 +12049,8 @@ function PropertyPdfDocument({ property, owner, tenant }) {
           <div className="property-pdf-section">
             <h4>Propriétaire</h4>
             <p><strong>{property.owner}</strong></p>
-            <p>{owner?.phone ?? "Téléphone à confirmer"}</p>
-            <p>{owner?.email ?? "Email à confirmer"}</p>
+            <p>{owner?.phone ?? "Téléphone non renseigné"}</p>
+            <p>{owner?.email ?? "Email non renseigné"}</p>
           </div>
           <div className="property-pdf-section">
             <h4>Locataire</h4>
@@ -11244,7 +12078,7 @@ function PropertyPdfDocument({ property, owner, tenant }) {
         <section className="property-pdf-section">
           <h4>Équipements</h4>
           <div className="property-pdf-tags">
-            {(property.tags?.length ? property.tags : ["Équipements à compléter"]).map((tag) => <span key={tag}>{tag}</span>)}
+            {(property.tags?.length ? property.tags : ["Équipements non renseignés"]).map((tag) => <span key={tag}>{tag}</span>)}
           </div>
         </section>
 
@@ -11257,9 +12091,9 @@ function PropertyPdfDocument({ property, owner, tenant }) {
           <img src={ekimmoAssets.logo} alt="E.K immo" />
           <div>
             <strong>E.K immo SAS</strong>
-            <span>Niaréla, face mairie - Bamako, Mali</span>
+            <span>Niaréla rue ACHKHABAD en face de la mairie - Bamako, Mali</span>
             <span>Contact : +223 72 77 71 77 / +223 44 44 13 31</span>
-            <span>www.ekimmo-mali.com</span>
+            <span>Mail : contact@ekimmo-mali.com</span>
           </div>
         </footer>
       </section>
@@ -11325,7 +12159,7 @@ function OwnerStatementModal({ owner, chargesList = charges, paymentsList = paym
             <Panel className="owner-preview-placeholder">
               <FileText size={34} />
               <h3>Aperçu de la situation propriétaire</h3>
-              <p>Cliquez sur Prévisualiser pour contrôler l'état avant génération PDF.</p>
+              <p>Prévisualisez l'état avant génération PDF.</p>
             </Panel>
           )}
         </div>
@@ -11377,7 +12211,7 @@ function OwnerReversementModal({ owner, onSave, onClose }) {
           <div>
             <span>Reversement propriétaire</span>
             <h2>Enregistrer reversement</h2>
-            <p>Le propriétaire est prérempli et le solde restant est calculé automatiquement.</p>
+            <p>Le propriétaire est déjà renseigné. Le solde se met à jour selon le montant saisi.</p>
           </div>
           <Badge label={owner.id} />
         </div>
@@ -11479,7 +12313,7 @@ function OwnerProfileDocument({ owner, chargesList = charges, paymentsList = pay
           </div>
           <div>
             <small>Adresse</small>
-            <strong>{owner.address ?? "Adresse à compléter"}</strong>
+            <strong>{owner.address ?? "Adresse non renseignée"}</strong>
           </div>
           <div>
             <small>Conditions de gestion</small>
@@ -11510,13 +12344,13 @@ function OwnerProfileDocument({ owner, chargesList = charges, paymentsList = pay
         <OwnerDocumentTable
           title="Biens rattachés"
           columns={["Référence", "Bien", "Quartier", "Statut", "Loyer"]}
-          rows={(ownedProperties.length ? ownedProperties : properties.slice(0, 2)).map((property) => [property.code, property.name, property.district, property.status, `${property.price} ${property.period}`])}
+          rows={ownedProperties.map((property) => [property.code, property.name, property.district, property.status, `${property.price} ${property.period}`])}
         />
 
         <OwnerDocumentTable
           title="Paiements récents"
           columns={["Référence", "Période", "Locataire", "Bien", "Payé"]}
-          rows={(ownerPayments.length ? ownerPayments : paymentRecords.slice(0, 2)).map((payment) => [payment.reference, payment.period, payment.tenant, payment.property, payment.paid])}
+          rows={ownerPayments.map((payment) => [payment.reference, payment.period, payment.tenant, payment.property, payment.paid])}
         />
 
         <OwnerDocumentTable
@@ -11532,7 +12366,7 @@ function OwnerProfileDocument({ owner, chargesList = charges, paymentsList = pay
           <img src={ekimmoAssets.logo} alt="E.K immo" />
           <div>
             <strong>E.K immo SAS</strong>
-            <span>Niaréla, face mairie - Bamako, Mali</span>
+            <span>Niaréla rue ACHKHABAD en face de la mairie - Bamako, Mali</span>
             <span>Contact : +223 72 77 71 77 / +223 44 44 13 31</span>
             <span>Document généré le 19/06/2026</span>
           </div>
@@ -11595,14 +12429,14 @@ function OwnerStatementDocument({ owner, period, chargesList = charges, payments
         <OwnerDocumentTable
           title="Paiements pris en compte"
           columns={["Date", "Période", "Locataire", "Bien", "Montant"]}
-          rows={(ownerPayments.length ? ownerPayments : paymentRecords.slice(0, 2)).map((payment) => [payment.date, payment.period, payment.tenant, payment.property, payment.paid])}
+          rows={ownerPayments.map((payment) => [payment.date, payment.period, payment.tenant, payment.property, payment.paid])}
         />
 
         {includeCharges && (
           <OwnerDocumentTable
             title="Détail des charges"
             columns={["Date", "Type", "Bien", "Montant", "Statut"]}
-            rows={(ownerCharges.length ? ownerCharges : charges.slice(0, 2)).map((charge) => [charge.date, charge.type, charge.property, charge.amount, charge.status])}
+            rows={ownerCharges.map((charge) => [charge.date, charge.type, charge.property, charge.amount, charge.status])}
           />
         )}
 
@@ -11610,7 +12444,7 @@ function OwnerStatementDocument({ owner, period, chargesList = charges, payments
           <OwnerDocumentTable
             title="Détail des reversements"
             columns={["Période", "Référence", "Payé", "Solde", "Statut"]}
-            rows={(ownerReversals.length ? ownerReversals : reversals.slice(0, 2)).map((reversal) => [reversal.period ?? "Mai 2026", reversal.reference ?? "État propriétaire", reversal.paid, reversal.balance, reversal.status])}
+            rows={ownerReversals.map((reversal) => [reversal.period ?? "Mai 2026", reversal.reference ?? "État propriétaire", reversal.paid, reversal.balance, reversal.status])}
           />
         )}
 
@@ -11618,8 +12452,8 @@ function OwnerStatementDocument({ owner, period, chargesList = charges, payments
           <img src={ekimmoAssets.logo} alt="E.K immo" />
           <div>
             <strong>E.K immo SAS</strong>
-            <span>Niaréla, face mairie - Bamako, Mali</span>
-            <span>État propriétaire généré pour contrôle, signature et archivage.</span>
+            <span>Niaréla rue ACHKHABAD en face de la mairie - Bamako, Mali</span>
+            <span>État propriétaire préparé pour signature et archivage.</span>
             <span>Contact : +223 72 77 71 77 / +223 44 44 13 31</span>
           </div>
         </footer>
@@ -11655,6 +12489,9 @@ function FillableDocument({ template, values, onChange, readOnly = false, previe
     if (template.key === "facture") return <OriginalInvoiceDocument values={values} />;
     if (template.key === "recu") return <OriginalReceiptDocument values={values} />;
     if (template.key === "bordereau") return <OriginalCommissionStatement values={values} />;
+    if (template.key === "courrierCommission") return <OriginalCommissionLetter values={values} />;
+    if (template.key === "etatLieuHabitation") return <OriginalConditionReport values={values} kind="habitation" />;
+    if (template.key === "etatLieuCommercial") return <OriginalConditionReport values={values} kind="commercial" />;
   }
 
   if (template.key === "bail") {
@@ -11665,6 +12502,9 @@ function FillableDocument({ template, values, onChange, readOnly = false, previe
     <div className={`fillable-document digital ${template.key}`}>
       {template.key === "recu" && <DigitalReceipt values={values} onChange={onChange} readOnly={readOnly} />}
       {template.key === "bordereau" && <DigitalCommissionStatement values={values} onChange={onChange} readOnly={readOnly} />}
+      {template.key === "courrierCommission" && <DigitalCommissionLetter values={values} onChange={onChange} readOnly={readOnly} />}
+      {template.key === "etatLieuHabitation" && <DigitalConditionReport values={values} onChange={onChange} readOnly={readOnly} kind="habitation" />}
+      {template.key === "etatLieuCommercial" && <DigitalConditionReport values={values} onChange={onChange} readOnly={readOnly} kind="commercial" />}
       {template.key === "facture" && <DigitalInvoice values={values} onChange={onChange} readOnly={readOnly} />}
     </div>
   );
@@ -11676,10 +12516,11 @@ function DigitalDocumentHeader({ title, subtitle, children }) {
       <img src={ekimmoAssets.logo} alt="E.K immo" />
       <div className="company-info">
         <strong>E.K immo SAS</strong>
-        <span>Société immobilière</span>
-        <span>Niaréla, face mairie - Bamako, Mali</span>
+        <span>Société par action simplifiée - Administrateur de biens immobiliers</span>
+        <span>Niaréla rue ACHKHABAD en face de la mairie - Bamako, Mali</span>
         <span>Contact : +223 72 77 71 77 / +223 44 44 13 31</span>
-        <span>RCCM : MA BKO 2022 B-2224</span>
+        <span>Mail : contact@ekimmo-mali.com</span>
+        <span>RCCM : MA.BKO.2022.B.2224 - NIF : 082255646X</span>
       </div>
       <div className="digital-doc-title">
         <span>{subtitle}</span>
@@ -11974,6 +12815,63 @@ function DigitalCommissionStatement({ values, onChange }) {
   );
 }
 
+function DigitalCommissionLetter({ values, onChange, readOnly = false }) {
+  return (
+    <div className="digital-page commission-letter-page">
+      <DigitalDocumentHeader title="Courrier commission" subtitle="Lettre d'accompagnement">
+        <div className="digital-meta-grid">
+          <DigitalField name="reference" label="N/Réf" values={values} onChange={onChange} readOnly={readOnly} />
+          <DigitalField name="date" label="Date" values={values} onChange={onChange} readOnly={readOnly} />
+        </div>
+      </DigitalDocumentHeader>
+
+      <section className="digital-grid three">
+        <DigitalField name="ville" label="Ville" values={values} onChange={onChange} readOnly={readOnly} />
+        <DigitalField name="bordereauNumero" label="N° bordereau" values={values} onChange={onChange} readOnly={readOnly} />
+        <DigitalField name="factureNumero" label="N° facture" values={values} onChange={onChange} readOnly={readOnly} />
+      </section>
+
+      <section className="digital-grid two">
+        <div className="digital-box">
+          <h4>Destinataire</h4>
+          <DigitalField name="destinataireCivilite" label="Civilité / fonction" values={values} onChange={onChange} readOnly={readOnly} />
+          <DigitalField name="destinataireSociete" label="Société" values={values} onChange={onChange} readOnly={readOnly} />
+          <DigitalField name="destinataireVille" label="Ville / pays" values={values} onChange={onChange} readOnly={readOnly} />
+        </div>
+        <div className="digital-box">
+          <h4>Références & pièces jointes</h4>
+          <DigitalField name="objet" label="Objet" values={values} onChange={onChange} readOnly={readOnly} />
+          <DigitalField name="pjBordereau" label="Pièce jointe bordereau" values={values} onChange={onChange} readOnly={readOnly} />
+          <DigitalField name="pjFacture" label="Pièce jointe facture" values={values} onChange={onChange} readOnly={readOnly} />
+        </div>
+      </section>
+
+      <section className="digital-grid two">
+        <DigitalField name="montantTotal" label="Montant total réclamé" values={values} onChange={onChange} readOnly={readOnly} />
+        <DigitalField name="periode" label="Période concernée" values={values} onChange={onChange} readOnly={readOnly} />
+      </section>
+
+      <section className="digital-box">
+        <h4>Corps du courrier</h4>
+        <DigitalField name="appel" label="Formule d'appel" values={values} onChange={onChange} readOnly={readOnly} />
+        <DigitalField name="corpsIntro" label="Paragraphe de demande" values={values} onChange={onChange} multiline readOnly={readOnly} />
+        <DigitalField name="corpsPieces" label="Paragraphe des pièces jointes" values={values} onChange={onChange} multiline readOnly={readOnly} />
+        <DigitalField name="formulePolitesse" label="Formule de politesse" values={values} onChange={onChange} multiline readOnly={readOnly} />
+      </section>
+
+      <section className="digital-grid two">
+        <DigitalField name="signataireTitre" label="Titre du signataire" values={values} onChange={onChange} readOnly={readOnly} />
+        <DigitalField name="signataireNom" label="Nom du signataire" values={values} onChange={onChange} readOnly={readOnly} />
+      </section>
+
+      <section className="digital-box">
+        <h4>Note interne</h4>
+        <DigitalField name="commentaireInterne" label="Commentaire" values={values} onChange={onChange} multiline hideLabel readOnly={readOnly} />
+      </section>
+    </div>
+  );
+}
+
 function LeaseField({ name, label, values, onChange, multiline = false, readOnly = false, className = "" }) {
   const handleChange = (value) => {
     if (!readOnly) onChange?.(name, value);
@@ -12035,7 +12933,7 @@ function LeaseVariableForm({ values, onChange, readOnly = false, includeReferenc
   return (
     <div className="lease-variable-form">
       <div className="form-helper-note">
-        Renseignez uniquement les éléments variables du bail. Ces informations alimentent automatiquement le modèle de contrat E.K immo au moment de la génération PDF.
+        Renseignez les éléments du bail. Le modèle E.K immo sera complété lors de la génération PDF.
       </div>
 
       {includeReference && (
@@ -12043,7 +12941,7 @@ function LeaseVariableForm({ values, onChange, readOnly = false, includeReferenc
           <h3>Références du contrat</h3>
           <div className="lease-variable-grid">
             <ContractVariableField name="objet" label="Type de contrat" options={["CONTRAT DE BAIL À USAGE PROFESSIONNEL", "Contrat de bail à usage d'habitation", "Mandat de gestion"]} {...fieldProps} />
-            <ContractVariableField name="contratNo" label="Numéro contrat" help="Généré automatiquement, modifiable si besoin." {...fieldProps} />
+            <ContractVariableField name="contratNo" label="Numéro contrat" help="Numéro proposé, modifiable si besoin." {...fieldProps} />
             <ContractVariableField name="souscritLe" label="Date de souscription" {...fieldProps} />
             <ContractVariableField name="bailleurRep" label="Représentant du bailleur" {...fieldProps} />
           </div>
@@ -12210,7 +13108,7 @@ function OriginalInvoiceDocument({ values }) {
 
         <footer className="source-signatures invoice-source-signatures">
           <strong>Pour Acquit</strong>
-          <strong>Pour ekIMMO</strong>
+          <strong>Pour E.K immo</strong>
         </footer>
       </section>
     </article>
@@ -12250,9 +13148,9 @@ function OriginalReceiptDocument({ values }) {
 
         <footer className="receipt-source-footer">
           <strong>SIGNATURE DU BENEFICIAIRE</strong>
-          <strong>ekIMMO SAS</strong>
-          <span>www.ekimmo-mali.com</span>
-          <span>RCCM : MA BKO 2022 B-2224 / NIF : 082255646 X</span>
+          <strong>E.K immo SAS</strong>
+          <span>Mail : contact@ekimmo-mali.com</span>
+          <span>RCCM : MA.BKO.2022.B.2224 / NIF : 082255646X</span>
           <span>Contact : +223 72 77 71 77 / +223 44 44 13 31</span>
         </footer>
       </section>
@@ -12321,8 +13219,310 @@ function OriginalCommissionStatement({ values }) {
         <p className="commission-source-net">Net propriétaire : <strong>{values.netProprietaire}</strong></p>
 
         <footer className="source-signatures commission-source-signatures">
-          <strong>POUR ekIMMO SAS</strong>
+          <strong>POUR E.K immo SAS</strong>
           <strong>POUR {values.partenaire || "NOM DU PARTENAIRE"}</strong>
+        </footer>
+      </section>
+    </article>
+  );
+}
+
+function CommissionLetterLine({ label, children, strong = false }) {
+  return (
+    <p className={strong ? "commission-letter-line strong" : "commission-letter-line"}>
+      <strong>{label}</strong>
+      <span>{children || "..."}</span>
+    </p>
+  );
+}
+
+function OriginalCommissionLetter({ values }) {
+  return (
+    <article className="original-document original-commission-letter">
+      <section className="source-sheet commission-letter-source-sheet">
+        <header className="commission-letter-header">
+          <img src={ekimmoAssets.logo} alt="E.K immo" />
+          <p>{values.ville || "Bamako"}, le {values.date || "...."}</p>
+        </header>
+
+        <section className="commission-letter-recipient">
+          <p>{values.destinataireCivilite || "Madame la Directrice Générale"}</p>
+          <p>{values.destinataireSociete || "Assurances LAFIA"}</p>
+          <p>{values.destinataireVille || "Bamako - Mali"}</p>
+        </section>
+
+        <section className="commission-letter-refs">
+          <CommissionLetterLine label="N/Réf :">{values.reference}</CommissionLetterLine>
+          <CommissionLetterLine label="OBJET :" strong>{values.objet}</CommissionLetterLine>
+          <CommissionLetterLine label="PJ :">{values.pjBordereau}</CommissionLetterLine>
+          <CommissionLetterLine label="">{values.pjFacture}</CommissionLetterLine>
+        </section>
+
+        <section className="commission-letter-body">
+          <p>{values.appel || "Madame,"}</p>
+          <p>{values.corpsIntro}</p>
+          <p>{values.corpsPieces}</p>
+          <p>{values.formulePolitesse}</p>
+        </section>
+
+        <footer className="commission-letter-signature">
+          <strong>{values.signataireTitre || "Le Président"}</strong>
+          <span>{values.signataireNom || "M. NIARO Tidiane"}</span>
+        </footer>
+      </section>
+    </article>
+  );
+}
+
+const conditionStateOptions = ["", "M", "P", "B", "TB"];
+
+function makeConditionRows(kind = "habitation") {
+  const sections = kind === "commercial"
+    ? [
+        ["Extérieur", ["Façade", "Accès", "Enseigne", "Portail / rideau métallique"]],
+        ["Local principal", ["Murs", "Sol", "Plafond", "Éclairage", "Prises électriques", "Climatisation"]],
+        ["Vitrine / accueil", ["Vitrine", "Porte d'entrée", "Comptoir", "Menuiserie"]],
+        ["Bureau / réserve", ["Murs", "Sol", "Étagères", "Fermeture"]],
+        ["Sanitaires", ["Lavabo", "WC", "Robinetterie", "Ventilation"]],
+        ["Sécurité", ["Extincteur", "Alarme", "Compteur électrique", "Compteur eau"]],
+      ]
+    : [
+        ["Extérieure", ["Façade", "Cour", "Jardin", "Terrasse", "Portail métallique"]],
+        ["Entrée", ["Porte", "Sonnette ou interphone", "Mur", "Sol", "Éclairage et interrupteurs"]],
+        ["Séjour / salon", ["Mur", "Sol", "Vitrage", "Plafond", "Climatiseur"]],
+        ["Cuisine", ["Mur", "Sol", "Placards et tiroirs", "Évier et robinetterie", "Plaques de cuisson"]],
+        ["Chambres", ["Mur", "Sol", "Vitrage et volets", "Prises électriques", "Climatiseur"]],
+        ["Salles de bain", ["Mur", "Sol", "Lavabo et robinetterie", "Baignoire / douche", "WC"]],
+        ["Équipements divers", ["Compteur eau", "Compteur électricité", "Clés remises", "Télécommande portail"]],
+      ];
+
+  return sections.flatMap(([section, items]) =>
+    items.map((item, index) => ({
+      id: makeDocumentLineId(`condition-${kind}`),
+      section,
+      item,
+      description: index === 0 ? "À vérifier lors de l'état des lieux" : "",
+      entryState: "",
+      exitState: "",
+      comments: "",
+    }))
+  );
+}
+
+function getConditionRows(values, kind = "habitation") {
+  if (Array.isArray(values.conditionRows) && values.conditionRows.length > 0) return values.conditionRows;
+  return makeConditionRows(kind);
+}
+
+function ConditionStateField({ value, onChange, label, readOnly = false }) {
+  return (
+    <label className="digital-field hide-label condition-state-field">
+      <span className="sr-only">{label}</span>
+      <select value={value ?? ""} onChange={(event) => onChange(event.target.value)} disabled={readOnly}>
+        {conditionStateOptions.map((option) => <option key={option} value={option}>{option || "-"}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function DigitalConditionReport({ values, onChange, readOnly = false, kind = "habitation" }) {
+  const rows = getConditionRows(values, kind);
+  const updateLine = (rowId, field, value) => {
+    onChange("conditionRows", rows.map((row) => (row.id === rowId ? { ...row, [field]: value } : row)));
+  };
+  const addLine = () => {
+    onChange("conditionRows", [
+      ...rows,
+      { id: makeDocumentLineId(`condition-${kind}`), section: kind === "commercial" ? "Local principal" : "Autres pièces", item: "", description: "", entryState: "", exitState: "", comments: "" },
+    ]);
+  };
+  const removeLine = (rowId) => {
+    const nextRows = rows.filter((row) => row.id !== rowId);
+    onChange("conditionRows", nextRows.length > 0 ? nextRows : makeConditionRows(kind));
+  };
+
+  return (
+    <div className="digital-page condition-report-page">
+      <DigitalDocumentHeader
+        title={kind === "commercial" ? "État des lieux bail commercial" : "État des lieux habitation"}
+        subtitle="Constat entrée / sortie"
+      >
+        <div className="digital-meta-grid">
+          <DigitalField name="reference" label="Référence" values={values} onChange={onChange} readOnly={readOnly} />
+          <DigitalField name="date" label="Date du constat" values={values} onChange={onChange} readOnly={readOnly} />
+        </div>
+      </DigitalDocumentHeader>
+
+      <section className="digital-grid three">
+        <DigitalField name="typeLogement" label={kind === "commercial" ? "Type de bail / local" : "Type de bien"} values={values} onChange={onChange} readOnly={readOnly} />
+        <DigitalField name="contractNo" label="Contrat N°" values={values} onChange={onChange} readOnly={readOnly} />
+        <DigitalField name="operation" label="Opération" values={values} onChange={onChange} readOnly={readOnly} />
+      </section>
+
+      <section className="digital-grid two">
+        <div className="digital-box">
+          <h4>Bien concerné</h4>
+          <DigitalField name="bien" label="Bien" values={values} onChange={onChange} readOnly={readOnly} />
+          <DigitalField name="adresse" label="Adresse" values={values} onChange={onChange} readOnly={readOnly} />
+          {kind === "commercial" && <DigitalField name="activite" label="Activité exercée" values={values} onChange={onChange} readOnly={readOnly} />}
+        </div>
+        <div className="digital-box">
+          <h4>Parties</h4>
+          <DigitalField name="bailleur" label="Bailleur / mandataire" values={values} onChange={onChange} readOnly={readOnly} />
+          <DigitalField name="locataire" label="Locataire / preneur" values={values} onChange={onChange} readOnly={readOnly} />
+          <DigitalField name="agent" label="Agent E.K immo" values={values} onChange={onChange} readOnly={readOnly} />
+        </div>
+      </section>
+
+      <section className="digital-grid two">
+        <DigitalField name="entryDate" label="Date d'entrée" values={values} onChange={onChange} readOnly={readOnly} />
+        <DigitalField name="exitDate" label="Date de sortie" values={values} onChange={onChange} readOnly={readOnly} />
+      </section>
+
+      <div className="form-helper-note">
+        Complétez les états avec les lettres M (mauvais), P (passable), B (bon), TB (très bon). Les lignes peuvent être adaptées selon le bien visité.
+      </div>
+
+      <div className="digital-table-wrap">
+        <table className="digital-table condition-report-table">
+          <thead>
+            <tr>
+              <th>Pièce / zone</th>
+              <th>Élément</th>
+              <th>Description / détails</th>
+              <th>État entrée</th>
+              <th>État sortie</th>
+              <th>Commentaires</th>
+              <th className="row-action-column">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr key={row.id}>
+                <td><EditableCell label={`Zone ${index + 1}`} value={row.section} onChange={(value) => updateLine(row.id, "section", value)} readOnly={readOnly} /></td>
+                <td><EditableCell label={`Élément ${index + 1}`} value={row.item} onChange={(value) => updateLine(row.id, "item", value)} readOnly={readOnly} /></td>
+                <td><EditableCell label={`Description ${index + 1}`} value={row.description} onChange={(value) => updateLine(row.id, "description", value)} multiline readOnly={readOnly} /></td>
+                <td><ConditionStateField label={`État entrée ${index + 1}`} value={row.entryState} onChange={(value) => updateLine(row.id, "entryState", value)} readOnly={readOnly} /></td>
+                <td><ConditionStateField label={`État sortie ${index + 1}`} value={row.exitState} onChange={(value) => updateLine(row.id, "exitState", value)} readOnly={readOnly} /></td>
+                <td><EditableCell label={`Commentaire ${index + 1}`} value={row.comments} onChange={(value) => updateLine(row.id, "comments", value)} multiline readOnly={readOnly} /></td>
+                <td className="row-action-cell">
+                  <button type="button" onClick={() => removeLine(row.id)} disabled={readOnly || rows.length === 1} aria-label={`Supprimer la ligne ${index + 1}`}>
+                    <XCircle size={17} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="document-row-actions">
+        <Button onClick={addLine} disabled={readOnly}><Plus size={17} /> Ajouter une ligne de constat</Button>
+      </div>
+
+      <section className="digital-box">
+        <h4>Observations ou réserves</h4>
+        <DigitalField name="observations" label="Observations" values={values} onChange={onChange} multiline hideLabel readOnly={readOnly} />
+      </section>
+
+      <section className="digital-grid two">
+        <DigitalField name="signatureBailleur" label="Nom du bailleur / mandataire" values={values} onChange={onChange} readOnly={readOnly} />
+        <DigitalField name="signatureLocataire" label="Nom du locataire / preneur" values={values} onChange={onChange} readOnly={readOnly} />
+      </section>
+    </div>
+  );
+}
+
+function groupConditionRows(rows) {
+  return rows.reduce((groups, row) => {
+    const key = row.section || "Autres";
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(row);
+    return groups;
+  }, {});
+}
+
+function OriginalConditionReport({ values, kind = "habitation" }) {
+  const rows = getConditionRows(values, kind);
+  const groups = groupConditionRows(rows);
+
+  return (
+    <article className="original-document original-condition-report">
+      <section className="source-sheet condition-source-sheet">
+        <header className="condition-source-header">
+          <img src={ekimmoAssets.logo} alt="E.K immo" />
+          <div>
+            <span>État des lieux</span>
+            <h3>{kind === "commercial" ? "BAIL COMMERCIAL" : "MAISON / APPARTEMENT / IMMEUBLE"}</h3>
+            <p>Référence : <strong>{values.reference}</strong></p>
+          </div>
+        </header>
+
+        <section className="condition-source-meta">
+          <p><span>Type</span><strong>{values.typeLogement}</strong></p>
+          <p><span>Contrat N°</span><strong>{values.contractNo}</strong></p>
+          <p><span>Opération</span><strong>{values.operation}</strong></p>
+          <p><span>Date</span><strong>{values.date}</strong></p>
+          <p><span>Bien</span><strong>{values.bien}</strong></p>
+          <p><span>Adresse</span><strong>{values.adresse}</strong></p>
+          <p><span>Bailleur / mandataire</span><strong>{values.bailleur}</strong></p>
+          <p><span>Locataire / preneur</span><strong>{values.locataire}</strong></p>
+          {kind === "commercial" && <p><span>Activité</span><strong>{values.activite}</strong></p>}
+        </section>
+
+        <p className="condition-source-help">État des pièces - compléter avec M (mauvais), P (passable), B (bon), TB (très bon).</p>
+
+        {Object.entries(groups).map(([section, sectionRows]) => (
+          <section className="condition-source-section" key={section}>
+            <h4>{section}</h4>
+            <table className="source-table condition-source-table">
+              <thead>
+                <tr>
+                  <th>Élément</th>
+                  <th>Description / détails</th>
+                  <th>État entrée</th>
+                  <th>État sortie</th>
+                  <th>Commentaires</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sectionRows.map((row, index) => (
+                  <tr key={`${section}-${row.item}-${index}`}>
+                    <td>{row.item || "\u00a0"}</td>
+                    <td>{row.description || "\u00a0"}</td>
+                    <td>{row.entryState || "\u00a0"}</td>
+                    <td>{row.exitState || "\u00a0"}</td>
+                    <td>{row.comments || "\u00a0"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        ))}
+
+        <section className="condition-source-observations">
+          <h4>Observations ou réserves</h4>
+          <p>{values.observations || "\u00a0"}</p>
+        </section>
+
+        <section className="condition-source-signatures">
+          <div>
+            <strong>Entrée</strong>
+            <span>Le {values.entryDate || ".... / .... / ...."}</span>
+            <em>{values.signatureBailleur || values.bailleur}</em>
+            <small>Nom et signature du bailleur ou mandataire</small>
+          </div>
+          <div>
+            <strong>Sortie</strong>
+            <span>Le {values.exitDate || ".... / .... / ...."}</span>
+            <em>{values.signatureLocataire || values.locataire}</em>
+            <small>Nom et signature du locataire / preneur</small>
+          </div>
+        </section>
+
+        <footer className="condition-source-footer">
+          <strong>E.K immo SAS</strong>
+          <span>Société par action simplifiée - RCCM : MA.BKO.2022.B.2224 - NIF : 082255646X</span>
+          <span>Niaréla rue ACHKHABAD en face de la mairie - Bamako - contact@ekimmo-mali.com</span>
         </footer>
       </section>
     </article>
@@ -12373,7 +13573,7 @@ function OriginalLeaseDocument({ values }) {
         <section className="lease-original-section">
           <LeaseHeading>ENTRE LES SOUSSIGNÉS :</LeaseHeading>
           <p>
-            La société <strong>ekIMMO SAS</strong>, société par actions simplifiée au capital d’un million
+            La société <strong>E.K immo SAS</strong>, société par actions simplifiée au capital d’un million
             (1 000 000) de francs CFA, dont le siège social est situé à Niaréla, rue ACHKHABAD,
             en face de la Mairie, Bamako-MALI, immatriculée au registre de commerce et du crédit mobilier
             de Bamako sous le numéro <strong>MA.BKO.2022.B.2224</strong>, représentée par
@@ -12397,7 +13597,7 @@ function OriginalLeaseDocument({ values }) {
         <section className="lease-original-section">
           <LeaseHeading>OBJET DU CONTRAT</LeaseHeading>
           <p>
-            La société ekIMMO SAS, es-qualité, le bailleur, donne à bail à usage professionnel à
+            La société E.K immo SAS, es-qualité, le bailleur, donne à bail à usage professionnel à
             <LeaseFill>{values.civilite}</LeaseFill> <LeaseFill wide>{values.preneur}</LeaseFill>,
             es-qualité de <LeaseFill wide>{values.qualitePreneur}</LeaseFill>, le preneur, le local ci-après désigné,
             le preneur déclarant parfaitement le connaître pour l'avoir vu et visité et qu'il l'accepte :
@@ -12528,7 +13728,7 @@ function OriginalLeaseDocument({ values }) {
         <section className="lease-original-signatures">
           <div>
             <strong>Le bailleur</strong>
-            <span>Pour ekIMMO</span>
+            <span>Pour E.K immo</span>
             <em>{values.bailleurRep}</em>
           </div>
           <div>
@@ -12553,6 +13753,22 @@ function getRelatedDocumentFiles(key) {
       { label: "Courrier commission LAFIA T1 2026.docx", href: ekimmoAssets.courrierCommissionDocx },
     ];
   }
+  if (key === "courrierCommission") {
+    return [
+      { label: "Bordereau commissions LAFIA T1 2026.pdf", href: ekimmoAssets.bordereauPdf },
+      { label: "Facture LAFIA T1 2026.docx", href: ekimmoAssets.factureDocx },
+    ];
+  }
+  if (key === "etatLieuHabitation") {
+    return [
+      { label: "ETAT DE LIEU MAISON_APPART_IMMEUBLE.docx", href: ekimmoAssets.etatLieuHabitationDocx },
+    ];
+  }
+  if (key === "etatLieuCommercial") {
+    return [
+      { label: "ETAT DES LIEU BAIL COMMERCIAL.docx", href: ekimmoAssets.etatLieuCommercialDocx },
+    ];
+  }
   if (key === "bail") {
     return [
       { label: "Contrat de bail DOCX", href: ekimmoAssets.bailDocx },
@@ -12573,6 +13789,7 @@ function getDocumentDefaults(key, data = {}) {
   const draftAmount = data.amount ? String(data.amount).replace(" FCFA", "").trim() : "";
   const specialConditions = data.specialConditions || draftText;
   const amountNumber = draftAmount || invoice.amount.replace(" FCFA", "");
+  const hasFilledDocumentData = property.name !== "Bien à renseigner" && invoice.client !== "Client à renseigner";
 
   if (key === "recu") {
     return {
@@ -12580,7 +13797,7 @@ function getDocumentDefaults(key, data = {}) {
       date: invoice.date,
       nom: invoice.client,
       structure: tenant.id ?? "Locataire",
-      telephone: tenant.phone ?? "+223 72 77 71 77",
+      telephone: tenant.phone ?? "",
       montantChiffres: data.amount || invoice.amount,
       montantLettres: "Quatre cent cinquante mille francs CFA",
       espece: payment.mode === "Espèces",
@@ -12600,29 +13817,90 @@ function getDocumentDefaults(key, data = {}) {
       partenaire: owner.name,
       periode: "Janvier 2026 à mars 2026",
       locataire1: `${tenant.name} - ${property.name}`,
-      locataire2: `${invoice.client} - Résidence ACI Baobab`,
-      locataire3: "Cabinet Diarra & Associés - Plateau Office Center",
+      locataire2: hasFilledDocumentData ? `${invoice.client} - Résidence ACI Baobab` : "",
+      locataire3: hasFilledDocumentData ? "Cabinet Diarra & Associés - Plateau Office Center" : "",
       periode1: "Janvier 2026",
       periode2: "Février 2026",
       periode3: "Mars 2026",
       encaisse1: "1 504 500",
-      encaisse2: "354 000",
-      encaisse3: "442 500",
+      encaisse2: hasFilledDocumentData ? "354 000" : "0",
+      encaisse3: hasFilledDocumentData ? "442 500" : "0",
       taux1: "10%",
       taux2: "10%",
       taux3: "10%",
       commission1: commission.commission,
-      commission2: "35 400",
-      commission3: "44 250",
+      commission2: hasFilledDocumentData ? "35 400" : "0",
+      commission3: hasFilledDocumentData ? "44 250" : "0",
       commissionLines: [
-        { id: "commission-line-1", locataire: `${tenant.name} - ${property.name}`, periode: "Janvier 2026", encaisse: "1 504 500", taux: "10%", commission: commission.commission },
-        { id: "commission-line-2", locataire: `${invoice.client} - Résidence ACI Baobab`, periode: "Février 2026", encaisse: "354 000", taux: "10%", commission: "35 400" },
-        { id: "commission-line-3", locataire: "Cabinet Diarra & Associés - Plateau Office Center", periode: "Mars 2026", encaisse: "442 500", taux: "10%", commission: "44 250" },
+        { id: "commission-line-1", locataire: `${tenant.name} - ${property.name}`, periode: "Janvier 2026", encaisse: hasFilledDocumentData ? "1 504 500" : "0", taux: "10%", commission: commission.commission },
+        ...(hasFilledDocumentData ? [
+          { id: "commission-line-2", locataire: `${invoice.client} - Résidence ACI Baobab`, periode: "Février 2026", encaisse: "354 000", taux: "10%", commission: "35 400" },
+          { id: "commission-line-3", locataire: "Cabinet Diarra & Associés - Plateau Office Center", periode: "Mars 2026", encaisse: "442 500", taux: "10%", commission: "44 250" },
+        ] : []),
       ],
-      total: "16 599 920",
-      totalCommission: "1 659 992",
-      netProprietaire: "14 939 928",
+      total: hasFilledDocumentData ? "16 599 920" : "0",
+      totalCommission: hasFilledDocumentData ? "1 659 992" : "0",
+      netProprietaire: hasFilledDocumentData ? "14 939 928" : "0",
       observations: draftText || "Bordereau préparé pour validation propriétaire et reversement trimestriel E.K immo.",
+    };
+  }
+
+  if (key === "courrierCommission") {
+    const bordereauNumero = data.bordereauNumero || "REC/LAF/0326";
+    const bordereauDate = data.bordereauDate || "31/03/2026";
+    const factureNumero = data.factureNumero || "FAC-2026-055";
+    const rawCommissionTotal = String(data.amount || "1 659 992 FCFA").trim();
+    const commissionTotal = rawCommissionTotal.toUpperCase().includes("FCFA") ? rawCommissionTotal : `${rawCommissionTotal} FCFA`;
+
+    return {
+      reference: draftReference ?? "COU-LAF-2026-017",
+      date: "05/06/2026",
+      ville: "Bamako",
+      destinataireCivilite: "Madame la Directrice Générale",
+      destinataireSociete: "Assurances LAFIA",
+      destinataireVille: "Bamako - Mali",
+      objet: "RÉCLAMATION DE COMMISSIONS GESTION LOCATIVE",
+      bordereauNumero,
+      bordereauDate,
+      factureNumero,
+      pjBordereau: `Bordereau N°${bordereauNumero} du ${bordereauDate}`,
+      pjFacture: `Facture N°${factureNumero}`,
+      appel: "Madame,",
+      montantTotal: commissionTotal,
+      corpsIntro: draftText || `Suite à l’encaissement de vos loyers et au recouvrement de vos créances locatives, nous vous remercions de bien vouloir régler les commissions correspondantes, soit la somme totale de ${commissionTotal}.`,
+      corpsPieces: `Vous trouverez ci-joint le bordereau d’encaissement et de recouvrement N°${bordereauNumero}, ainsi que la facture de commissions N°${factureNumero}.`,
+      formulePolitesse: "Vous souhaitant bonne réception, recevez Madame la Directrice Générale, nos salutations distinguées.",
+      signataireTitre: "Le Président",
+      signataireNom: "M. NIARO Tidiane",
+      commentaireInterne: specialConditions || `Courrier d’accompagnement du bordereau ${bordereauNumero} et de la facture ${factureNumero}.`,
+      partenaire: owner.name,
+      periode: "Janvier 2026 à mars 2026",
+      totalCommission: commissionTotal.replace(/\s*FCFA/i, ""),
+    };
+  }
+
+  if (key === "etatLieuHabitation" || key === "etatLieuCommercial") {
+    const isCommercial = key === "etatLieuCommercial";
+    const contract = contracts.find((item) => item.property === property.name || item.client === tenant.name) ?? contracts[0];
+
+    return {
+      reference: draftReference ?? makeDocumentNumber(isCommercial ? "EDL-COM" : "EDL-HAB", isCommercial ? 22 : 18),
+      date: "24/06/2026",
+      typeLogement: isCommercial ? "Bail commercial - local professionnel" : property.type || "Appartement / maison",
+      contractNo: contract?.number ?? makeDocumentNumber("CON", 46),
+      operation: "État des lieux d'entrée",
+      bien: property.name,
+      adresse: property.address ?? property.district,
+      bailleur: owner.name,
+      locataire: tenant.name,
+      agent: "Aïssata Diarra",
+      activite: isCommercial ? "Activité commerciale autorisée au bail" : "",
+      entryDate: "24/06/2026",
+      exitDate: "",
+      signatureBailleur: owner.name,
+      signatureLocataire: tenant.name,
+      observations: specialConditions || "Constat établi contradictoirement. Les réserves éventuelles doivent être mentionnées avant signature.",
+      conditionRows: makeConditionRows(isCommercial ? "commercial" : "habitation"),
     };
   }
 
@@ -12753,6 +14031,36 @@ function FinancePage({ activeTab, onTab, onAction, paymentsList = paymentRecords
     Entretiens: <Button variant="primary" onClick={() => onAction("Ajouter un entretien")}><Wrench size={17} /> Ajouter un entretien</Button>,
     Reversements: <Button variant="primary" onClick={() => onAction("Préparer un reversement")}><RefreshCw size={17} /> Préparer un reversement</Button>,
   };
+  const financeDataCount = {
+    Loyers: agencyRentRows.length,
+    Paiements: paymentsList.length,
+    Impayés: rentRowsList.filter((row) => parseFCFA(row.balance) > 0).length,
+    Commissions: commissionsList.length,
+    Charges: chargesList.length,
+    Entretiens: maintenancesList.length,
+    Reversements: reversalsList.length,
+  };
+  const isFinanceEmpty = (financeDataCount[effectiveTab] ?? 0) === 0;
+
+  if (isFinanceEmpty) {
+    return (
+      <>
+        <PageIntro
+          title="Finance métier"
+          actions={null}
+        />
+        <Tabs tabs={tabs} active={effectiveTab} onChange={onTab} demo="finance-tabs" />
+        <Panel>
+          <div className="empty-state compact-empty">
+            <WalletCards size={24} />
+            <h3>Aucune donnée finance</h3>
+            <p>Ce sous-onglet sera alimenté par les biens, contrats, paiements et charges enregistrés.</p>
+            <Button onClick={() => onAction("Ajouter un bien")}><Plus size={17} /> Ajouter un bien</Button>
+          </div>
+        </Panel>
+      </>
+    );
+  }
 
   return (
     <>
@@ -13127,7 +14435,7 @@ function CommissionExportModal({ commission, payment, contract, onArchive, onClo
     status: commission.status ?? "Généré",
     paymentReference: payment?.reference ?? "Aucun paiement lié",
     contractNumber: contract?.number ?? "Aucun contrat lié",
-    observation: "État de commission préparé pour contrôle et archivage.",
+    observation: "État de commission prêt pour validation et archivage.",
   });
   const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
   const fileName = `EKIMMO_Commission_${commission.id}_2026-06-24.pdf`;
@@ -13168,7 +14476,7 @@ function CommissionExportModal({ commission, payment, contract, onArchive, onClo
             <Panel className="owner-preview-placeholder">
               <FileText size={34} />
               <h3>Aperçu de l'état de commission</h3>
-              <p>Cliquez sur Aperçu pour contrôler le document avant export.</p>
+              <p>Vérifiez l'aperçu avant export.</p>
             </Panel>
           )}
         </div>
@@ -13496,7 +14804,7 @@ function ChargesView({ onAction, chargesList = charges, detailRequest = null, on
       ["Charges agence", formatFCFA(chargesList.filter((charge) => charge.payer === "Agence").reduce((sum, charge) => sum + parseFCFA(charge.amount), 0)), "Dépenses prises en charge directement par E.K immo.", Banknote],
       ["Charges propriétaires", formatFCFA(chargesList.filter((charge) => charge.payer === "Propriétaire").reduce((sum, charge) => sum + parseFCFA(charge.amount), 0)), "Montants imputés aux propriétaires concernés.", HandCoins],
       ["Charges refacturables", formatFCFA(chargesList.filter((charge) => charge.payer.includes("Locataire")).reduce((sum, charge) => sum + parseFCFA(charge.amount), 0)), "Sommes récupérables auprès des locataires ou dossiers.", WalletCards],
-      ["Charges à valider", String(chargesList.filter((charge) => ["À valider", "En attente", "Brouillon"].includes(charge.status)).length), "Dossiers encore à contrôler avant paiement ou archive.", AlertTriangle],
+      ["Charges à valider", String(chargesList.filter((charge) => ["À valider", "En attente", "Brouillon"].includes(charge.status)).length), "Dossiers en attente de validation.", AlertTriangle],
     ];
   }, [chargesList]);
 
@@ -13816,7 +15124,7 @@ function MaintenanceProfilePanel({ maintenance, onAction }) {
         <p><span>Coût réel</span><strong>{maintenance.realCost ?? (maintenance.status === "En cours" ? "À confirmer" : maintenance.cost)}</strong></p>
         <p><span>Prise en charge</span><strong>{maintenance.payer}</strong></p>
         <p><span>Justificatif</span><Badge label={maintenance.proof ? "Justificatif joint" : "À valider"} /></p>
-        <p><span>Photos</span><strong>{maintenance.beforePhotos || maintenance.afterPhotos ? `${maintenance.beforePhotos || "Avant à compléter"} · ${maintenance.afterPhotos || "Après à compléter"}` : "À compléter"}</strong></p>
+        <p><span>Photos</span><strong>{maintenance.beforePhotos || maintenance.afterPhotos ? `${maintenance.beforePhotos || "Photos avant manquantes"} · ${maintenance.afterPhotos || "Photos après manquantes"}` : "Photos manquantes"}</strong></p>
         <p><span>Observations</span><strong>{maintenance.workDone ?? maintenance.note}</strong></p>
         <p><span>Statut</span><Badge label={maintenance.status} /></p>
       </div>
@@ -13891,7 +15199,7 @@ function FinanceReversalPrepareModal({ owner, ownersList = owners, paymentsList 
           <div>
             <span>Reversement propriétaire</span>
             <h2>Préparer un reversement</h2>
-            <p>Sélectionnez le propriétaire, contrôlez le calcul, puis enregistrez le paiement prévu.</p>
+            <p>Sélectionnez le propriétaire, vérifiez le solde puis enregistrez le reversement.</p>
           </div>
           <Badge label={values.reference} />
         </div>
@@ -13994,7 +15302,7 @@ function ReversalCalculationModal({ reversal, paymentsList = paymentRecords, cha
 }
 
 function ReversalConfirmModal({ reversal, onSave, onClose }) {
-  const [comment, setComment] = useState("Reversement complet validé après contrôle du solde propriétaire.");
+  const [comment, setComment] = useState("Reversement complet validé sur le solde propriétaire.");
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
@@ -14215,7 +15523,7 @@ function ReversalCancelModal({ reversal, onSave, onClose }) {
           <div>
             <span>Annulation</span>
             <h2>Annuler ce reversement ?</h2>
-            <p>{reversal.owner} · {reversal.reference ?? "Référence à confirmer"}</p>
+            <p>{reversal.owner} · {reversal.reference ?? "Référence non renseignée"}</p>
           </div>
           <Badge label={reversal.status} />
         </div>
@@ -14575,7 +15883,7 @@ function buildReportRows(selected, { propertiesList, ownersList, tenantsList, co
     return maintenancesList.map((maintenance) => ({
       type: "entretien",
       maintenance,
-      cells: [maintenance.property, maintenance.manager, maintenance.provider ?? "Prestataire à confirmer", maintenance.cost, maintenance.status],
+      cells: [maintenance.property, maintenance.manager, maintenance.provider ?? "Prestataire non confirmé", maintenance.cost, maintenance.status],
     }));
   }
 
@@ -14737,7 +16045,7 @@ function buildReportHtml(payload, mode) {
   </header>
   <section class="filters">${filterList}</section>
   <table><thead><tr>${headerCells}</tr></thead><tbody>${rows}</tbody></table>
-  <footer>© 2026 E.K immo · Rapport généré depuis le module Rapports.</footer>
+  <footer>© 2026 E.K immo · Rapport métier.</footer>
 </body>
 </html>`;
 }
@@ -14793,7 +16101,7 @@ function ReportsPage({
   };
   const openExportMenu = () => {
     if (!selected) {
-      setExportMessage("Veuillez sélectionner un rapport avant export.");
+      setExportMessage("Sélectionnez un rapport avant export.");
       return;
     }
     setExportMessage("");
@@ -14801,6 +16109,7 @@ function ReportsPage({
   };
   const runExport = (type) => {
     exportActions[type]?.();
+    onAction("Exporter rapport");
     setExportMenuOpen(false);
   };
 
@@ -14810,14 +16119,20 @@ function ReportsPage({
         title="Rapports & exports"
         actions={
           <div className="inline-menu-wrapper">
-            <Button variant="primary" onClick={openExportMenu}>
+            <Button
+              variant="primary"
+              onClick={openExportMenu}
+              aria-haspopup="menu"
+              aria-expanded={exportMenuOpen}
+              aria-controls="reports-export-menu"
+            >
               <Download size={18} /> Exporter rapport
             </Button>
             {exportMenuOpen && (
-              <div className="inline-action-menu">
-                <button onClick={() => runExport("PDF")}><FileText size={16} /><span>PDF</span></button>
-                <button onClick={() => runExport("Excel")}><Download size={16} /><span>Excel</span></button>
-                <button onClick={() => runExport("Impression")}><Printer size={16} /><span>Impression</span></button>
+              <div className="inline-action-menu" id="reports-export-menu" role="menu" aria-label="Formats d'export du rapport">
+                <button role="menuitem" onClick={() => runExport("PDF")}><FileText size={16} /><span>PDF</span></button>
+                <button role="menuitem" onClick={() => runExport("Excel")}><Download size={16} /><span>Excel</span></button>
+                <button role="menuitem" onClick={() => runExport("Impression")}><Printer size={16} /><span>Impression</span></button>
               </div>
             )}
           </div>
@@ -14870,7 +16185,7 @@ function ReportsPage({
             />
           </Panel>
           <div className="action-row compact-row">
-            <Button onClick={() => filteredRows[0] ? onAction("Détail ligne rapport", { reportRow: filteredRows[0] }) : setExportMessage("Veuillez sélectionner une ligne avant d'ouvrir le détail.")}><Eye size={17} /> Détail ligne</Button>
+            <Button onClick={() => filteredRows[0] ? onAction("Détail ligne rapport", { reportRow: filteredRows[0] }) : setExportMessage("Sélectionnez une ligne pour ouvrir le détail.")}><Eye size={17} /> Détail ligne</Button>
             <Button variant="primary" onClick={() => runExport("PDF")}><Download size={17} /> PDF</Button>
             <Button onClick={() => runExport("Excel")}><Download size={17} /> Excel</Button>
             <Button onClick={() => runExport("Impression")}><Printer size={17} /> Imprimer</Button>
@@ -15121,7 +16436,7 @@ function RolesAdmin() {
         ]}
       />
       <p className={feedback === "Permissions enregistrées avec succès." ? "form-success" : hasUnsavedChanges ? "form-alert" : "role-description"}>
-        {feedback || (hasUnsavedChanges ? "Des permissions ont été modifiées. Cliquez sur Sauvegarder pour enregistrer." : activeRole?.description)}
+        {feedback || (hasUnsavedChanges ? "Modifications non enregistrées. Sauvegardez pour les appliquer." : activeRole?.description)}
       </p>
       <div className="permission-grid">
         <span>Module</span>
@@ -15586,19 +16901,19 @@ function ForgotPasswordModal({ onClose }) {
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail) {
       setStatus("error");
-      setMessage("Veuillez renseigner votre adresse email.");
+      setMessage("Renseignez votre adresse email.");
       setDetail("");
       return;
     }
     if (!isValidEmail(normalizedEmail)) {
       setStatus("error");
-      setMessage("Veuillez renseigner une adresse email valide.");
+      setMessage("Renseignez une adresse email valide.");
       setDetail("");
       return;
     }
     if (normalizedEmail.includes("erreur") || normalizedEmail.includes("server")) {
       setStatus("error");
-      setMessage("Impossible d’envoyer le lien pour le moment. Veuillez réessayer.");
+      setMessage("L'envoi du lien a échoué. Réessayez dans quelques instants.");
       setDetail("");
       return;
     }
@@ -15712,7 +17027,7 @@ function ChangePasswordModal({ onClose }) {
     }
     if (!values.newPassword.trim()) {
       setStatus("error");
-      setMessage("Veuillez renseigner un nouveau mot de passe.");
+      setMessage("Renseignez un nouveau mot de passe.");
       return;
     }
     if (values.newPassword !== values.confirmPassword) {
@@ -16015,9 +17330,9 @@ function Segmented({ value, onChange, options }) {
   );
 }
 
-function Button({ children, variant = "secondary", compact = false, onClick, disabled = false }) {
+function Button({ children, variant = "secondary", compact = false, onClick, disabled = false, ...props }) {
   return (
-    <button className={`button ${variant} ${compact ? "compact" : ""}`} onClick={onClick} disabled={disabled}>
+    <button className={`button ${variant} ${compact ? "compact" : ""}`} onClick={onClick} disabled={disabled} {...props}>
       {children}
     </button>
   );
@@ -16400,13 +17715,13 @@ function ProspectProposalModal({ prospect, onSave, onClose }) {
   };
 
   return (
-    <div className="modal-backdrop">
-      <section className="modal-card wide-modal prospect-proposal-modal">
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal prospect-proposal-modal" role="dialog" aria-modal="true" aria-labelledby="prospect-proposal-title" onMouseDown={(event) => event.stopPropagation()}>
         <button className="modal-close" onClick={onClose}>×</button>
         <div className="payment-modal-head">
           <div>
             <span>Propositions de biens</span>
-            <h2>Biens compatibles</h2>
+            <h2 id="prospect-proposal-title">Biens compatibles</h2>
             <p>Rechercher, filtrer puis sélectionner un ou plusieurs biens à proposer au prospect.</p>
           </div>
           <Badge label={prospect?.status ?? "Nouveau"} />
@@ -16879,7 +18194,7 @@ function OwnerFormModal({ sequence = owners.length + 1, owner = null, mode = "cr
           <div className="form-grid compact-form">
             <label>Type<select value={values.type} onChange={(event) => update("type", event.target.value)}><option>Personne physique</option><option>Société</option></select></label>
             <label>Nom complet ou raison sociale<input value={values.name} onChange={(event) => update("name", event.target.value)} /></label>
-            <label>Identifiant propriétaire généré automatiquement<input value={values.id} readOnly /></label>
+            <label>Identifiant propriétaire<input value={values.id} readOnly /></label>
             <label>Téléphone<input value={values.phone} onChange={(event) => update("phone", event.target.value)} /></label>
             <label>Email<input value={values.email} onChange={(event) => update("email", event.target.value)} /></label>
             <label>Adresse<input value={values.address} onChange={(event) => update("address", event.target.value)} /></label>
@@ -17021,7 +18336,7 @@ function ChargeProofModal({ charge, onSave, onClose }) {
 
   const submit = () => {
     if (!fileName.trim()) {
-      setMessage("Veuillez importer un PDF ou une image.");
+      setMessage("Importez un PDF ou une image.");
       return;
     }
     onSave({
@@ -17273,15 +18588,15 @@ function ChargeFormModal({ title, context = null, propertiesList = properties, m
 
   const submit = (validate = false) => {
     if (!selectedProperty?.name) {
-      setMessage("Veuillez sélectionner un bien concerné.");
+      setMessage("Sélectionnez le bien concerné.");
       return;
     }
     if (!values.description.trim()) {
-      setMessage("Veuillez renseigner la description de la charge.");
+      setMessage("Renseignez la description de la charge.");
       return;
     }
     if (parseFCFA(values.amount) <= 0) {
-      setMessage("Veuillez renseigner un montant valide.");
+      setMessage("Renseignez un montant valide.");
       return;
     }
 
@@ -17531,17 +18846,17 @@ function NewTenantFormModal({ sequence = 1, propertiesList = properties, onSave,
 
   const submit = (forceContract = false) => {
     if (!values.name.trim()) {
-      setValidationMessage("Veuillez renseigner le nom complet du locataire.");
+      setValidationMessage("Renseignez le nom complet du locataire.");
       return;
     }
 
     if (!values.phone.trim()) {
-      setValidationMessage("Veuillez renseigner le téléphone du locataire.");
+      setValidationMessage("Renseignez le téléphone du locataire.");
       return;
     }
 
     if (!selectedProperty?.code) {
-      setValidationMessage("Veuillez sélectionner un bien occupé.");
+      setValidationMessage("Sélectionnez le bien occupé.");
       return;
     }
 
@@ -17557,10 +18872,10 @@ function NewTenantFormModal({ sequence = 1, propertiesList = properties, onSave,
         id: values.id,
         name: values.name.trim(),
         phone: values.phone.trim(),
-        email: values.email.trim() || "email à compléter",
+        email: values.email.trim() || "email non renseigné",
         address: values.address.trim() || selectedProperty.address,
         profession: values.profession.trim() || "Locataire",
-        identity: values.identity.trim() || "Pièce d'identité à compléter",
+        identity: values.identity.trim() || "Pièce d'identité manquante",
         property: selectedProperty.name,
         owner: selectedProperty.owner,
         rent: values.rent.trim() || selectedProperty.price,
@@ -17751,7 +19066,7 @@ function PaymentProofModal({ payment, onSave, onClose }) {
   };
   const submit = (actionLabel = existingProof ? "Justificatif remplacé" : "Justificatif ajouté") => {
     if (!fileName.trim()) {
-      setMessage("Veuillez importer un PDF ou une image.");
+      setMessage("Importez un PDF ou une image.");
       return;
     }
     onSave({
@@ -18008,7 +19323,7 @@ function ArrearsStatementModal({ row, relancesList = [], promise, history = [], 
             <Panel className="owner-preview-placeholder">
               <FileText size={34} />
               <h3>Aperçu de l'état impayé</h3>
-              <p>Cliquez sur Aperçu pour contrôler le document avant PDF, impression ou archivage.</p>
+              <p>Vérifiez l'aperçu avant PDF, impression ou archivage.</p>
             </Panel>
           )}
         </div>
@@ -18299,7 +19614,7 @@ function RentStatementModal({ row, paymentsList = paymentRecords, relancesList =
             <Panel className="owner-preview-placeholder">
               <FileText size={34} />
               <h3>Aperçu de l'état de loyer</h3>
-              <p>Cliquez sur Prévisualiser pour contrôler le document avant génération.</p>
+              <p>Vérifiez le document avant génération.</p>
             </Panel>
           )}
         </div>
@@ -18555,7 +19870,7 @@ function TenantReceiptModal({ tenant, property, payment, paymentsList = paymentR
           <div>
             <span>Génération de reçu</span>
             <h2>{tenant.name}</h2>
-            <p>Préparer un reçu fidèle au modèle E.K immo, puis le prévisualiser, générer, imprimer ou archiver.</p>
+            <p>Préparez le reçu E.K immo, puis générez, imprimez ou archivez le document.</p>
           </div>
           <div className="document-editor-actions">
             <Button onClick={() => setPreview(true)}><Eye size={17} /> Prévisualiser</Button>
@@ -18581,7 +19896,7 @@ function TenantReceiptModal({ tenant, property, payment, paymentsList = paymentR
             <Panel className="owner-preview-placeholder">
               <ReceiptText size={34} />
               <h3>Aperçu du reçu</h3>
-              <p>Cliquez sur Prévisualiser pour contrôler le document avant impression.</p>
+              <p>Vérifiez le reçu avant impression.</p>
             </Panel>
           )}
         </div>
@@ -18722,7 +20037,7 @@ function PropertyDocumentImportModal({ context = null, propertiesList = properti
 
   const submit = (open = false) => {
     if (!values.name.trim()) {
-      setMessage("Veuillez renseigner le nom du document.");
+      setMessage("Renseignez le nom du document.");
       return;
     }
 
@@ -19111,7 +20426,7 @@ function TenantSituationModal({ tenant, property, paymentsList = paymentRecords,
             <Panel className="owner-preview-placeholder">
               <FileText size={34} />
               <h3>Aperçu de la situation locataire</h3>
-              <p>Cliquez sur Prévisualiser pour contrôler le document.</p>
+              <p>Vérifiez le document avant validation.</p>
             </Panel>
           )}
         </div>
@@ -19162,7 +20477,7 @@ function TenantSituationDocument({ tenant, property, period, paymentsList = paym
           <OwnerDocumentTable
             title="Paiements"
             columns={["Période", "Bien", "Montant dû", "Montant payé", "Solde"]}
-            rows={(tenantRows.length ? tenantRows : rentRows.slice(0, 2)).map((row) => [row.period, row.property, row.expected, row.paid, row.balance])}
+            rows={tenantRows.map((row) => [row.period, row.property, row.expected, row.paid, row.balance])}
           />
         )}
 
@@ -19192,8 +20507,8 @@ function TenantSituationDocument({ tenant, property, period, paymentsList = paym
           <img src={ekimmoAssets.logo} alt="E.K immo" />
           <div>
             <strong>E.K immo SAS</strong>
-            <span>Niaréla, face mairie - Bamako, Mali</span>
-            <span>Situation locataire générée pour contrôle et archivage.</span>
+            <span>Niaréla rue ACHKHABAD en face de la mairie - Bamako, Mali</span>
+            <span>Situation locataire prête pour validation et archivage.</span>
             <span>Contact : +223 72 77 71 77 / +223 44 44 13 31</span>
           </div>
         </footer>
@@ -19417,7 +20732,7 @@ function PaymentRegistrationModal({ context, paymentsList = paymentRecords, rent
                 <label>Loyer attendu<input value={expected} onChange={(event) => setExpected(event.target.value)} /></label>
                 <label>Montant déjà payé<input value={alreadyPaid} onChange={(event) => setAlreadyPaid(event.target.value)} /></label>
                 <label>Montant payé maintenant<input value={paidNow} onChange={(event) => setPaidNow(event.target.value)} /></label>
-                <label>Solde restant calculé automatiquement<input value={remaining} readOnly /></label>
+                <label>Solde restant<input value={remaining} readOnly /></label>
                 <label>Statut automatique<input value={status} readOnly /></label>
               </div>
             </div>
@@ -19438,7 +20753,7 @@ function PaymentRegistrationModal({ context, paymentsList = paymentRecords, rent
               <label className="check-card">
                 <input type="checkbox" checked={autoReceipt} onChange={(event) => setAutoReceipt(event.target.checked)} />
                 <span>
-                  <strong>Générer reçu automatiquement</strong>
+                  <strong>Générer un reçu</strong>
                   <small>{receiptNumber} · avec case Mobile Money pour Orange Money et Moov Money.</small>
                 </span>
               </label>
@@ -19499,7 +20814,7 @@ function UrgentMaintenanceModal({ context, onSave, onClose }) {
         status: values.priority === "Critique" ? "Critique" : "Urgent",
         note: values.description,
         priority: values.priority,
-        provider: values.provider || "Prestataire à confirmer",
+        provider: values.provider || "Prestataire non confirmé",
         proof: values.proof || undefined,
         source: "Dashboard - alerte maintenance urgente",
       },
@@ -19524,7 +20839,7 @@ function UrgentMaintenanceModal({ context, onSave, onClose }) {
           <span><AlertTriangle size={20} /></span>
           <div>
             <strong>Créer une intervention prioritaire</strong>
-            <small>L'action sera ajoutée au suivi des entretiens du bien et au module Finance. Une charge peut être créée en même temps si le coût doit être suivi.</small>
+            <small>L'entretien sera ajouté au suivi du bien. Une charge peut être créée en même temps si le coût doit être suivi.</small>
           </div>
         </div>
 
@@ -19536,7 +20851,7 @@ function UrgentMaintenanceModal({ context, onSave, onClose }) {
             <label>Priorité<select value={values.priority} onChange={update("priority")}>{priorities.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label>Date prévue<input value={values.date} onChange={update("date")} placeholder="JJ/MM/AAAA" /></label>
             <label>Responsable interne<select value={values.manager} onChange={update("manager")}>{managers.map((item) => <option key={item}>{item}</option>)}</select></label>
-            <label>Prestataire<input value={values.provider} onChange={update("provider")} placeholder="Prestataire à confirmer" /></label>
+            <label>Prestataire<input value={values.provider} onChange={update("provider")} placeholder="Prestataire non confirmé" /></label>
             <label className="full">Description du problème<textarea value={values.description} onChange={update("description")} /></label>
           </div>
         </div>
@@ -19653,7 +20968,7 @@ function MaintenanceProofModal({ maintenance, onSave, onClose }) {
   const [message, setMessage] = useState("");
   const save = () => {
     if (!fileName.trim()) {
-      setMessage("Veuillez importer un justificatif.");
+      setMessage("Importez un justificatif.");
       return;
     }
     onSave({ maintenance, proof: { fileName, reference, comment } });
@@ -19838,7 +21153,7 @@ function MaintenanceReportModal({ maintenance, onArchive, onClose }) {
     responsable: maintenance.manager,
     prestataire: maintenance.provider ?? "Prestataire local agréé",
     cout: maintenance.realCost ?? maintenance.cost,
-    photos: `${maintenance.beforePhotos || "Photos avant à compléter"} / ${maintenance.afterPhotos || "Photos après à compléter"}`,
+    photos: `${maintenance.beforePhotos || "Photos avant manquantes"} / ${maintenance.afterPhotos || "Photos après manquantes"}`,
     observations: maintenance.workDone ?? maintenance.note,
   };
   const archive = () => {
@@ -20002,7 +21317,7 @@ function MaintenanceFormModal({ context, onSave, onClose }) {
       status,
       note: description,
       priority,
-      provider: provider || "Prestataire à confirmer",
+      provider: provider || "Prestataire non confirmé",
       proof: proofName || undefined,
       beforePhotos: beforePhotos || undefined,
       afterPhotos: afterPhotos || undefined,
@@ -20019,7 +21334,7 @@ function MaintenanceFormModal({ context, onSave, onClose }) {
           <div>
             <span>Bien : {propertyName}</span>
             <h2>{isEditMode ? "Modifier entretien" : "Ajouter un entretien"}</h2>
-            <p>{isEditMode ? "Formulaire prérempli pour mettre à jour le suivi technique." : "Suivi technique, coût et charge liée pour E.K immo."}</p>
+            <p>{isEditMode ? "Mettez à jour le suivi technique." : "Renseignez l'intervention, le coût et la prise en charge."}</p>
           </div>
           <Badge label={priority} />
         </div>
@@ -20044,7 +21359,7 @@ function MaintenanceFormModal({ context, onSave, onClose }) {
             <label>Coût estimé<input value={estimatedCost} onChange={(event) => setEstimatedCost(event.target.value)} /></label>
             <label>Coût réel, si déjà réalisé<input value={realCost} onChange={(event) => setRealCost(event.target.value)} placeholder="À confirmer" /></label>
             <label>Prise en charge<select value={payer} onChange={(event) => setPayer(event.target.value)}>{payers.map((item) => <option key={item}>{item}</option>)}</select></label>
-            <label>Créer automatiquement une charge liée ?<select value={createCharge} onChange={(event) => setCreateCharge(event.target.value)}><option>Oui</option><option>Non</option></select></label>
+            <label>Créer une charge liée ?<select value={createCharge} onChange={(event) => setCreateCharge(event.target.value)}><option>Oui</option><option>Non</option></select></label>
           </div>
         </div>
 
@@ -20072,6 +21387,12 @@ function DocumentContextMenu({ property, onSelect, onClose }) {
     ...template,
     description: template.key === "bail"
       ? `Contrat prérempli avec ${property.tenant}`
+      : template.key === "courrierCommission"
+        ? `Courrier de réclamation de commissions pour ${property.owner}`
+      : template.key === "etatLieuHabitation"
+        ? `Constat entrée / sortie pour ${property.name}`
+      : template.key === "etatLieuCommercial"
+        ? `Constat commercial rattaché à ${property.name}`
       : template.key === "bordereau"
         ? `Bordereau lié à ${property.owner}`
         : template.key === "recu"
@@ -20085,7 +21406,7 @@ function DocumentContextMenu({ property, onSelect, onClose }) {
         <button className="modal-close" onClick={onClose}>×</button>
         <span>Générer document</span>
         <h2>{property.name}</h2>
-        <p>Choisissez le document à préparer. L'atelier Docs s'ouvrira avec les informations du bien déjà renseignées.</p>
+        <p>Sélectionnez un modèle. Les informations du bien seront reprises dans l'atelier Docs.</p>
         <div className="document-menu-list">
           {availableTemplates.map((template) => (
             <button key={template.key} onClick={() => onSelect(template.key)}>
@@ -20255,7 +21576,7 @@ function ContractPdfModal({ contract, onPdfAction, onClose }) {
         ) : (
           <>
             <div className="document-menu-list compact-document-menu">
-              <button onClick={() => runAction("preview")}><Eye size={20} /><span><strong>Prévisualiser PDF</strong><small>{pdfReference || "Version prête à contrôler avant impression."}</small></span></button>
+              <button onClick={() => runAction("preview")}><Eye size={20} /><span><strong>Prévisualiser PDF</strong><small>{pdfReference || "Version prête avant impression."}</small></span></button>
               <button onClick={() => runAction("download")}><Download size={20} /><span><strong>Télécharger PDF</strong><small>Préparer la version PDF du contrat pour export.</small></span></button>
               <button onClick={() => runAction("archive")}><Archive size={20} /><span><strong>Archiver PDF</strong><small>Classer le PDF dans Docs, catégorie contrats.</small></span></button>
               <button onClick={() => runAction("new-version")}><RefreshCw size={20} /><span><strong>Générer nouvelle version</strong><small>Créer une version PDF actualisée depuis les données du contrat.</small></span></button>
@@ -20461,7 +21782,7 @@ function ContractDocumentModal({ contract, action, onImport, onSignedAction, onC
             </div>
             {previewOpen && (
               <div className="notice">
-                Aperçu du document signé : {fileName}. Dans la démonstration, le fichier importé est archivé dans la fiche contrat et disponible depuis cette vue.
+                Document signé : {fileName}. Le fichier est archivé dans la fiche contrat et reste disponible depuis cette vue.
               </div>
             )}
             <div className="action-row compact-row">
@@ -20745,22 +22066,31 @@ function ContractTerminationModal({ contract, onSave, onClose }) {
   );
 }
 
-function ContractFormModal({ property: initialProperty = properties[0], tenant: initialTenant = tenants[0], onGenerate, onClose }) {
+function ContractFormModal({
+  property: initialProperty = properties[0],
+  tenant: initialTenant = tenants[0],
+  propertiesList = properties,
+  ownersList = owners,
+  tenantsList = tenants,
+  onGenerate,
+  onDraft,
+  onClose,
+}) {
   const [preview, setPreview] = useState(false);
-  const initialOwner = owners.find((item) => item.name === initialProperty.owner) ?? owners[0];
-  const tenantOptions = Array.from(new Set([initialTenant?.name, ...tenants.map((tenant) => tenant.name), ...prospects.map((prospect) => prospect.name)].filter(Boolean)));
+  const initialOwner = ownersList.find((item) => item.name === initialProperty.owner) ?? ownersList[0] ?? owners[0];
+  const tenantOptions = Array.from(new Set([initialTenant?.name, ...tenantsList.map((tenant) => tenant.name), ...prospects.map((prospect) => prospect.name)].filter(Boolean)));
   const [propertyCode, setPropertyCode] = useState(initialProperty.code);
-  const [tenantName, setTenantName] = useState(initialTenant?.name ?? tenants[0].name);
-  const [values, setValues] = useState(() => getDocumentDefaults("bail", { property: initialProperty, owner: initialOwner, tenant: initialTenant ?? tenants[0] }));
+  const [tenantName, setTenantName] = useState(initialTenant?.name ?? tenantsList[0]?.name ?? tenants[0].name);
+  const [values, setValues] = useState(() => getDocumentDefaults("bail", { property: initialProperty, owner: initialOwner, tenant: initialTenant ?? tenantsList[0] ?? tenants[0] }));
 
   const updateLease = (name, value) => {
     setValues((current) => ({ ...current, [name]: value }));
   };
 
   const handlePropertyChange = (code) => {
-    const property = properties.find((item) => item.code === code) ?? properties[0];
-    const owner = owners.find((item) => item.name === property.owner) ?? owners[0];
-    const tenant = initialTenant?.name === tenantName ? initialTenant : tenants.find((item) => item.name === tenantName) ?? tenants[0];
+    const property = propertiesList.find((item) => item.code === code) ?? propertiesList[0] ?? properties[0];
+    const owner = ownersList.find((item) => item.name === property.owner) ?? ownersList[0] ?? owners[0];
+    const tenant = initialTenant?.name === tenantName ? initialTenant : tenantsList.find((item) => item.name === tenantName) ?? tenantsList[0] ?? tenants[0];
     const nextDefaults = getDocumentDefaults("bail", { property, owner, tenant });
 
     setPropertyCode(code);
@@ -20779,9 +22109,9 @@ function ContractFormModal({ property: initialProperty = properties[0], tenant: 
   };
 
   const handleTenantChange = (name) => {
-    const property = properties.find((item) => item.code === propertyCode) ?? properties[0];
-    const owner = owners.find((item) => item.name === property.owner) ?? owners[0];
-    const tenant = initialTenant?.name === name ? initialTenant : tenants.find((item) => item.name === name) ?? tenants[0];
+    const property = propertiesList.find((item) => item.code === propertyCode) ?? propertiesList[0] ?? properties[0];
+    const owner = ownersList.find((item) => item.name === property.owner) ?? ownersList[0] ?? owners[0];
+    const tenant = initialTenant?.name === name ? initialTenant : tenantsList.find((item) => item.name === name) ?? tenantsList[0] ?? tenants[0];
     const nextDefaults = getDocumentDefaults("bail", { property, owner, tenant });
 
     setTenantName(name);
@@ -20794,8 +22124,8 @@ function ContractFormModal({ property: initialProperty = properties[0], tenant: 
   };
 
   const buildGeneratedContract = (status = "Généré") => {
-    const property = properties.find((item) => item.code === propertyCode) ?? initialProperty;
-    const tenant = initialTenant?.name === tenantName ? initialTenant : tenants.find((item) => item.name === tenantName) ?? { name: tenantName };
+    const property = propertiesList.find((item) => item.code === propertyCode) ?? initialProperty;
+    const tenant = initialTenant?.name === tenantName ? initialTenant : tenantsList.find((item) => item.name === tenantName) ?? { name: tenantName };
 
     return {
       number: values.contratNo || `CON-2026-${String(Date.now()).slice(-3)}`,
@@ -20820,19 +22150,26 @@ function ContractFormModal({ property: initialProperty = properties[0], tenant: 
     onClose();
   };
 
+  const saveDraft = () => {
+    const property = propertiesList.find((item) => item.code === propertyCode) ?? initialProperty;
+    const owner = ownersList.find((item) => item.name === property.owner) ?? ownersList[0] ?? owners[0];
+    const tenant = initialTenant?.name === tenantName ? initialTenant : tenantsList.find((item) => item.name === tenantName) ?? { name: tenantName };
+    onDraft?.({ values, property, owner, tenant });
+  };
+
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section className="modal-card wide-modal contract-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
         <button className="modal-close" onClick={onClose}>×</button>
         <h2>Créer contrat</h2>
-        <p>Création à partir d'un formulaire métier. Les champs renseignés alimentent automatiquement le modèle de bail E.K immo.</p>
+        <p>Renseignez les informations du bail. Le modèle E.K immo sera complété à la génération.</p>
         <div className="form-section">
           <h3>Contrat et rattachement</h3>
           <div className="form-grid">
             <label>Type de contrat<select value={values.objet} onChange={(event) => updateLease("objet", event.target.value)}><option>CONTRAT DE BAIL À USAGE PROFESSIONNEL</option><option>Contrat de bail à usage d'habitation</option><option>Mandat de gestion</option></select></label>
-            <label>Numéro contrat<input value={values.contratNo} onChange={(event) => updateLease("contratNo", event.target.value)} /><small>Généré automatiquement, modifiable avant sortie PDF.</small></label>
+            <label>Numéro contrat<input value={values.contratNo} onChange={(event) => updateLease("contratNo", event.target.value)} /><small>Numéro proposé, modifiable avant PDF.</small></label>
             <label>Date de souscription<input value={values.souscritLe} onChange={(event) => updateLease("souscritLe", event.target.value)} /></label>
-            <label>Bien concerné<select value={propertyCode} onChange={(event) => handlePropertyChange(event.target.value)}>{properties.map((property) => <option value={property.code} key={property.code}>{property.name}</option>)}</select></label>
+            <label>Bien concerné<select value={propertyCode} onChange={(event) => handlePropertyChange(event.target.value)}>{propertiesList.map((property) => <option value={property.code} key={property.code}>{property.name}</option>)}</select></label>
             <label>Propriétaire / bailleur<select value={values.bailleurRep} onChange={(event) => updateLease("bailleurRep", event.target.value)}><option>M. Tidiane Niaro</option><option>Mamadou Keita</option><option>Sira Coulibaly</option><option>Foncière Mandé</option></select></label>
             <label>Locataire ou client<select value={tenantName} onChange={(event) => handleTenantChange(event.target.value)}>{tenantOptions.map((name) => <option key={name}>{name}</option>)}</select></label>
           </div>
@@ -20840,13 +22177,13 @@ function ContractFormModal({ property: initialProperty = properties[0], tenant: 
 
         <LeaseVariableForm values={values} onChange={updateLease} includeReference={false} />
         <div className="action-row compact-row">
-          <Button onClick={onClose}><Archive size={17} /> Enregistrer brouillon</Button>
+          <Button onClick={saveDraft}><Archive size={17} /> Enregistrer brouillon</Button>
           <Button variant="primary" onClick={generateContract}><Download size={17} /> Générer PDF</Button>
           <Button onClick={archiveContract}><Archive size={17} /> Archiver</Button>
         </div>
         {preview && (
           <DocumentPreviewModal
-            template={documentTemplates.find((item) => item.key === "bail") ?? documentTemplates[3]}
+            template={documentTemplates.find((item) => item.key === "bail") ?? documentTemplates[0]}
             values={values}
             onChange={updateLease}
             onClose={() => setPreview(false)}
@@ -20857,25 +22194,72 @@ function ContractFormModal({ property: initialProperty = properties[0], tenant: 
   );
 }
 
-function PropertyFormModal({ title, property = properties[0], ownersList = owners, ownerPrefill = "", onClose }) {
+function PropertyFormModal({
+  title,
+  property = null,
+  propertiesList = properties,
+  ownersList = owners,
+  tenantsList = tenants,
+  ownerPrefill = "",
+  onSave,
+  onClose,
+}) {
   const isEditMode = title === "Modifier le bien";
+  const nextCode = `EKM-NEW-${String((propertiesList?.length ?? properties.length) + 1).padStart(3, "0")}`;
+  const ownerName = ownerPrefill || property?.owner || ownersList[0]?.name || "Propriétaire à renseigner";
+  const tenantName = property?.tenant ?? "Libre";
+  const parentOptions = propertiesList.filter(isBuildingProperty);
+  const defaultParent = property?.parentCode || parentOptions[0]?.code || "";
+
   const sensitiveInitialValues = useMemo(() => ({
     rent: property?.price ?? "850 000 FCFA",
     status: property?.status ?? "Disponible",
-    owner: isEditMode ? (property?.owner ?? ownersList[0].name) : (ownerPrefill || property?.owner || ownersList[0].name),
-    tenant: property?.tenant ?? "Libre",
+    owner: isEditMode ? (property?.owner ?? ownerName) : ownerName,
+    tenant: tenantName,
     financialMode: property?.financialMode ?? "Encaissement par l'agence",
     commission: property?.commission ?? "50% du loyer",
     deposit: property?.deposit ?? "1 700 000 FCFA",
-  }), [isEditMode, ownerPrefill, ownersList, property]);
+  }), [isEditMode, ownerName, property, tenantName]);
+
   const [propertyNature, setPropertyNature] = useState(property?.parentCode ? "Appartement rattaché" : isBuildingProperty(property) ? "Immeuble parent" : "Bien individuel");
-  const [hasFocalPoint, setHasFocalPoint] = useState(true);
+  const [hasFocalPoint, setHasFocalPoint] = useState(Boolean(property?.focalPoint) || !isEditMode);
   const [sensitiveValues, setSensitiveValues] = useState(sensitiveInitialValues);
+  const [formValues, setFormValues] = useState(() => ({
+    code: isEditMode ? property?.code ?? nextCode : nextCode,
+    type: property?.type ?? "Appartement rattaché",
+    name: isEditMode ? property?.name ?? "" : "Appartement B-204 Korofina",
+    district: property?.district ?? "ACI 2000, Bamako",
+    address: property?.address ?? "Adresse complète du bien",
+    description: property?.description ?? "Description du bien, de ses accès et de ses caractéristiques principales.",
+    salePrice: property?.salePrice ?? "",
+    parentCode: defaultParent,
+    block: property?.block ?? "Bloc A",
+    floor: property?.floor ?? "2e étage",
+    unitNumber: property?.unitNumber ?? "B-204",
+    blocksCount: String(property?.structure?.blocks?.length ?? 2),
+    unitsCount: String(property?.structure?.blocks?.reduce((sum, block) => sum + block.units, 0) ?? 12),
+    availableUnits: String(property?.structure?.blocks?.reduce((sum, block) => sum + block.available, 0) ?? 3),
+    structureRef: property?.structureRef ?? "STR-KOR-2026",
+    agent: property?.agent ?? "Aïssata Diarra",
+    rooms: String(property?.rooms ?? 4),
+    bedrooms: String(property?.bedrooms ?? 3),
+    baths: String(property?.baths ?? 2),
+    surface: property?.surface ?? "145 m²",
+    condition: property?.condition ?? "Bon",
+    tags: Array.isArray(property?.tags) ? property.tags.join(", ") : "Balcon, sécurité 24h, climatisation",
+    observations: property?.lastAction ?? "Note de suivi à conserver dans l'historique.",
+    focalName: property?.focalPoint?.name ?? "Ousmane Traoré",
+    focalRole: property?.focalPoint?.role ?? "Gestionnaire du syndic",
+    focalPhone: property?.focalPoint?.phone ?? "+223 76 55 21 04",
+    focalEmail: property?.focalPoint?.email ?? "syndic.korofina@foncieremande.ml",
+  }));
   const [confirmSensitiveChange, setConfirmSensitiveChange] = useState(false);
+  const [pendingDraft, setPendingDraft] = useState(false);
+
   const sensitiveOptions = {
     status: ["Disponible", "Loué", "Réservé", "Gestion multi-lots", "Entretien seul", "Vendu", "En travaux", "Indisponible"],
     owner: ownersList.map((owner) => owner.name),
-    tenant: ["Libre", ...tenants.map((tenant) => tenant.name)],
+    tenant: ["Libre", ...tenantsList.map((tenant) => tenant.name)],
     financialMode: ["Encaissement par l'agence", "Encaissement direct par le propriétaire", "Contrat entretien seul"],
   };
   const sensitiveLabels = {
@@ -20896,20 +22280,100 @@ function PropertyFormModal({ title, property = properties[0], ownersList = owner
     setConfirmSensitiveChange(false);
   };
 
-  const handleSave = () => {
-    if (isEditMode && changedSensitiveFields.length > 0) {
+  const updateValue = (key) => (event) => {
+    setFormValues((current) => ({ ...current, [key]: event.target.value }));
+  };
+
+  const withCurrentOption = (key) => Array.from(new Set([sensitiveValues[key], ...(sensitiveOptions[key] ?? [])].filter(Boolean)));
+
+  const buildPropertyPayload = (draft = false) => {
+    const tags = formValues.tags
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+    const parent = propertyNature === "Appartement rattaché"
+      ? propertiesList.find((item) => item.code === formValues.parentCode)
+      : null;
+    const blockCount = Math.max(1, parseNumber(formValues.blocksCount) || 1);
+    const unitsCount = Math.max(blockCount, parseNumber(formValues.unitsCount) || blockCount);
+    const availableUnits = Math.max(0, parseNumber(formValues.availableUnits) || 0);
+    const unitsPerBlock = Math.max(1, Math.ceil(unitsCount / blockCount));
+    const availablePerBlock = Math.max(0, Math.ceil(availableUnits / blockCount));
+    const selectedImage = formValues.type.includes("Bureau") || formValues.type.includes("Boutique")
+      ? assets.office
+      : formValues.type.includes("Villa") || formValues.type.includes("Maison")
+        ? assets.villa
+        : assets.residence;
+
+    return {
+      ...property,
+      code: formValues.code.trim() || nextCode,
+      type: formValues.type,
+      name: formValues.name.trim() || formValues.code.trim() || nextCode,
+      district: formValues.district.trim(),
+      address: formValues.address.trim(),
+      description: formValues.description.trim(),
+      status: draft ? "Brouillon" : sensitiveValues.status,
+      price: sensitiveValues.rent.trim(),
+      salePrice: formValues.salePrice.trim(),
+      period: property?.period ?? "/mois",
+      deposit: sensitiveValues.deposit.trim(),
+      commission: sensitiveValues.commission.trim(),
+      owner: sensitiveValues.owner,
+      tenant: sensitiveValues.tenant,
+      financialMode: sensitiveValues.financialMode,
+      agent: formValues.agent,
+      surface: formValues.surface.trim(),
+      rooms: parseNumber(formValues.rooms) || formValues.rooms,
+      bedrooms: parseNumber(formValues.bedrooms) || formValues.bedrooms,
+      baths: parseNumber(formValues.baths) || formValues.baths,
+      condition: formValues.condition,
+      tags: tags.length ? tags : ["À compléter"],
+      image: property?.image ?? selectedImage,
+      parentCode: propertyNature === "Appartement rattaché" ? formValues.parentCode : undefined,
+      parentName: parent?.name,
+      block: propertyNature === "Appartement rattaché" ? formValues.block : undefined,
+      floor: propertyNature === "Appartement rattaché" ? formValues.floor : undefined,
+      unitNumber: propertyNature === "Appartement rattaché" ? formValues.unitNumber : undefined,
+      structureRef: propertyNature === "Immeuble parent" ? formValues.structureRef : undefined,
+      structure: propertyNature === "Immeuble parent"
+        ? {
+          kind: "building",
+          totalUnits: unitsCount,
+          availableUnits,
+          blocks: Array.from({ length: blockCount }).map((_, index) => ({
+            name: `Bloc ${String.fromCharCode(65 + index)}`,
+            floors: 4,
+            units: unitsPerBlock,
+            available: Math.max(0, availableUnits - index * availablePerBlock > 0 ? Math.min(availablePerBlock, availableUnits - index * availablePerBlock) : 0),
+          })),
+        }
+        : undefined,
+      focalPoint: hasFocalPoint
+        ? {
+          name: formValues.focalName.trim(),
+          role: formValues.focalRole.trim(),
+          phone: formValues.focalPhone.trim(),
+          email: formValues.focalEmail.trim(),
+        }
+        : null,
+      lastAction: draft ? "Brouillon de fiche bien" : formValues.observations.trim(),
+    };
+  };
+
+  const handleSave = (draft = false) => {
+    if (isEditMode && !draft && changedSensitiveFields.length > 0) {
+      setPendingDraft(false);
       setConfirmSensitiveChange(true);
       return;
     }
-    onClose();
+    onSave?.({ property: buildPropertyPayload(draft), mode: isEditMode ? "edit" : "create", draft });
   };
 
   const confirmSave = () => {
     setConfirmSensitiveChange(false);
-    onClose();
+    onSave?.({ property: buildPropertyPayload(pendingDraft), mode: isEditMode ? "edit" : "create", draft: pendingDraft });
   };
-
-  const withCurrentOption = (key) => Array.from(new Set([sensitiveValues[key], ...(sensitiveOptions[key] ?? [])].filter(Boolean)));
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
@@ -20919,15 +22383,15 @@ function PropertyFormModal({ title, property = properties[0], ownersList = owner
         <div className="form-section">
           <h3>Informations générales</h3>
           <div className="form-grid compact-form">
-            <label>Code du bien<input defaultValue="EKM-NEW-001" /></label>
-            <label>Type de bien<select><option>Immeuble collectif</option><option>Appartement rattaché</option><option>Appartement individuel</option><option>Maison</option><option>Villa</option><option>Terrain</option><option>Bureau</option><option>Boutique</option></select></label>
-            <label>Nom ou désignation<input defaultValue="Appartement B-204 Korofina" /></label>
-            <label>Quartier<input defaultValue="ACI 2000, Bamako" /></label>
-            <label className="full">Adresse détaillée<input defaultValue="Adresse complète du bien" /></label>
-            <label className="full">Description<textarea defaultValue="Description du bien, de ses accès et de ses caractéristiques principales." /></label>
+            <label>Code du bien<input value={formValues.code} onChange={updateValue("code")} /></label>
+            <label>Type de bien<select value={formValues.type} onChange={updateValue("type")}><option>Immeuble collectif</option><option>Appartement rattaché</option><option>Appartement individuel</option><option>Maison</option><option>Villa</option><option>Terrain</option><option>Bureau</option><option>Boutique</option></select></label>
+            <label>Nom ou désignation<input value={formValues.name} onChange={updateValue("name")} /></label>
+            <label>Quartier<input value={formValues.district} onChange={updateValue("district")} /></label>
+            <label className="full">Adresse détaillée<input value={formValues.address} onChange={updateValue("address")} /></label>
+            <label className="full">Description<textarea value={formValues.description} onChange={updateValue("description")} /></label>
             <label>Statut<select value={sensitiveValues.status} onChange={(event) => updateSensitiveValue("status", event.target.value)}>{withCurrentOption("status").map((option) => <option key={option}>{option}</option>)}</select></label>
             <label>Prix de location<input value={sensitiveValues.rent} onChange={(event) => updateSensitiveValue("rent", event.target.value)} /></label>
-            <label>Prix de vente<input placeholder="Si applicable" /></label>
+            <label>Prix de vente<input value={formValues.salePrice} onChange={updateValue("salePrice")} placeholder="Si applicable" /></label>
             <label>Montant de caution<input value={sensitiveValues.deposit} onChange={(event) => updateSensitiveValue("deposit", event.target.value)} /></label>
             <label>Commission applicable<input value={sensitiveValues.commission} onChange={(event) => updateSensitiveValue("commission", event.target.value)} /></label>
           </div>
@@ -20938,18 +22402,18 @@ function PropertyFormModal({ title, property = properties[0], ownersList = owner
             <label>Nature du dossier<select value={propertyNature} onChange={(event) => setPropertyNature(event.target.value)}><option>Appartement rattaché</option><option>Immeuble parent</option><option>Bien individuel</option></select></label>
             {propertyNature === "Appartement rattaché" && (
               <>
-                <label>Immeuble parent<select>{properties.filter(isBuildingProperty).map((property) => <option key={property.code}>{property.name}</option>)}</select></label>
-                <label>Bloc<select><option>Bloc A</option><option>Bloc B</option><option>Bloc C</option></select></label>
-                <label>Étage<input defaultValue="2e étage" /></label>
-                <label>Numéro du lot<input defaultValue="B-204" /></label>
+                <label>Immeuble parent<select value={formValues.parentCode} onChange={updateValue("parentCode")}>{parentOptions.map((item) => <option value={item.code} key={item.code}>{item.name}</option>)}</select></label>
+                <label>Bloc<select value={formValues.block} onChange={updateValue("block")}><option>Bloc A</option><option>Bloc B</option><option>Bloc C</option></select></label>
+                <label>Étage<input value={formValues.floor} onChange={updateValue("floor")} /></label>
+                <label>Numéro du lot<input value={formValues.unitNumber} onChange={updateValue("unitNumber")} /></label>
               </>
             )}
             {propertyNature === "Immeuble parent" && (
               <>
-                <label>Nombre de blocs<input defaultValue="2" /></label>
-                <label>Nombre d'appartements<input defaultValue="12" /></label>
-                <label>Lots disponibles<input defaultValue="3" /></label>
-                <label>Référence structure<input defaultValue="STR-KOR-2026" /></label>
+                <label>Nombre de blocs<input value={formValues.blocksCount} onChange={updateValue("blocksCount")} inputMode="numeric" /></label>
+                <label>Nombre d'appartements<input value={formValues.unitsCount} onChange={updateValue("unitsCount")} inputMode="numeric" /></label>
+                <label>Lots disponibles<input value={formValues.availableUnits} onChange={updateValue("availableUnits")} inputMode="numeric" /></label>
+                <label>Référence structure<input value={formValues.structureRef} onChange={updateValue("structureRef")} /></label>
               </>
             )}
           </div>
@@ -20966,7 +22430,7 @@ function PropertyFormModal({ title, property = properties[0], ownersList = owner
           <div className="form-grid compact-form">
             <label>Propriétaire<select value={sensitiveValues.owner} onChange={(event) => updateSensitiveValue("owner", event.target.value)}>{withCurrentOption("owner").map((option) => <option key={option}>{option}</option>)}</select></label>
             <label>Locataire actuel<select value={sensitiveValues.tenant} onChange={(event) => updateSensitiveValue("tenant", event.target.value)}>{withCurrentOption("tenant").map((option) => <option key={option}>{option}</option>)}</select></label>
-            <label>Agent responsable<select><option>Aïssata Diarra</option><option>Mariam Traoré</option><option>Issa Maïga</option><option>Cheick Camara</option></select></label>
+            <label>Agent responsable<select value={formValues.agent} onChange={updateValue("agent")}><option>Aïssata Diarra</option><option>Mariam Traoré</option><option>Issa Maïga</option><option>Cheick Camara</option></select></label>
             <label>Mode de gestion financière<select value={sensitiveValues.financialMode} onChange={(event) => updateSensitiveValue("financialMode", event.target.value)}>{withCurrentOption("financialMode").map((option) => <option key={option}>{option}</option>)}</select></label>
             <label className="check-line full">
               <input type="checkbox" checked={hasFocalPoint} onChange={(event) => setHasFocalPoint(event.target.checked)} />
@@ -20974,10 +22438,10 @@ function PropertyFormModal({ title, property = properties[0], ownersList = owner
             </label>
             {hasFocalPoint && (
               <>
-                <label>Nom du point focal<input defaultValue="Ousmane Traoré" /></label>
-                <label>Fonction / rôle<input defaultValue="Gestionnaire du syndic" /></label>
-                <label>Téléphone<input defaultValue="+223 76 55 21 04" /></label>
-                <label>Email<input defaultValue="syndic.korofina@foncieremande.ml" /></label>
+                <label>Nom du point focal<input value={formValues.focalName} onChange={updateValue("focalName")} /></label>
+                <label>Fonction / rôle<input value={formValues.focalRole} onChange={updateValue("focalRole")} /></label>
+                <label>Téléphone<input value={formValues.focalPhone} onChange={updateValue("focalPhone")} /></label>
+                <label>Email<input value={formValues.focalEmail} onChange={updateValue("focalEmail")} /></label>
               </>
             )}
           </div>
@@ -20985,11 +22449,13 @@ function PropertyFormModal({ title, property = properties[0], ownersList = owner
         <div className="form-section">
           <h3>Détails, médias et documents</h3>
           <div className="form-grid compact-form">
-            <label>Nombre de pièces<input defaultValue="4" /></label>
-            <label>Surface<input defaultValue="145 m²" /></label>
-            <label>État général<select><option>Bon</option><option>À rafraîchir</option><option>En travaux</option><option>À rénover</option></select></label>
-            <label>Équipements<input defaultValue="Balcon, sécurité 24h, climatisation" /></label>
-            <label className="full">Observations<textarea defaultValue="Dernière action ou point de suivi à conserver dans l'historique." /></label>
+            <label>Nombre de pièces<input value={formValues.rooms} onChange={updateValue("rooms")} inputMode="numeric" /></label>
+            <label>Chambres<input value={formValues.bedrooms} onChange={updateValue("bedrooms")} inputMode="numeric" /></label>
+            <label>Salles d'eau<input value={formValues.baths} onChange={updateValue("baths")} inputMode="numeric" /></label>
+            <label>Surface<input value={formValues.surface} onChange={updateValue("surface")} /></label>
+            <label>État général<select value={formValues.condition} onChange={updateValue("condition")}><option>Bon</option><option>À rafraîchir</option><option>En travaux</option><option>À rénover</option></select></label>
+            <label>Équipements<input value={formValues.tags} onChange={updateValue("tags")} /></label>
+            <label className="full">Observations<textarea value={formValues.observations} onChange={updateValue("observations")} /></label>
             <label>Photos du bien<input type="file" multiple /></label>
             <label>Titre foncier<input type="file" /></label>
             <label>Mandat<input type="file" /></label>
@@ -21012,8 +22478,8 @@ function PropertyFormModal({ title, property = properties[0], ownersList = owner
           </div>
         )}
         <div className="action-row compact-row">
-          <Button variant="primary" onClick={handleSave}><CheckCircle2 size={17} /> Enregistrer</Button>
-          <Button onClick={handleSave}>Enregistrer comme brouillon</Button>
+          <Button variant="primary" onClick={() => handleSave(false)}><CheckCircle2 size={17} /> Enregistrer</Button>
+          <Button onClick={() => handleSave(true)}>Enregistrer comme brouillon</Button>
           <Button onClick={onClose}>Annuler</Button>
         </div>
       </section>
@@ -21046,7 +22512,7 @@ function getDocumentPreviewContext(title) {
     const tenant = tenants.find((item) => item.name === contract.client) ?? tenants[0];
 
     return {
-      template: documentTemplates.find((item) => item.key === "bail") ?? documentTemplates[3],
+      template: documentTemplates.find((item) => item.key === "bail") ?? documentTemplates[0],
       data: { property, owner, tenant },
     };
   }
@@ -21055,12 +22521,21 @@ function getDocumentPreviewContext(title) {
     return { template: documentTemplates.find((item) => item.key === "recu") ?? documentTemplates[1], data: {} };
   }
 
+  if (normalizedTitle.includes("courrier")) {
+    return { template: documentTemplates.find((item) => item.key === "courrierCommission") ?? documentTemplates[3], data: {} };
+  }
+
+  if (normalizedTitle.includes("etat") && normalizedTitle.includes("lieu")) {
+    const templateKey = normalizedTitle.includes("commercial") ? "etatLieuCommercial" : "etatLieuHabitation";
+    return { template: documentTemplates.find((item) => item.key === templateKey) ?? documentTemplates[0], data: {} };
+  }
+
   if (normalizedTitle.includes("bordereau") || normalizedTitle.includes("commission")) {
     return { template: documentTemplates.find((item) => item.key === "bordereau") ?? documentTemplates[2], data: {} };
   }
 
   if (normalizedTitle.includes("contrat") || normalizedTitle.includes("bail")) {
-    return { template: documentTemplates.find((item) => item.key === "bail") ?? documentTemplates[3], data: {} };
+    return { template: documentTemplates.find((item) => item.key === "bail") ?? documentTemplates[0], data: {} };
   }
 
   if (normalizedTitle.includes("facture")) {
@@ -21137,7 +22612,6 @@ function ArchivePropertyModal({ property, onConfirm, onClose }) {
 
 function DemoModal({ title, onClose }) {
   const documentContext = getDocumentPreviewContext(title);
-  const sensitive = isSensitiveAction(title);
 
   if (documentContext) {
     return <ActionDocumentModal context={documentContext} onClose={onClose} />;
@@ -21148,24 +22622,15 @@ function DemoModal({ title, onClose }) {
       <section className="modal-card" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
         <button className="modal-close" onClick={onClose}>×</button>
         <div className="round-icon large">
-          <Plus size={22} />
+          <AlertTriangle size={22} />
         </div>
         <h2>{title}</h2>
-        <div className="form-grid compact-form">
-          <label>Référence<input defaultValue="EKM-DEMO-2026" /></label>
-          <label>Responsable<select><option>Aïssata Diarra</option><option>Mariam Traoré</option><option>Issa Maïga</option></select></label>
-          {sensitive && (
-            <label className="full">Justification<textarea defaultValue="Action sensible à confirmer pour conserver la traçabilité dans l'historique." /></label>
-          )}
-        </div>
-        {sensitive && (
-          <div className="sensitive-warning">
-            Cette action modifie une donnée importante. La confirmation sera historisée avec l'utilisateur, la date, l'ancienne valeur et la nouvelle valeur.
-          </div>
-        )}
+        <p>
+          Cette action n'est pas encore raccordée à une écriture métier. Elle n'enregistre aucune donnée
+          et ne modifie pas les fiches.
+        </p>
         <div className="action-row compact-row">
-          <Button variant="primary" onClick={onClose}><CheckCircle2 size={17} /> {sensitive ? "Confirmer" : "Valider"}</Button>
-          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" onClick={onClose}>Fermer</Button>
         </div>
       </section>
     </div>
