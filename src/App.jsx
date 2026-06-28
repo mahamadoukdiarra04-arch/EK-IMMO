@@ -880,8 +880,41 @@ function getDemoStepsForTrack(track = "complete") {
   const intro = guidedDemoSteps.find((step) => step.key === "intro");
   const end = guidedDemoSteps.find((step) => step.key === "end");
   if (track === "complete") return guidedDemoSteps;
-  const pageSteps = guidedDemoSteps.filter((step) => step.tracks?.includes(track));
-  return [intro, ...pageSteps, end].filter(Boolean);
+
+  const modulePageByTrack = {
+    Dashboard: "Dashboard",
+    Biens: "Biens",
+    Clients: "Clients",
+    Contrats: "Contrats",
+    Finance: "Finance",
+    Rapports: "Rapports",
+    Plus: "Plus",
+  };
+  const modulePage = modulePageByTrack[track] ?? track;
+  const trackLabel = demoTrackOptions.find((option) => option.key === track)?.label ?? track;
+  const pageSteps = guidedDemoSteps.filter((step) => step.tracks?.includes(track) && step.page === modulePage);
+  const moduleIntro = intro
+    ? {
+      ...intro,
+      key: `intro-${track}`,
+      page: modulePage,
+      title: track === "Dashboard" ? "Tutoriel tableau de bord" : `${trackLabel}`,
+      body: `Ce tutoriel se concentre uniquement sur ${trackLabel}. Les étapes transversales restent disponibles dans la démo complète.`,
+      task: "Suivez les zones mises en lumière. Certaines étapes vous demanderont d'ouvrir un formulaire ou d'enregistrer une action.",
+    }
+    : null;
+  const moduleEnd = end
+    ? {
+      ...end,
+      key: `end-${track}`,
+      page: modulePage,
+      title: `${trackLabel} terminé`,
+      body: `Le tutoriel ${trackLabel} est terminé. Vous pouvez relancer un autre module ou continuer à tester l'application.`,
+      task: "Cliquez sur Terminer pour quitter la visite.",
+    }
+    : null;
+
+  return [moduleIntro, ...pageSteps, moduleEnd].filter(Boolean);
 }
 
 const modalDemoGuidance = {
