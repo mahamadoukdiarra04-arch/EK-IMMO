@@ -8639,7 +8639,7 @@ function DemoModeModal({ dataLoaded, onLoadData, onStartTrack, onClose }) {
           </div>
           <span>
             <h2>Mode DEMO</h2>
-            <p>Choisissez un tutoriel guidé. Le client réalise les actions, puis l’étape suivante se débloque.</p>
+            <p>Choisissez un tutoriel guidé. Réalisez les actions demandées, puis l’étape suivante se débloque.</p>
           </span>
         </div>
 
