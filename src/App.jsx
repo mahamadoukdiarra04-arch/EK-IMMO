@@ -884,6 +884,352 @@ function getDemoStepsForTrack(track = "complete") {
   return [intro, ...pageSteps, end].filter(Boolean);
 }
 
+const modalDemoGuidance = {
+  "Relancer locataires dashboard": [
+    {
+      key: "selection",
+      target: "modal-relance-selection",
+      title: "Sélection des locataires",
+      body: "La relance groupée commence par la liste des locataires en retard. Les cases permettent d'inclure ou non chaque dossier dans l'action du jour.",
+      task: "Gardez les locataires concernés cochés. Vous pouvez décocher un dossier si la relance ne doit pas partir maintenant.",
+    },
+    {
+      key: "fields",
+      target: "modal-relance-fields",
+      title: "Paramètres de relance",
+      body: "Le canal, la prochaine date de relance et le responsable servent à alimenter Finance > Impayés, la fiche locataire et l'historique.",
+      task: "Choisissez le canal, vérifiez la date et adaptez le message si nécessaire.",
+    },
+    {
+      key: "save",
+      target: "modal-relance-save",
+      title: "Enregistrer la relance",
+      body: "La validation rattache l'action aux impayés sélectionnés et prépare la prochaine action de suivi.",
+      task: "Cliquez sur Enregistrer relance ou Enregistrer et marquer comme relancé.",
+      waitForParent: true,
+    },
+  ],
+  "Ajouter un bien": [
+    {
+      key: "identity",
+      target: "modal-property-main",
+      title: "Informations du bien",
+      body: "Cette première partie identifie le bien : code, type, nom, quartier, adresse, statut, loyer, caution et commission.",
+      task: "Exemple conseillé : Immeuble ACI Baobab, ACI 2000, statut Gestion multi-lots, loyer global 4 650 000 FCFA.",
+    },
+    {
+      key: "structure",
+      target: "modal-property-structure",
+      title: "Immeuble, blocs et lots",
+      body: "Cette zone permet de créer un immeuble parent ou un appartement rattaché. Chaque appartement garde sa propre fiche, tout en restant lié à l'immeuble.",
+      task: "Choisissez Immeuble parent pour créer la structure, ou Appartement rattaché pour lier un lot à un immeuble existant.",
+    },
+    {
+      key: "owner",
+      target: "modal-property-owner",
+      title: "Propriétaire et point focal",
+      body: "Le propriétaire est sélectionné ici. Si une autre personne suit le dossier pour lui, activez le point focal et renseignez ses coordonnées.",
+      task: "Vérifiez le propriétaire, le mode financier et le point focal avant d'enregistrer.",
+    },
+    {
+      key: "save",
+      target: "modal-property-save",
+      title: "Enregistrer le bien",
+      body: "Après validation, le bien apparaît dans la liste active et sa fiche complète s'ouvre avec les onglets de suivi.",
+      task: "Cliquez sur Enregistrer pour créer la fiche bien.",
+      waitForParent: true,
+    },
+  ],
+  "Ajouter locataire": [
+    {
+      key: "choice",
+      target: "modal-tenant-attach-mode",
+      title: "Choisir le type de rattachement",
+      body: "Vous pouvez rattacher un locataire déjà présent ou créer un nouveau locataire depuis cette même fenêtre.",
+      task: "Gardez Locataire existant pour aller vite, ou passez à Nouveau locataire pour saisir une nouvelle fiche.",
+    },
+    {
+      key: "details",
+      target: "modal-tenant-attach-details",
+      title: "Conditions d'entrée",
+      body: "La date d'entrée, le loyer, la caution et l'option de contrat alimentent la fiche du bien, la fiche locataire et l'historique.",
+      task: "Vérifiez la date, le loyer mensuel, la caution et l'option Créer contrat maintenant.",
+    },
+    {
+      key: "save",
+      target: "modal-tenant-attach-save",
+      title: "Rattacher le locataire",
+      body: "La validation peut passer le bien en Loué, mettre à jour l'onglet Locataire et ouvrir ensuite la création du contrat.",
+      task: "Cliquez sur Rattacher locataire ou Rattacher et créer contrat.",
+      waitForParent: true,
+    },
+  ],
+  "Enregistrer paiement": [
+    {
+      key: "amounts",
+      target: "modal-payment-amounts",
+      title: "Montants du paiement",
+      body: "Cette section calcule automatiquement le total payé, le solde restant et le statut du paiement.",
+      task: "Vérifiez la période, le loyer attendu, le montant déjà payé et le montant payé maintenant.",
+    },
+    {
+      key: "method",
+      target: "modal-payment-method",
+      title: "Mode et référence",
+      body: "Le mode de paiement, la référence et la date servent au reçu et à la situation propriétaire.",
+      task: "Choisissez le mode de paiement, vérifiez la référence et gardez le reçu automatique si nécessaire.",
+    },
+    {
+      key: "save",
+      target: "modal-payment-save",
+      title: "Valider le paiement",
+      body: "Le paiement mettra à jour l'onglet Paiements, le solde du locataire et les cartes financières.",
+      task: "Cliquez sur Enregistrer paiement ou Enregistrer et générer reçu.",
+      waitForParent: true,
+    },
+  ],
+  "Ajouter entretien": [
+    {
+      key: "info",
+      target: "modal-maintenance-info",
+      title: "Informations de l'entretien",
+      body: "L'entretien décrit le besoin technique, la priorité, la date prévue, le responsable et le prestataire.",
+      task: "Exemple : plomberie urgente, fuite salle d'eau, responsable Mariam Traoré, prestataire Plomberie Mali Services.",
+    },
+    {
+      key: "cost",
+      target: "modal-maintenance-cost",
+      title: "Coût et prise en charge",
+      body: "Cette partie indique qui prend en charge l'intervention et si une charge liée doit être créée automatiquement.",
+      task: "Vérifiez le coût estimé, le coût réel si connu, la prise en charge et l'option de charge liée.",
+    },
+    {
+      key: "save",
+      target: "modal-maintenance-save",
+      title: "Planifier l'entretien",
+      body: "L'intervention apparaîtra dans la fiche du bien, Finance > Entretiens et, si demandé, dans Finance > Charges.",
+      task: "Cliquez sur Planifier entretien ou Planifier et créer charge.",
+      waitForParent: true,
+    },
+  ],
+  "Ajouter une charge": [
+    {
+      key: "info",
+      target: "modal-charge-info",
+      title: "Informations de la charge",
+      body: "La charge précise la date, le type, le montant, le statut et la description de la dépense.",
+      task: "Exemple : nettoyage cour immeuble, 95 000 FCFA, statut À valider.",
+    },
+    {
+      key: "linking",
+      target: "modal-charge-linking",
+      title: "Rattachement et impact",
+      body: "Le rattachement lie la charge au bien, au propriétaire, au locataire ou à un entretien existant.",
+      task: "Vérifiez le bien, le propriétaire, l'entretien lié et la prise en charge.",
+    },
+    {
+      key: "save",
+      target: "modal-charge-save",
+      title: "Enregistrer la charge",
+      body: "La charge sera visible dans la fiche du bien et dans Finance > Charges.",
+      task: "Cliquez sur Enregistrer ou Enregistrer et valider.",
+      waitForParent: true,
+    },
+  ],
+  "Nouveau propriétaire": [
+    {
+      key: "identity",
+      target: "modal-owner-identity",
+      title: "Identité du propriétaire",
+      body: "La fiche propriétaire commence par le type, l'identité, le téléphone, l'email, l'adresse et le point focal si c'est une société.",
+      task: "Exemple : Société Baco Immo SAS, point focal Aminata Coulibaly.",
+    },
+    {
+      key: "conditions",
+      target: "modal-owner-conditions",
+      title: "Conditions de gestion",
+      body: "Ces champs pilotent la commission agence, le mode et la périodicité de reversement.",
+      task: "Vérifiez le mandat, la commission et le mode de reversement.",
+    },
+    {
+      key: "save",
+      target: "modal-owner-save",
+      title: "Enregistrer le propriétaire",
+      body: "Le propriétaire sera disponible pour être lié à un ou plusieurs biens.",
+      task: "Cliquez sur Enregistrer ou Enregistrer et ajouter un bien.",
+      waitForParent: true,
+    },
+  ],
+  "Nouveau locataire": [
+    {
+      key: "identity",
+      target: "modal-new-tenant-identity",
+      title: "Identité du locataire",
+      body: "Renseignez le nom, le téléphone, l'email, la profession, l'adresse et la pièce d'identité.",
+      task: "Exemple : Awa Traoré, +223 76 32 10 18, consultante.",
+    },
+    {
+      key: "property",
+      target: "modal-new-tenant-property",
+      title: "Rattachement immobilier",
+      body: "Le bien occupé détermine automatiquement le propriétaire. La date d'entrée et l'agent complètent le dossier.",
+      task: "Sélectionnez le bien, vérifiez le propriétaire et la date d'entrée.",
+    },
+    {
+      key: "save",
+      target: "modal-new-tenant-save",
+      title: "Enregistrer le locataire",
+      body: "Le locataire sera ajouté à Clients > Locataires et à la fiche du bien sélectionné.",
+      task: "Cliquez sur Enregistrer ou Enregistrer et créer contrat.",
+      waitForParent: true,
+    },
+  ],
+  "Nouveau prospect": [
+    {
+      key: "identity",
+      target: "modal-prospect-identity",
+      title: "Identification du prospect",
+      body: "Cette partie décrit le contact, son type et la source d'arrivée.",
+      task: "Exemple : Bintou Dembélé, WhatsApp, particulier.",
+    },
+    {
+      key: "need",
+      target: "modal-prospect-need",
+      title: "Besoin immobilier",
+      body: "Le besoin permet de proposer des biens pertinents : objectif, type recherché, quartiers, budget, délai et exigences.",
+      task: "Renseignez le type de bien, les quartiers souhaités et le budget.",
+    },
+    {
+      key: "save",
+      target: "modal-prospect-save",
+      title: "Enregistrer le prospect",
+      body: "La fiche prospect servira à suivre les propositions, visites, échanges et conversions.",
+      task: "Cliquez sur Enregistrer ou Enregistrer et proposer un bien.",
+      waitForParent: true,
+    },
+  ],
+  "Planifier visite prospect": [
+    {
+      key: "client",
+      target: "modal-visit-client",
+      title: "Client de la visite",
+      body: "La visite peut partir d'un prospect existant ou d'un nouveau prospect créé directement.",
+      task: "Vérifiez le prospect, le téléphone et le besoin.",
+    },
+    {
+      key: "planning",
+      target: "modal-visit-planning",
+      title: "Planification",
+      body: "La date, l'heure, l'agent, le lieu de rendez-vous et le rappel permettent d'alimenter le planning et les notifications.",
+      task: "Vérifiez la date, l'heure, l'agent et le rappel notification.",
+    },
+    {
+      key: "save",
+      target: "modal-visit-save",
+      title: "Valider la visite",
+      body: "La visite sera visible dans Clients > Visites, la fiche prospect et la fiche bien.",
+      task: "Cliquez sur Planifier visite.",
+      waitForParent: true,
+    },
+  ],
+  "Créer contrat": [
+    {
+      key: "variables",
+      target: "modal-contract-form",
+      title: "Champs variables du contrat",
+      body: "Le formulaire ne demande que les informations qui changent : parties, dates, loyer, caution, commission et conditions particulières.",
+      task: "Contrôlez les champs préremplis avant de générer le PDF.",
+    },
+    {
+      key: "save",
+      target: "modal-contract-save",
+      title: "Générer le contrat",
+      body: "Le document généré reprend le modèle source et sera ajouté aux fiches liées.",
+      task: "Cliquez sur Générer PDF.",
+      waitForParent: true,
+    },
+  ],
+  "Importer document": [
+    {
+      key: "type",
+      target: "modal-document-import-type",
+      title: "Type de document",
+      body: "Le type classe le document dans la fiche liée et dans les archives.",
+      task: "Choisissez le type : titre foncier, mandat, contrat signé, facture, reçu, photo ou justificatif.",
+    },
+    {
+      key: "file",
+      target: "modal-document-import-file",
+      title: "Fichier et rattachement",
+      body: "Le document est rattaché au bien, et peut aussi être lié à un propriétaire, locataire, contrat, charge ou entretien.",
+      task: "Sélectionnez le fichier, vérifiez le nom et le rattachement.",
+    },
+    {
+      key: "save",
+      target: "modal-document-import-save",
+      title: "Importer le document",
+      body: "L'import ajoute le document à la fiche bien, aux archives et à l'historique.",
+      task: "Cliquez sur Importer ou Importer et ouvrir.",
+      waitForParent: true,
+    },
+  ],
+  "Préparer reversement": [
+    {
+      key: "owner",
+      target: "modal-reversal-owner",
+      title: "Propriétaire et période",
+      body: "Le reversement commence par le propriétaire et la période à couvrir.",
+      task: "Sélectionnez le propriétaire et vérifiez la période début / fin.",
+    },
+    {
+      key: "calculation",
+      target: "modal-reversal-calculation",
+      title: "Calcul automatique",
+      body: "Le solde reprend les loyers encaissés, commissions, charges déduites et reversements déjà effectués.",
+      task: "Contrôlez le calcul avant de passer au paiement.",
+    },
+    {
+      key: "save",
+      target: "modal-reversal-save",
+      title: "Enregistrer le reversement",
+      body: "Le reversement mettra à jour la situation propriétaire et pourra générer un état.",
+      task: "Cliquez sur Enregistrer reversement ou Enregistrer et générer état.",
+      waitForParent: true,
+    },
+  ],
+  "Ajouter utilisateur": [
+    {
+      key: "fields",
+      target: "modal-user-fields",
+      title: "Informations utilisateur",
+      body: "La création utilisateur définit l'identité, le rôle, le statut et le mode d'invitation.",
+      task: "Renseignez le nom, l'email, le téléphone, le rôle et le statut.",
+    },
+    {
+      key: "save",
+      target: "modal-user-save",
+      title: "Créer l'utilisateur",
+      body: "L'utilisateur sera ajouté à l'administration avec son historique initial.",
+      task: "Cliquez sur Créer utilisateur ou Créer et envoyer invitation.",
+      waitForParent: true,
+    },
+  ],
+};
+
+function getModalDemoStep(parentStep, modalName, phaseIndex) {
+  const phases = modalDemoGuidance[modalName];
+  if (!parentStep?.waitFor || !phases?.length) return null;
+  const safeIndex = Math.min(Math.max(phaseIndex, 0), phases.length - 1);
+  const phase = phases[safeIndex];
+  return {
+    ...parentStep,
+    ...phase,
+    key: `${parentStep.key}-modal-${phase.key}`,
+    waitFor: phase.waitForParent ? parentStep.waitFor : phase.waitFor,
+    success: parentStep.success,
+  };
+}
+
 const interactiveDemoSteps = [
   {
     key: "intro",
@@ -3401,6 +3747,7 @@ function App() {
   const [demoIndex, setDemoIndex] = useState(0);
   const [demoRect, setDemoRect] = useState(null);
   const [demoStepStatus, setDemoStepStatus] = useState(null);
+  const [demoModalPhase, setDemoModalPhase] = useState(0);
   const [globalQuery, setGlobalQuery] = useState("");
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [propertyView, setPropertyView] = useState("list");
@@ -3502,6 +3849,9 @@ function App() {
   const demoBaseUsers = demoDataLoaded ? users : [];
   const activeDemoSteps = useMemo(() => getDemoStepsForTrack(demoTrack), [demoTrack]);
   const demoStep = activeDemoSteps[demoIndex];
+  const modalGuidancePhases = demoActive && demoStep?.waitFor ? modalDemoGuidance[modal] : null;
+  const effectiveDemoStep = modalGuidancePhases?.length ? getModalDemoStep(demoStep, modal, demoModalPhase) : demoStep;
+  const modalGuidanceActive = Boolean(modalGuidancePhases?.length && effectiveDemoStep);
   const allContracts = useMemo(() => {
     const applyOverride = (contract) => ({ ...contract, ...(contractOverrides[getContractKey(contract)] ?? {}) });
     return [...generatedContracts.map(applyOverride), ...demoBaseContracts.map(applyOverride)];
@@ -3614,6 +3964,7 @@ function App() {
   }, [allTenants]);
 
   const advanceDemoStep = () => {
+    setDemoModalPhase(0);
     setDemoIndex((index) => {
       if (index >= activeDemoSteps.length - 1) {
         setDemoActive(false);
@@ -3629,10 +3980,11 @@ function App() {
     const expectedEvents = Array.isArray(demoStep.waitFor) ? demoStep.waitFor : [demoStep.waitFor];
     const normalizedEvent = normalizeSearch(eventName);
     const matched = expectedEvents.some((event) => normalizeSearch(event) === normalizedEvent);
-    if (!matched || demoStepStatus?.key === demoStep.key) return false;
+    const completionKey = effectiveDemoStep?.key ?? demoStep.key;
+    if (!matched || demoStepStatus?.key === completionKey) return false;
 
     setDemoStepStatus({
-      key: demoStep.key,
+      key: completionKey,
       message: demoStep.success ?? "Étape validée.",
     });
     window.setTimeout(advanceDemoStep, 850);
@@ -4574,6 +4926,7 @@ function App() {
     loadDemoData();
     setDemoTrack(track);
     setDemoIndex(0);
+    setDemoModalPhase(0);
     setDemoActive(true);
     setModal(null);
     const firstPageStep = getDemoStepsForTrack(track).find((step) => step.page && step.page !== "Dashboard");
@@ -4585,13 +4938,23 @@ function App() {
   const stopDemo = () => {
     setDemoActive(false);
     setDemoRect(null);
+    setDemoModalPhase(0);
   };
 
   const previousDemoStep = () => {
+    if (modalGuidanceActive && demoModalPhase > 0) {
+      setDemoModalPhase((phase) => Math.max(phase - 1, 0));
+      return;
+    }
+    setDemoModalPhase(0);
     setDemoIndex((index) => Math.max(index - 1, 0));
   };
 
   const nextDemoStep = () => {
+    if (modalGuidanceActive && demoModalPhase < modalGuidancePhases.length - 1) {
+      setDemoModalPhase((phase) => phase + 1);
+      return;
+    }
     advanceDemoStep();
   };
 
@@ -7237,6 +7600,10 @@ function App() {
   }, [activeDemoSteps, demoActive, demoIndex, propertiesWithArchiveState]);
 
   useEffect(() => {
+    setDemoModalPhase(0);
+  }, [modal, demoStep?.key]);
+
+  useEffect(() => {
     if (!demoActive) return undefined;
 
     const handleKeyDown = (event) => {
@@ -7250,12 +7617,12 @@ function App() {
   }, [demoActive]);
 
   useEffect(() => {
-    if (!demoActive || !demoStep) return undefined;
+    if (!demoActive || !effectiveDemoStep) return undefined;
 
-    const targetSelector = `[data-demo="${demoStep.target}"]`;
+    const targetSelector = `[data-demo="${effectiveDemoStep.target}"]`;
 
     const measureTarget = () => {
-      const target = document.querySelector(targetSelector);
+      const target = document.querySelector(targetSelector) ?? (modal ? document.querySelector(".modal-card") : null);
       if (!target) {
         setDemoRect(null);
         return;
@@ -7270,7 +7637,7 @@ function App() {
     };
 
     const focusTarget = () => {
-      const target = document.querySelector(targetSelector);
+      const target = document.querySelector(targetSelector) ?? (modal ? document.querySelector(".modal-card") : null);
       if (!target) {
         setDemoRect(null);
         return;
@@ -7288,7 +7655,7 @@ function App() {
       window.removeEventListener("resize", measureTarget);
       window.removeEventListener("scroll", measureTarget, true);
     };
-  }, [demoActive, demoStep, activePage, propertyView, propertyTab, clientTab, contractTab, financeTab, adminTab, reportType]);
+  }, [demoActive, effectiveDemoStep, modal, activePage, propertyView, propertyTab, clientTab, contractTab, financeTab, adminTab, reportType]);
 
   if (!isAuthenticated || showLogin) {
     return <LoginScreen onLogin={handleLogin} />;
@@ -7419,11 +7786,13 @@ function App() {
       </main>
 
       <Footer />
-      {demoActive && demoStep && (
+      {demoActive && effectiveDemoStep && (
         <DemoTour
-          step={demoStep}
+          step={effectiveDemoStep}
           index={demoIndex}
           total={activeDemoSteps.length}
+          subIndex={modalGuidanceActive ? demoModalPhase : null}
+          subTotal={modalGuidanceActive ? modalGuidancePhases.length : null}
           rect={demoRect}
           status={demoStepStatus}
           onNext={nextDemoStep}
@@ -8271,7 +8640,7 @@ function DemoModeModal({ dataLoaded, onLoadData, onStartTrack, onClose }) {
   );
 }
 
-function DemoTour({ step, index, total, rect, status, onNext, onPrevious, onStop }) {
+function DemoTour({ step, index, total, subIndex = null, subTotal = null, rect, status, onNext, onPrevious, onStop }) {
   const position = getDemoCardPosition(rect);
   const spotlightStyle = rect
     ? {
@@ -8284,6 +8653,7 @@ function DemoTour({ step, index, total, rect, status, onNext, onPrevious, onStop
   const isLast = index === total - 1;
   const waitsForAction = Boolean(step.waitFor);
   const completed = status?.key === step.key;
+  const hasSubStep = Number.isInteger(subIndex) && Number.isInteger(subTotal) && subTotal > 1;
 
   return (
     <div className="demo-tour" role="dialog" aria-label="Mode démonstration E.K immo">
@@ -8321,7 +8691,7 @@ function DemoTour({ step, index, total, rect, status, onNext, onPrevious, onStop
           </div>
         )}
         <div className="demo-progress" aria-label={`Étape ${index + 1} sur ${total}`}>
-          <span>Étape {index + 1} / {total}</span>
+          <span>Étape {index + 1} / {total}{hasSubStep ? ` · Sous-étape ${subIndex + 1} / ${subTotal}` : ""}</span>
           <div>
             <i style={{ width: `${((index + 1) / total) * 100}%` }} />
           </div>
@@ -15889,7 +16259,7 @@ function FinanceReversalPrepareModal({ owner, ownersList = owners, paymentsList 
           <Badge label={values.reference} />
         </div>
 
-        <div className="form-section">
+        <div className="form-section" data-demo="modal-reversal-owner">
           <h3>Propriétaire</h3>
           <div className="form-grid compact-form">
             <label>Sélectionner propriétaire<select value={ownerName} onChange={(event) => setOwnerName(event.target.value)}>{ownersList.map((item) => <option key={item.id}>{item.name}</option>)}</select></label>
@@ -15898,7 +16268,7 @@ function FinanceReversalPrepareModal({ owner, ownersList = owners, paymentsList 
           </div>
         </div>
 
-        <div className="form-section">
+        <div className="form-section" data-demo="modal-reversal-calculation">
           <h3>Calcul automatique</h3>
           <div className="simple-list">
             <p><span>Loyers encaissés</span><strong>{calculation.collectedLabel}</strong></p>
@@ -15926,7 +16296,7 @@ function FinanceReversalPrepareModal({ owner, ownersList = owners, paymentsList 
         <div className="action-row compact-row">
           <Button onClick={onClose}>Annuler</Button>
           <Button onClick={() => setPreview(true)}><Eye size={17} /> Prévisualiser état</Button>
-          <Button variant="primary" onClick={() => submit(false)}><CheckCircle2 size={17} /> Enregistrer reversement</Button>
+          <Button data-demo="modal-reversal-save" variant="primary" onClick={() => submit(false)}><CheckCircle2 size={17} /> Enregistrer reversement</Button>
           <Button onClick={() => submit(true)}><FileText size={17} /> Enregistrer et générer état</Button>
         </div>
       </section>
@@ -17422,7 +17792,7 @@ function UserFormAdminModal({ mode = "create", user = null, sequence = 1, onCrea
         <div className="round-icon"><UserCog size={22} /></div>
         <h2>{isEdit ? "Modifier utilisateur" : "Ajouter utilisateur"}</h2>
         <p>{isEdit ? "Mettre à jour les informations, le rôle et le statut de l'utilisateur." : "Créer un accès collaborateur pour l'espace E.K immo."}</p>
-        <div className="form-grid compact-form">
+        <div className="form-grid compact-form" data-demo="modal-user-fields">
           <label>Nom<input value={values.name} onChange={update("name")} placeholder="Nom complet" /></label>
           <label>Email<input value={values.email} onChange={update("email")} placeholder="nom@ekimmo.ml" /></label>
           <label>Téléphone<input value={values.phone} onChange={update("phone")} placeholder="+223 70 00 00 00" /></label>
@@ -17442,7 +17812,7 @@ function UserFormAdminModal({ mode = "create", user = null, sequence = 1, onCrea
           ) : (
             <>
               <Button onClick={() => submitCreate(false)}><UserCog size={17} /> Créer utilisateur</Button>
-              <Button variant="primary" onClick={() => submitCreate(true)}><Send size={17} /> Créer et envoyer invitation</Button>
+              <Button data-demo="modal-user-save" variant="primary" onClick={() => submitCreate(true)}><Send size={17} /> Créer et envoyer invitation</Button>
             </>
           )}
         </div>
@@ -18267,7 +18637,7 @@ function ProspectFormModal({ sequence = prospects.length + 1, onSave, onClose })
           <Badge label={values.id} />
         </div>
 
-        <div className="form-section">
+        <div className="form-section" data-demo="modal-prospect-identity">
           <h3>Identification</h3>
           <div className="form-grid">
             <label>Nom
@@ -18297,7 +18667,7 @@ function ProspectFormModal({ sequence = prospects.length + 1, onSave, onClose })
           </div>
         </div>
 
-        <div className="form-section">
+        <div className="form-section" data-demo="modal-prospect-need">
           <h3>Besoin immobilier</h3>
           <div className="form-grid">
             <label>Objectif
@@ -18355,7 +18725,7 @@ function ProspectFormModal({ sequence = prospects.length + 1, onSave, onClose })
         <div className="action-row compact-row">
           <Button onClick={onClose}>Annuler</Button>
           <Button onClick={() => submit(false)} disabled={!canSave}>Enregistrer</Button>
-          <Button variant="primary" onClick={() => submit(true)} disabled={!canSave}>
+          <Button data-demo="modal-prospect-save" variant="primary" onClick={() => submit(true)} disabled={!canSave}>
             <Home size={17} /> Enregistrer et proposer un bien
           </Button>
         </div>
@@ -18639,7 +19009,7 @@ function ProspectVisitModal({ prospect, proposal, property, prospectsList = pros
           <Badge label={visit.clientMode === "new" ? "Nouveau prospect" : (visit.prospectName || "Prospect")} />
         </div>
 
-        <div className="form-section">
+        <div className="form-section" data-demo="modal-visit-client">
           <h3>Client</h3>
           <div className="segmented visit-mode-switch" role="group" aria-label="Type de prospect">
             <button className={visit.clientMode === "existing" ? "active" : ""} type="button" onClick={() => setClientMode("existing")}>Prospect existant</button>
@@ -18667,7 +19037,7 @@ function ProspectVisitModal({ prospect, proposal, property, prospectsList = pros
           </div>
         </div>
 
-        <div className="form-section">
+        <div className="form-section" data-demo="modal-visit-planning">
           <h3>Planification</h3>
           <div className="form-grid">
             <label>Date<input type="date" value={visit.date} onChange={update("date")} /></label>
@@ -18689,7 +19059,7 @@ function ProspectVisitModal({ prospect, proposal, property, prospectsList = pros
 
         <div className="action-row compact-row">
           <Button onClick={onClose}>Annuler</Button>
-          <Button variant="primary" onClick={() => onSave({ prospect, visit })}>Planifier visite</Button>
+          <Button data-demo="modal-visit-save" variant="primary" onClick={() => onSave({ prospect, visit })}>Planifier visite</Button>
         </div>
       </section>
     </div>
@@ -18875,7 +19245,7 @@ function OwnerFormModal({ sequence = owners.length + 1, owner = null, mode = "cr
           <Badge label={values.id} />
         </div>
 
-        <div className="form-section">
+        <div className="form-section" data-demo="modal-owner-identity">
           <h3>Identité</h3>
           <div className="form-grid compact-form">
             <label>Type<select value={values.type} onChange={(event) => update("type", event.target.value)}><option>Personne physique</option><option>Société</option></select></label>
@@ -18890,7 +19260,7 @@ function OwnerFormModal({ sequence = owners.length + 1, owner = null, mode = "cr
           </div>
         </div>
 
-        <div className="form-section">
+        <div className="form-section" data-demo="modal-owner-conditions">
           <h3>Conditions de gestion</h3>
           <div className="form-grid compact-form">
             <label>Type de mandat<select value={values.mandateType} onChange={(event) => update("mandateType", event.target.value)}><option>Mandat de gestion locative</option><option>Mandat entretien seul</option><option>Mandat de mise en location</option><option>Mandat de vente</option><option>Mandat mixte</option></select></label>
@@ -18917,7 +19287,7 @@ function OwnerFormModal({ sequence = owners.length + 1, owner = null, mode = "cr
             <Button variant="primary" disabled={!canSave} onClick={() => submit(false)}><CheckCircle2 size={17} /> Enregistrer les modifications</Button>
           ) : (
             <>
-              <Button variant="primary" disabled={!canSave} onClick={() => submit(false)}><CheckCircle2 size={17} /> Enregistrer</Button>
+              <Button data-demo="modal-owner-save" variant="primary" disabled={!canSave} onClick={() => submit(false)}><CheckCircle2 size={17} /> Enregistrer</Button>
               <Button disabled={!canSave} onClick={() => submit(true)}><Plus size={17} /> Enregistrer et ajouter un bien</Button>
             </>
           )}
@@ -19337,7 +19707,7 @@ function ChargeFormModal({ title, context = null, propertiesList = properties, m
           <Badge label={values.id} />
         </div>
 
-        <div className="form-section">
+        <div className="form-section" data-demo="modal-charge-info">
           <h3>Informations générales</h3>
           <div className="form-grid compact-form">
             <label>Date<input type="date" value={values.date} onChange={update("date")} /></label>
@@ -19348,7 +19718,7 @@ function ChargeFormModal({ title, context = null, propertiesList = properties, m
           </div>
         </div>
 
-        <div className="form-section">
+        <div className="form-section" data-demo="modal-charge-linking">
           <h3>Rattachement</h3>
           <div className="form-grid compact-form">
             <label>Bien concerné<select value={values.propertyCode} onChange={update("propertyCode")}>{propertyOptions.map((property) => <option key={property.code} value={property.code}>{property.name}</option>)}</select></label>
@@ -19359,7 +19729,7 @@ function ChargeFormModal({ title, context = null, propertiesList = properties, m
           </div>
         </div>
 
-        <div className="form-section">
+        <div className="form-section" data-demo="modal-charge-linking">
           <h3>Prise en charge</h3>
           <div className="form-grid compact-form">
             <label>Prise en charge<select value={values.payer} onChange={update("payer")}>{chargePayers.map((item) => <option key={item}>{item}</option>)}</select></label>
@@ -19380,7 +19750,7 @@ function ChargeFormModal({ title, context = null, propertiesList = properties, m
         {message && <p className="form-feedback error">{message}</p>}
         <div className="action-row compact-row">
           <Button onClick={onClose}><XCircle size={17} /> Annuler</Button>
-          <Button disabled={!canSave} onClick={() => submit(false)}><CheckCircle2 size={17} /> Enregistrer</Button>
+          <Button data-demo="modal-charge-save" disabled={!canSave} onClick={() => submit(false)}><CheckCircle2 size={17} /> Enregistrer</Button>
           <Button variant="primary" disabled={!canSave} onClick={() => submit(true)}><ShieldCheck size={17} /> Enregistrer et valider</Button>
         </div>
       </section>
@@ -19590,7 +19960,7 @@ function NewTenantFormModal({ sequence = 1, propertiesList = properties, onSave,
           <Badge label={values.id} />
         </div>
 
-        <div className="form-section">
+        <div className="form-section" data-demo="modal-new-tenant-identity">
           <h3>Identité</h3>
           <div className="form-grid tenant-creation-grid">
             <label>Nom complet<input value={values.name} onChange={update("name")} placeholder="Ex. Aminata Coulibaly" /></label>
@@ -19602,7 +19972,7 @@ function NewTenantFormModal({ sequence = 1, propertiesList = properties, onSave,
           </div>
         </div>
 
-        <div className="form-section">
+        <div className="form-section" data-demo="modal-new-tenant-property">
           <h3>Rattachement immobilier</h3>
           <div className="form-grid tenant-creation-grid">
             <label>Bien occupé<select value={values.propertyCode} onChange={updateProperty}>{propertyOptions.map((property) => <option key={property.code} value={property.code}>{property.name}</option>)}</select></label>
@@ -19639,7 +20009,7 @@ function NewTenantFormModal({ sequence = 1, propertiesList = properties, onSave,
 
         <div className="action-row compact-row">
           <Button onClick={onClose}>Annuler</Button>
-          <Button variant="primary" disabled={!canSave} onClick={() => submit(false)}><CheckCircle2 size={17} /> Enregistrer</Button>
+          <Button data-demo="modal-new-tenant-save" variant="primary" disabled={!canSave} onClick={() => submit(false)}><CheckCircle2 size={17} /> Enregistrer</Button>
           <Button disabled={!canSave} onClick={() => submit(true)}><FileText size={17} /> Enregistrer et créer contrat</Button>
         </div>
       </section>
@@ -20775,14 +21145,14 @@ function PropertyDocumentImportModal({ context = null, propertiesList = properti
           <Badge label={selectedProperty.code} />
         </div>
 
-        <div className="form-section">
+        <div className="form-section" data-demo="modal-document-import-type">
           <h3>Type de document</h3>
           <div className="form-grid compact-form">
             <label>Type<select value={values.documentType} onChange={update("documentType")}>{documentTypes.map((item) => <option key={item}>{item}</option>)}</select></label>
           </div>
         </div>
 
-        <div className="form-section">
+        <div className="form-section" data-demo="modal-document-import-file">
           <h3>Rattachement</h3>
           <div className="form-grid compact-form">
             <label>Bien concerné<select value={values.propertyCode} onChange={updateProperty}>{propertyOptions.map((property) => <option key={property.code} value={property.code}>{property.name}</option>)}</select></label>
@@ -20794,7 +21164,7 @@ function PropertyDocumentImportModal({ context = null, propertiesList = properti
           </div>
         </div>
 
-        <div className="form-section">
+        <div className="form-section" data-demo="modal-document-import-file">
           <h3>Fichier</h3>
           <div className="document-upload-grid">
             <label className="full">
@@ -20818,7 +21188,7 @@ function PropertyDocumentImportModal({ context = null, propertiesList = properti
         {message && <p className="form-feedback error">{message}</p>}
         <div className="action-row compact-row">
           <Button onClick={onClose}>Annuler</Button>
-          <Button disabled={!canImport} onClick={() => submit(false)}><Upload size={17} /> Importer</Button>
+          <Button data-demo="modal-document-import-save" disabled={!canImport} onClick={() => submit(false)}><Upload size={17} /> Importer</Button>
           <Button variant="primary" disabled={!canImport} onClick={() => submit(true)}><Eye size={17} /> Importer et ouvrir</Button>
         </div>
       </section>
@@ -20917,7 +21287,7 @@ function DashboardRentReminderModal({ rows = [], relancesList = [], onSave, onCl
           <Badge label={`${selectedRows.length} sélectionné(s)`} />
         </div>
 
-        <div className="reminder-table-wrap">
+        <div className="reminder-table-wrap" data-demo="modal-relance-selection">
           <table>
             <thead>
               <tr>
@@ -20950,7 +21320,7 @@ function DashboardRentReminderModal({ rows = [], relancesList = [], onSave, onCl
           </table>
         </div>
 
-        <div className="form-section">
+        <div className="form-section" data-demo="modal-relance-fields">
           <h3>Relance</h3>
           <div className="form-grid compact-form">
             <label>Canal<select value={values.channel} onChange={update("channel")}><option>Appel</option><option>WhatsApp</option><option>SMS</option><option>Email</option><option>Visite</option></select></label>
@@ -20962,7 +21332,7 @@ function DashboardRentReminderModal({ rows = [], relancesList = [], onSave, onCl
 
         <div className="action-row compact-row">
           <Button onClick={onClose}>Annuler</Button>
-          <Button disabled={!selectedRows.length} onClick={() => submit(false)}><Bell size={17} /> Enregistrer relance</Button>
+          <Button data-demo="modal-relance-save" disabled={!selectedRows.length} onClick={() => submit(false)}><Bell size={17} /> Enregistrer relance</Button>
           <Button variant="primary" disabled={!selectedRows.length} onClick={() => submit(true)}><CheckCircle2 size={17} /> Enregistrer et marquer comme relancé</Button>
         </div>
       </section>
@@ -21274,10 +21644,12 @@ function AttachTenantModal({ property, onClose, onAttach }) {
         <h2>Rattacher un locataire</h2>
         <p>Bien concerné : <strong>{property.name}</strong> · {property.address}</p>
 
-        <Segmented value={mode} onChange={setMode} options={["Locataire existant", "Nouveau locataire"]} />
+        <div data-demo="modal-tenant-attach-mode">
+          <Segmented value={mode} onChange={setMode} options={["Locataire existant", "Nouveau locataire"]} />
+        </div>
 
         {mode === "Locataire existant" ? (
-          <div className="form-section">
+          <div className="form-section" data-demo="modal-tenant-attach-details">
             <h3>Cas 1 — Locataire existant</h3>
             <div className="form-grid compact-form">
               <label>Sélectionner locataire<select value={existingTenantName} onChange={(event) => setExistingTenantName(event.target.value)}>{tenants.map((tenant) => <option key={tenant.id}>{tenant.name}</option>)}</select></label>
@@ -21297,7 +21669,7 @@ function AttachTenantModal({ property, onClose, onAttach }) {
             </div>
           </div>
         ) : (
-          <div className="form-section">
+          <div className="form-section" data-demo="modal-tenant-attach-details">
             <h3>Cas 2 — Nouveau locataire</h3>
             <div className="form-grid compact-form">
               <label>Nom complet<input value={newValues.name} onChange={(event) => updateNew("name", event.target.value)} /></label>
@@ -21318,7 +21690,7 @@ function AttachTenantModal({ property, onClose, onAttach }) {
 
         <div className="action-row compact-row">
           <Button onClick={onClose}>Annuler</Button>
-          <Button variant="primary" onClick={() => submit(false)}><UsersRound size={17} /> Rattacher locataire</Button>
+          <Button data-demo="modal-tenant-attach-save" variant="primary" onClick={() => submit(false)}><UsersRound size={17} /> Rattacher locataire</Button>
           <Button onClick={() => submit(true)}><FileText size={17} /> Rattacher et créer contrat</Button>
         </div>
       </section>
@@ -21411,7 +21783,7 @@ function PaymentRegistrationModal({ context, paymentsList = paymentRecords, rent
           </div>
         ) : (
           <>
-            <div className="form-section">
+            <div className="form-section" data-demo="modal-payment-amounts">
               <h3>Montants</h3>
               <div className="form-grid compact-form">
                 <label>Période concernée<input value={period} onChange={(event) => setPeriod(event.target.value)} /></label>
@@ -21423,7 +21795,7 @@ function PaymentRegistrationModal({ context, paymentsList = paymentRecords, rent
               </div>
             </div>
 
-            <div className="form-section">
+            <div className="form-section" data-demo="modal-payment-method">
               <h3>Paiement</h3>
               <div className="form-grid compact-form">
                 <label>Mode de paiement<select value={mode} onChange={(event) => setMode(event.target.value)}>{paymentModes.map((item) => <option key={item}>{item}</option>)}</select></label>
@@ -21449,7 +21821,7 @@ function PaymentRegistrationModal({ context, paymentsList = paymentRecords, rent
 
         <div className="action-row compact-row">
           <Button onClick={onClose}>Annuler</Button>
-          {!isDirectCollection && <Button variant="primary" onClick={() => submit(false)}><CheckCircle2 size={17} /> Enregistrer paiement</Button>}
+          {!isDirectCollection && <Button data-demo="modal-payment-save" variant="primary" onClick={() => submit(false)}><CheckCircle2 size={17} /> Enregistrer paiement</Button>}
           {!isDirectCollection && <Button onClick={() => submit(true)}><ReceiptText size={17} /> Enregistrer et générer reçu</Button>}
         </div>
       </section>
@@ -22025,7 +22397,7 @@ function MaintenanceFormModal({ context, onSave, onClose }) {
           <Badge label={priority} />
         </div>
 
-        <div className="form-section">
+        <div className="form-section" data-demo="modal-maintenance-info">
           <h3>Informations de l'entretien</h3>
           <div className="form-grid compact-form">
             <label>Bien concerné<select value={propertyName} onChange={(event) => setPropertyName(event.target.value)}>{properties.map((property) => <option key={property.code}>{property.name}</option>)}</select></label>
@@ -22039,7 +22411,7 @@ function MaintenanceFormModal({ context, onSave, onClose }) {
           </div>
         </div>
 
-        <div className="form-section">
+        <div className="form-section" data-demo="modal-maintenance-cost">
           <h3>Coût & prise en charge</h3>
           <div className="form-grid compact-form">
             <label>Coût estimé<input value={estimatedCost} onChange={(event) => setEstimatedCost(event.target.value)} /></label>
@@ -22060,7 +22432,7 @@ function MaintenanceFormModal({ context, onSave, onClose }) {
 
         <div className="action-row compact-row">
           <Button onClick={onClose}>Annuler</Button>
-          <Button variant="primary" onClick={() => submit(false)}><CalendarDays size={17} /> Planifier entretien</Button>
+          <Button data-demo="modal-maintenance-save" variant="primary" onClick={() => submit(false)}><CalendarDays size={17} /> Planifier entretien</Button>
           <Button onClick={() => submit(true)}><ReceiptText size={17} /> Planifier et créer charge</Button>
         </div>
       </section>
@@ -22849,7 +23221,7 @@ function ContractFormModal({
         <button className="modal-close" onClick={onClose}>×</button>
         <h2>Créer contrat</h2>
         <p>Renseignez les informations du bail. Le modèle E.K immo sera complété à la génération.</p>
-        <div className="form-section">
+        <div className="form-section" data-demo="modal-contract-form">
           <h3>Contrat et rattachement</h3>
           <div className="form-grid">
             <label>Type de contrat<select value={values.objet} onChange={(event) => updateLease("objet", event.target.value)}><option>CONTRAT DE BAIL À USAGE PROFESSIONNEL</option><option>Contrat de bail à usage d'habitation</option><option>Mandat de gestion</option></select></label>
@@ -22861,10 +23233,12 @@ function ContractFormModal({
           </div>
         </div>
 
-        <LeaseVariableForm values={values} onChange={updateLease} includeReference={false} />
+        <div data-demo="modal-contract-form">
+          <LeaseVariableForm values={values} onChange={updateLease} includeReference={false} />
+        </div>
         <div className="action-row compact-row">
           <Button onClick={saveDraft}><Archive size={17} /> Enregistrer brouillon</Button>
-          <Button variant="primary" onClick={generateContract}><Download size={17} /> Générer PDF</Button>
+          <Button data-demo="modal-contract-save" variant="primary" onClick={generateContract}><Download size={17} /> Générer PDF</Button>
           <Button onClick={archiveContract}><Archive size={17} /> Archiver</Button>
         </div>
         {preview && (
@@ -23066,7 +23440,7 @@ function PropertyFormModal({
       <section className="modal-card wide-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
         <button className="modal-close" onClick={onClose}>×</button>
         <h2>{title}</h2>
-        <div className="form-section">
+        <div className="form-section" data-demo="modal-property-main">
           <h3>Informations générales</h3>
           <div className="form-grid compact-form">
             <label>Code du bien<input value={formValues.code} onChange={updateValue("code")} /></label>
@@ -23082,7 +23456,7 @@ function PropertyFormModal({
             <label>Commission applicable<input value={sensitiveValues.commission} onChange={(event) => updateSensitiveValue("commission", event.target.value)} /></label>
           </div>
         </div>
-        <div className="form-section">
+        <div className="form-section" data-demo="modal-property-structure">
           <h3>Immeuble, blocs et lots</h3>
           <div className="form-grid compact-form">
             <label>Nature du dossier<select value={propertyNature} onChange={(event) => setPropertyNature(event.target.value)}><option>Appartement rattaché</option><option>Immeuble parent</option><option>Bien individuel</option></select></label>
@@ -23111,7 +23485,7 @@ function PropertyFormModal({
             </div>
           </div>
         </div>
-        <div className="form-section">
+        <div className="form-section" data-demo="modal-property-owner">
           <h3>Propriétaire & point focal</h3>
           <div className="form-grid compact-form">
             <label>Propriétaire<select value={sensitiveValues.owner} onChange={(event) => updateSensitiveValue("owner", event.target.value)}>{withCurrentOption("owner").map((option) => <option key={option}>{option}</option>)}</select></label>
@@ -23164,7 +23538,7 @@ function PropertyFormModal({
           </div>
         )}
         <div className="action-row compact-row">
-          <Button variant="primary" onClick={() => handleSave(false)}><CheckCircle2 size={17} /> Enregistrer</Button>
+          <Button data-demo="modal-property-save" variant="primary" onClick={() => handleSave(false)}><CheckCircle2 size={17} /> Enregistrer</Button>
           <Button onClick={() => handleSave(true)}>Enregistrer comme brouillon</Button>
           <Button onClick={onClose}>Annuler</Button>
         </div>
