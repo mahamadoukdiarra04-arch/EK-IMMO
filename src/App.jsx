@@ -223,21 +223,664 @@ const demoSteps = [
 ];
 
 const demoTrackOptions = [
-  { key: "complete", label: "Démo complète", description: "Parcours interactif de bout en bout, avec actions à réaliser." },
-  { key: "Dashboard", label: "Tableau de bord", description: "Lecture des KPI, alertes et actions prioritaires." },
-  { key: "Biens", label: "Module Biens", description: "Créer un bien, rattacher un locataire, ajouter documents, charges et entretiens." },
-  { key: "Clients", label: "Module Clients", description: "Créer propriétaires, locataires, prospects et planifier une visite." },
-  { key: "Contrats", label: "Module Docs", description: "Créer contrats, générer documents, gérer échéances et archives." },
-  { key: "Finance", label: "Module Finance", description: "Paiements, impayés, charges, entretiens et reversements." },
-  { key: "Rapports", label: "Module Rapports", description: "Filtres, états, exports PDF, Excel et impression." },
-  { key: "Plus", label: "Administration", description: "Créer utilisateurs, gérer rôles, permissions et modèles." },
+  { key: "complete", label: "Démo complète", description: "Parcours guidé de prise en main avec lectures, exemples et actions réelles." },
+  { key: "Dashboard", label: "Tableau de bord", description: "Comprendre chaque carte, les graphiques, alertes et actions prioritaires." },
+  { key: "Biens", label: "Module Biens", description: "Créer un bien, lire une fiche, rattacher locataire, charge, entretien et document." },
+  { key: "Clients", label: "Module Clients", description: "Parcourir les listes, créer propriétaire, locataire, prospect et visite." },
+  { key: "Contrats", label: "Module Docs", description: "Choisir un modèle, générer, archiver, suivre contrats, signatures et échéances." },
+  { key: "Finance", label: "Module Finance", description: "Suivre loyers, paiements, impayés, charges, entretiens et reversements." },
+  { key: "Rapports", label: "Module Rapports", description: "Sélectionner un rapport, lire les résultats, exporter PDF, Excel ou impression." },
+  { key: "Plus", label: "Administration", description: "Créer utilisateurs, gérer rôles, permissions et modèles documentaires." },
+];
+
+const guidedDemoSteps = [
+  {
+    key: "intro",
+    page: "Dashboard",
+    target: "demo-button",
+    title: "Bienvenue dans le parcours guidé",
+    body: "La visite fonctionne comme une prise en main. Chaque étape éclaire une zone, explique son rôle et demande parfois de réaliser une action réelle.",
+    task: "Avancez étape par étape. Vous pouvez passer une étape ou arrêter le parcours à tout moment.",
+  },
+  {
+    key: "dashboard-kpi-portfolio",
+    tracks: ["Dashboard"],
+    page: "Dashboard",
+    target: "dashboard-kpi-portfolio",
+    title: "Portefeuille suivi",
+    body: "Cette carte donne le volume total de biens suivis par E.K immo. Le détail sépare les biens en gestion locative et les biens suivis uniquement pour l'entretien.",
+    task: "Vérifiez d'abord si le portefeuille correspond au périmètre réel de l'agence.",
+  },
+  {
+    key: "dashboard-kpi-available",
+    tracks: ["Dashboard", "Biens"],
+    page: "Dashboard",
+    target: "dashboard-kpi-available",
+    title: "Biens disponibles",
+    body: "Cette carte sert à repérer rapidement les biens commercialisables. Le détail indique ce qui relève de la location et ce qui relève de la vente.",
+    task: "Utilisez ce chiffre avant de proposer un bien à un prospect ou de planifier une visite.",
+  },
+  {
+    key: "dashboard-kpi-rental",
+    tracks: ["Dashboard", "Finance"],
+    page: "Dashboard",
+    target: "dashboard-kpi-rental",
+    title: "Gestion locative",
+    body: "Cette carte isole les biens loués et réservés. Elle sert à mesurer la charge locative active, pas seulement le nombre de biens enregistrés.",
+    task: "Comparez ce chiffre avec les paiements et les contrats actifs pour détecter les écarts.",
+  },
+  {
+    key: "dashboard-kpi-cashflow",
+    tracks: ["Dashboard", "Finance"],
+    page: "Dashboard",
+    target: "dashboard-kpi-cashflow",
+    title: "Flux attendus",
+    body: "Cette carte regroupe les montants attendus. Elle distingue les loyers classiques des flux d'entretien, car ces revenus ne suivent pas la même logique métier.",
+    task: "Servez-vous de cette carte pour anticiper l'encaissement du mois.",
+  },
+  {
+    key: "dashboard-kpi-arrears",
+    tracks: ["Dashboard", "Finance"],
+    page: "Dashboard",
+    target: "dashboard-kpi-arrears",
+    title: "Impayés",
+    body: "Cette carte attire l'attention sur les montants en retard. Le détail permet de distinguer les loyers des forfaits ou autres frais.",
+    task: "Quand ce montant augmente, commencez par traiter les alertes ou ouvrez Finance > Impayés.",
+  },
+  {
+    key: "dashboard-kpi-fees",
+    tracks: ["Dashboard", "Finance"],
+    page: "Dashboard",
+    target: "dashboard-kpi-fees",
+    title: "Honoraires générés",
+    body: "Cette carte suit la part agence : commissions de gestion, forfaits et autres honoraires. Elle aide à comprendre le revenu réel d'E.K immo.",
+    task: "Contrôlez ce montant avant de préparer les situations propriétaires.",
+  },
+  {
+    key: "dashboard-kpi-charges",
+    tracks: ["Dashboard", "Finance"],
+    page: "Dashboard",
+    target: "dashboard-kpi-charges",
+    title: "Charges et interventions",
+    body: "Cette carte rassemble les sorties liées aux biens et aux interventions. Le détail distingue l'entretien des refacturations.",
+    task: "Une charge propriétaire devra ensuite apparaître dans la situation propriétaire.",
+  },
+  {
+    key: "dashboard-kpi-reversals",
+    tracks: ["Dashboard", "Finance"],
+    page: "Dashboard",
+    target: "dashboard-kpi-reversals",
+    title: "Reversements en attente",
+    body: "Cette carte signale ce qui doit encore être reversé aux propriétaires, après commissions et déductions.",
+    task: "Utilisez ce chiffre pour prioriser les reversements à préparer.",
+  },
+  {
+    key: "dashboard-rent-evolution",
+    tracks: ["Dashboard", "Finance"],
+    page: "Dashboard",
+    target: "dashboard-rent-chart",
+    title: "Évolution mensuelle des loyers",
+    body: "Ce graphique compare les loyers attendus et encaissés mois par mois. Au survol d'une barre, l'infobulle affiche attendus, encaissés, impayés et taux d'encaissement.",
+    task: "Survolez une barre pour lire le détail du mois, puis continuez.",
+  },
+  {
+    key: "dashboard-pipeline",
+    tracks: ["Dashboard", "Clients"],
+    page: "Dashboard",
+    target: "dashboard-pipeline-chart",
+    title: "Pipeline commercial",
+    body: "Le cercle indique la répartition des prospects et visites : nouveaux contacts, visites prévues, dossiers conclus ou perdus.",
+    task: "Utilisez ce bloc pour savoir si l'activité commerciale avance ou se bloque.",
+  },
+  {
+    key: "dashboard-watch-list",
+    tracks: ["Dashboard", "Biens"],
+    page: "Dashboard",
+    target: "dashboard-watch-list",
+    title: "Biens à suivre",
+    body: "Cette liste donne les dossiers immobiliers qui demandent une attention rapide : visite, travaux, lots rattachés, disponibilité ou entretien.",
+    task: "Cliquez une ligne quand vous voulez ouvrir directement la fiche du bien concerné.",
+  },
+  {
+    key: "dashboard-alert-relance",
+    tracks: ["Dashboard", "Finance"],
+    page: "Dashboard",
+    target: "dashboard-alert-relance",
+    title: "Relancer les impayés",
+    body: "Le bouton Relancer ouvre la relance groupée des locataires en retard. La relance sera rattachée aux impayés, aux fiches locataires et à l'historique.",
+    task: "Cliquez sur Relancer, gardez les locataires cochés, puis cliquez sur Enregistrer relance.",
+    waitFor: "save:dashboard-relance",
+    success: "Relance enregistrée et visible dans le suivi des impayés.",
+  },
+  {
+    key: "dashboard-alert-document",
+    tracks: ["Dashboard", "Contrats"],
+    page: "Dashboard",
+    target: "dashboard-alert-document",
+    title: "Demander un document manquant",
+    body: "Ce bouton sert à suivre un document absent sans perdre le dossier. Le statut reste demandé jusqu'à l'import.",
+    task: "Exemple : demander l'assurance habitation du dossier LOC-2026-018 avec une date limite.",
+  },
+  {
+    key: "property-list-purpose",
+    tracks: ["Biens"],
+    page: "Biens",
+    propertyView: "list",
+    target: "property-grid",
+    title: "Liste des biens",
+    body: "Les fiches biens donnent en un coup d'oeil le statut, le code, le montant, le quartier, le propriétaire et le bouton d'accès à la fiche.",
+    task: "Repérez les biens loués, disponibles, vendus, en entretien seul et les immeubles multi-lots.",
+  },
+  {
+    key: "property-add",
+    tracks: ["Biens"],
+    page: "Biens",
+    propertyView: "list",
+    target: "property-add-button",
+    title: "Créer un bien",
+    body: "Ce bouton ouvre le formulaire de création. Il sert à enregistrer villa, appartement, immeuble, lot rattaché, terrain ou bien suivi en entretien seul.",
+    task: "Cliquez sur Ajouter un bien. Exemple : Immeuble ACI Baobab, ACI 2000, propriétaire Sira Coulibaly, encaissement agence, 3 lots rattachés.",
+    waitFor: "save:property",
+    success: "Bien créé. La fiche du bien s'ouvre automatiquement.",
+  },
+  {
+    key: "property-card-reading",
+    tracks: ["Biens"],
+    page: "Biens",
+    propertyView: "list",
+    target: "property-card",
+    title: "Lire une fiche bien",
+    body: "La carte doit rester lisible : référence, montant, fréquence, nom du bien, quartier, propriétaire et accès à la fiche.",
+    task: "Vérifiez d'abord le statut et le montant avant d'ouvrir une fiche.",
+  },
+  {
+    key: "property-detail-header",
+    tracks: ["Biens"],
+    page: "Biens",
+    propertyView: "detail",
+    propertyTab: "Résumé",
+    target: "property-hero",
+    title: "Fiche complète du bien",
+    body: "L'en-tête regroupe la photo, l'adresse, le type, le mode financier, le propriétaire, le point focal éventuel et le locataire.",
+    task: "C'est ici que l'équipe vérifie rapidement si le bien est loué, disponible, multi-lots ou suivi uniquement pour entretien.",
+  },
+  {
+    key: "property-tabs",
+    tracks: ["Biens"],
+    page: "Biens",
+    propertyView: "detail",
+    propertyTab: "Résumé",
+    target: "property-detail-tabs",
+    title: "Onglets de la fiche",
+    body: "Chaque onglet répond à une question : résumé, lots, propriétaire, locataire, contrats, paiements, charges, documents et historique.",
+    task: "Utilisez ces onglets pour suivre l'ensemble du dossier sans sortir de la fiche.",
+  },
+  {
+    key: "property-add-tenant",
+    tracks: ["Biens", "Clients"],
+    page: "Biens",
+    propertyView: "detail",
+    propertyTab: "Résumé",
+    target: "property-action-tenant",
+    title: "Rattacher un locataire",
+    body: "Ce bouton relie un locataire au bien. Il peut utiliser un locataire existant ou créer un nouveau locataire avec caution, date d'entrée et observations.",
+    task: "Cliquez sur Ajouter locataire. Exemple : Awa Traoré, entrée le 01/07/2026, loyer 2 750 000 FCFA, caution 5 500 000 FCFA.",
+    waitFor: "save:tenant-attachment",
+    success: "Locataire rattaché, fiche bien et onglet Locataire mis à jour.",
+  },
+  {
+    key: "property-create-contract",
+    tracks: ["Biens", "Contrats"],
+    page: "Biens",
+    propertyView: "detail",
+    propertyTab: "Résumé",
+    target: "property-action-contract",
+    title: "Créer le contrat du bien",
+    body: "Ce bouton prépare le contrat avec les informations du bien, du propriétaire et du locataire. Le formulaire ne demande que les éléments variables.",
+    task: "Cliquez sur Créer contrat, vérifiez les dates, le loyer, la caution et la commission, puis générez le contrat.",
+    waitFor: "save:contract-generation",
+    success: "Contrat généré et ajouté aux documents liés.",
+  },
+  {
+    key: "property-register-payment",
+    tracks: ["Biens", "Finance"],
+    page: "Biens",
+    propertyView: "detail",
+    propertyTab: "Résumé",
+    target: "property-action-payment",
+    title: "Enregistrer un paiement",
+    body: "Ce bouton ouvre l'encaissement du loyer ou d'un règlement lié au bien. Le solde restant est recalculé automatiquement.",
+    task: "Cliquez sur Paiement. Exemple : période Mai 2026, montant payé maintenant 450 000 FCFA, mode Orange Money, reçu automatique.",
+    waitFor: "save:payment",
+    success: "Paiement enregistré, solde et fiche locataire mis à jour.",
+  },
+  {
+    key: "property-add-maintenance",
+    tracks: ["Biens", "Finance"],
+    page: "Biens",
+    propertyView: "detail",
+    propertyTab: "Résumé",
+    target: "property-action-maintenance",
+    title: "Planifier un entretien",
+    body: "Ce bouton crée une intervention liée au bien, avec priorité, responsable, prestataire, coût et prise en charge.",
+    task: "Cliquez sur Ajouter entretien. Exemple : plomberie urgente, fuite salle d'eau, prestataire Plomberie Mali Services, charge liée propriétaire.",
+    waitFor: "save:maintenance",
+    success: "Entretien planifié et visible dans Finance > Entretiens.",
+  },
+  {
+    key: "property-add-charge",
+    tracks: ["Biens", "Finance"],
+    page: "Biens",
+    propertyView: "detail",
+    propertyTab: "Résumé",
+    target: "property-action-charge",
+    title: "Ajouter une charge",
+    body: "Ce bouton rattache une dépense au bien. La charge peut être supportée par l'agence, le propriétaire, le locataire ou rester en suivi interne.",
+    task: "Cliquez sur Ajouter charge. Exemple : nettoyage cour immeuble, 95 000 FCFA, prise en charge propriétaire, statut à valider.",
+    waitFor: "save:charge",
+    success: "Charge ajoutée dans la fiche bien et le module Finance.",
+  },
+  {
+    key: "property-generate-document",
+    tracks: ["Biens", "Contrats"],
+    page: "Biens",
+    propertyView: "detail",
+    propertyTab: "Résumé",
+    target: "property-action-document",
+    title: "Générer un document depuis le bien",
+    body: "Ce bouton propose les documents disponibles : facture, reçu, bordereau, contrat, courrier de commission ou état des lieux.",
+    task: "Cliquez sur Générer document, choisissez un modèle, puis contrôlez les champs avant génération.",
+  },
+  {
+    key: "property-import-document",
+    tracks: ["Biens", "Contrats"],
+    page: "Biens",
+    propertyView: "detail",
+    propertyTab: "Documents",
+    target: "property-documents-panel",
+    title: "Documents de la fiche bien",
+    body: "Cet onglet conserve les contrats signés, reçus, photos, justificatifs, rapports d'entretien et documents importés.",
+    task: "Cliquez sur Importer dans cet onglet. Exemple : titre foncier ou rapport d'entretien en PDF.",
+    waitFor: "save:document-import",
+    success: "Document importé et historisé sur le bien.",
+  },
+  {
+    key: "clients-tabs-purpose",
+    tracks: ["Clients"],
+    page: "Clients",
+    clientTab: "Propriétaires",
+    target: "client-tabs",
+    title: "Organisation des clients",
+    body: "Le module Clients sépare propriétaires, locataires, prospects et visites, avec une logique commune : liste longue, recherche, filtres, fiche détaillée.",
+    task: "Choisissez le sous-onglet adapté au dossier que vous traitez.",
+  },
+  {
+    key: "owner-list-columns",
+    tracks: ["Clients"],
+    page: "Clients",
+    clientTab: "Propriétaires",
+    target: "owner-workspace",
+    title: "Liste des propriétaires",
+    body: "La liste affiche l'identité, le contact, le nombre de biens, la valeur locative et le statut. Un clic ouvre la fiche sans perdre la position dans la liste.",
+    task: "Repérez les colonnes utiles avant d'ouvrir une fiche propriétaire.",
+  },
+  {
+    key: "owner-create",
+    tracks: ["Clients"],
+    page: "Clients",
+    clientTab: "Propriétaires",
+    target: "client-primary-action",
+    title: "Créer un propriétaire",
+    body: "Ce bouton ouvre la fiche de création propriétaire : identité, conditions de gestion, commission, mode de reversement et documents.",
+    task: "Cliquez sur Nouveau propriétaire. Exemple : Société Baco Immo SAS, point focal Aminata Coulibaly, commission 8%, reversement mensuel.",
+    waitFor: "save:owner",
+    success: "Propriétaire créé et disponible dans la liste clients.",
+  },
+  {
+    key: "tenant-list-columns",
+    tracks: ["Clients"],
+    page: "Clients",
+    clientTab: "Locataires",
+    target: "tenant-workspace",
+    title: "Liste des locataires",
+    body: "Cette liste suit le locataire, son téléphone, le bien occupé, le propriétaire, le loyer, l'impayé, le contrat actif et le statut.",
+    task: "La fiche locataire sert ensuite à enregistrer paiement, reçu, relance, contrat ou situation.",
+  },
+  {
+    key: "tenant-create",
+    tracks: ["Clients"],
+    page: "Clients",
+    clientTab: "Locataires",
+    target: "client-primary-action",
+    title: "Créer un locataire",
+    body: "Ce bouton crée un locataire et le rattache à un bien. Le propriétaire est déduit automatiquement du bien sélectionné.",
+    task: "Cliquez sur Nouveau locataire. Exemple : Awa Traoré, Villa Koulouba, entrée 01/07/2026, loyer 2 750 000 FCFA, caution 5 500 000 FCFA.",
+    waitFor: "save:tenant",
+    success: "Locataire enregistré et rattaché au portefeuille.",
+  },
+  {
+    key: "prospect-board",
+    tracks: ["Clients"],
+    page: "Clients",
+    clientTab: "Prospects",
+    target: "prospect-workspace",
+    title: "Suivi des prospects",
+    body: "Les prospects sont suivis avant conclusion : besoin immobilier, budget, quartiers, agent, prochaines actions et biens proposés.",
+    task: "Utilisez cette vue pour savoir qui relancer et quel bien proposer.",
+  },
+  {
+    key: "prospect-create",
+    tracks: ["Clients"],
+    page: "Clients",
+    clientTab: "Prospects",
+    target: "client-primary-action",
+    title: "Créer un prospect",
+    body: "Ce bouton ouvre la création d'un prospect avec identification, besoin immobilier et suivi commercial.",
+    task: "Cliquez sur Nouveau prospect. Exemple : Bintou Dembélé, recherche villa 4 chambres, Sotuba/Titibougou, budget 1 500 000 FCFA.",
+    waitFor: "save:prospect",
+    success: "Prospect créé avec son besoin et sa prochaine action.",
+  },
+  {
+    key: "visits-columns",
+    tracks: ["Clients"],
+    page: "Clients",
+    clientTab: "Visites",
+    target: "visits-workspace",
+    title: "Planning des visites",
+    body: "Cette vue se lit comme un planning : client, bien, date, agent, statut et action à réaliser après la visite.",
+    task: "Les filtres permettent d'isoler les visites du jour, reportées, annulées ou conclues.",
+  },
+  {
+    key: "prospect-visit",
+    tracks: ["Clients"],
+    page: "Clients",
+    clientTab: "Visites",
+    target: "client-primary-action",
+    title: "Planifier une visite",
+    body: "Ce bouton ouvre la planification : prospect, bien, adresse, disponibilité, date, heure, agent, lieu de rendez-vous et rappel.",
+    task: "Cliquez sur Planifier visite. Exemple : Bintou Dembélé, Villa Koulouba, jeudi 10h, agent Mariam Traoré.",
+    waitFor: "save:visit",
+    success: "Visite ajoutée au planning, à la fiche prospect et à la fiche bien.",
+  },
+  {
+    key: "docs-templates",
+    tracks: ["Contrats"],
+    page: "Contrats",
+    contractTab: "Génération de document",
+    target: "document-generation",
+    title: "Choisir un modèle de document",
+    body: "L'atelier propose les modèles générables : facture, reçu, bordereau, courrier de commission, contrat de bail et états des lieux.",
+    task: "Choisissez un modèle. Exemple : Bordereau commissions pour une période trimestrielle.",
+  },
+  {
+    key: "docs-generate",
+    tracks: ["Contrats"],
+    page: "Contrats",
+    contractTab: "Génération de document",
+    target: "document-generation",
+    title: "Générer et archiver",
+    body: "Le formulaire collecte uniquement les champs variables. Le rendu final reprend le modèle source avec logo, structure et mise en page.",
+    task: "Générez un PDF puis archivez-le. Exemple : facture FAC-2026-055 pour Awa Traoré, Villa Koulouba.",
+    waitFor: "save:generated-document",
+    success: "Document archivé dans Docs > Archives.",
+  },
+  {
+    key: "docs-archives",
+    tracks: ["Contrats"],
+    page: "Contrats",
+    contractTab: "Archives",
+    target: "document-archive",
+    title: "Archives et brouillons",
+    body: "Les documents archivés sont classés par catégorie. Les brouillons peuvent être repris, les archives peuvent être consultées ou exportées.",
+    task: "Utilisez cette vue pour retrouver les documents générés dans toute l'application.",
+  },
+  {
+    key: "contracts-list",
+    tracks: ["Contrats"],
+    page: "Contrats",
+    contractTab: "Contrats",
+    target: "contracts-workspace",
+    title: "Liste des contrats",
+    body: "Chaque ligne indique le numéro, le type, le bien, les parties, les dates, le statut, l'échéance et les actions.",
+    task: "Ouvrez une fiche contrat pour gérer les échéances, PDF, signature, renouvellement, résiliation ou archivage.",
+  },
+  {
+    key: "contract-deadline",
+    tracks: ["Contrats"],
+    page: "Contrats",
+    contractTab: "Contrats",
+    target: "contracts-workspace",
+    title: "Gérer une échéance",
+    body: "La fiche contrat permet d'ajouter prochain loyer, fin de contrat, révision, renouvellement, relance ou rappel personnalisé.",
+    task: "Depuis une fiche contrat, cliquez sur Gérer les échéances. Exemple : fin de contrat, rappel 30 jours avant, notifier agent et propriétaire.",
+    waitFor: "save:contract-deadline",
+    success: "Échéance ajoutée à la timeline du contrat.",
+  },
+  {
+    key: "contract-pdf",
+    tracks: ["Contrats"],
+    page: "Contrats",
+    contractTab: "Contrats",
+    target: "contracts-workspace",
+    title: "PDF du contrat",
+    body: "Le bouton PDF ouvre les options : prévisualiser, télécharger, archiver ou générer une nouvelle version.",
+    task: "Depuis une fiche contrat, lancez une action PDF sur le contrat.",
+    waitFor: "save:contract-pdf",
+    success: "PDF du contrat généré ou archivé.",
+  },
+  {
+    key: "contract-signed",
+    tracks: ["Contrats"],
+    page: "Contrats",
+    contractTab: "Contrats",
+    target: "contracts-workspace",
+    title: "Contrat signé",
+    body: "Ce bouton sert à importer ou consulter la version signée. Si aucun fichier n'existe, la modal demande le fichier, la date, les signataires et l'observation.",
+    task: "Depuis une fiche contrat, importez un contrat signé.",
+    waitFor: "save:contract-signed",
+    success: "Document signé enregistré dans la fiche contrat.",
+  },
+  {
+    key: "contract-renewal",
+    tracks: ["Contrats"],
+    page: "Contrats",
+    contractTab: "Contrats",
+    target: "contracts-workspace",
+    title: "Renouveler un contrat",
+    body: "Le renouvellement conserve l'historique, applique les nouvelles dates et peut générer un avenant.",
+    task: "Depuis une fiche contrat, renouvelez le contrat. Exemple : nouvelle fin 31/12/2027, même loyer, avenant généré.",
+    waitFor: "save:contract-renewal",
+    success: "Contrat renouvelé et timeline mise à jour.",
+  },
+  {
+    key: "contract-termination",
+    tracks: ["Contrats"],
+    page: "Contrats",
+    contractTab: "Contrats",
+    target: "contracts-workspace",
+    title: "Résilier un contrat",
+    body: "La résiliation modifie le statut du contrat, peut libérer le bien et met à jour l'historique.",
+    task: "Depuis une fiche contrat, résiliez le contrat. Exemple : départ locataire, restitution caution oui, bien disponible.",
+    waitFor: "save:contract-termination",
+    success: "Contrat résilié, bien et locataire mis à jour.",
+  },
+  {
+    key: "finance-tabs",
+    tracks: ["Finance"],
+    page: "Finance",
+    financeTab: "Loyers",
+    target: "finance-tabs",
+    title: "Sous-onglets Finance",
+    body: "La finance est découpée par usage : loyers, paiements, impayés, commissions, charges, entretiens et reversements.",
+    task: "Commencez par le sous-onglet adapté au type d'opération.",
+  },
+  {
+    key: "finance-rents",
+    tracks: ["Finance"],
+    page: "Finance",
+    financeTab: "Loyers",
+    target: "finance-rents-workspace",
+    title: "Tableau des loyers",
+    body: "Chaque ligne rapproche période, locataire, bien, propriétaire, montant attendu, payé, solde et statut.",
+    task: "Utilisez les actions de ligne pour enregistrer paiement, voir détail, générer état ou ajouter relance.",
+  },
+  {
+    key: "finance-payment",
+    tracks: ["Finance"],
+    page: "Finance",
+    financeTab: "Paiements",
+    target: "finance-action-payment",
+    title: "Enregistrer un paiement",
+    body: "Ce bouton ouvre le paiement avec locataire, bien, période, montant dû, montant payé, solde, mode de paiement et reçu automatique.",
+    task: "Cliquez sur Enregistrer un paiement. Exemple : Awa Traoré, Villa Koulouba, Mai 2026, Orange Money, reçu automatique.",
+    waitFor: "save:payment",
+    success: "Paiement pris en compte dans le module Finance.",
+  },
+  {
+    key: "finance-arrears",
+    tracks: ["Finance"],
+    page: "Finance",
+    financeTab: "Impayés",
+    target: "finance-arrears-workspace",
+    title: "Suivi des impayés",
+    body: "Cette vue centralise les retards, les relances, promesses de paiement, litiges et régularisations.",
+    task: "Utilisez Promesse, Relance, Paiement ou État impayé selon la situation.",
+  },
+  {
+    key: "finance-charges-summary",
+    tracks: ["Finance"],
+    page: "Finance",
+    financeTab: "Charges",
+    target: "charges-workspace",
+    title: "Charges et dépenses",
+    body: "Les cartes résument total du mois, charges agence, charges propriétaires, charges refacturables et charges à valider.",
+    task: "Contrôlez toujours la prise en charge avant de valider une charge.",
+  },
+  {
+    key: "finance-charge",
+    tracks: ["Finance"],
+    page: "Finance",
+    financeTab: "Charges",
+    target: "finance-action-charge",
+    title: "Ajouter une charge",
+    body: "Ce bouton crée une dépense depuis Finance, avec rattachement au bien, propriétaire, locataire ou entretien.",
+    task: "Cliquez sur Ajouter une charge. Exemple : réparation électrique, 120 000 FCFA, propriétaire, justificatif PDF.",
+    waitFor: "save:charge",
+    success: "Charge ajoutée dans Finance.",
+  },
+  {
+    key: "finance-charge-validation",
+    tracks: ["Finance"],
+    page: "Finance",
+    financeTab: "Charges",
+    target: "charges-workspace",
+    title: "Valider une charge",
+    body: "Valider confirme l'impact comptable : agence, propriétaire, locataire ou suivi interne.",
+    task: "Ouvrez une charge et validez-la. Exemple : charge propriétaire disponible pour déduction.",
+    waitFor: "save:charge-validation",
+    success: "Charge validée et prête pour déduction ou refacturation.",
+  },
+  {
+    key: "finance-maintenance",
+    tracks: ["Finance"],
+    page: "Finance",
+    financeTab: "Entretiens",
+    target: "finance-action-maintenance",
+    title: "Ajouter un entretien",
+    body: "Ce bouton crée une intervention indépendante ou liée à un bien. Elle peut ensuite générer une charge.",
+    task: "Cliquez sur Ajouter un entretien. Exemple : inspection climatisation, priorité normale, prestataire connu, coût estimé 75 000 FCFA.",
+    waitFor: "save:maintenance",
+    success: "Entretien ajouté dans Finance > Entretiens.",
+  },
+  {
+    key: "finance-reversal",
+    tracks: ["Finance"],
+    page: "Finance",
+    financeTab: "Reversements",
+    target: "finance-action-reversal",
+    title: "Préparer un reversement",
+    body: "Le reversement calcule loyers encaissés, commissions retenues, charges déduites, paiements déjà effectués et solde à reverser.",
+    task: "Cliquez sur Préparer un reversement. Exemple : Mamadou Keita, période Mai à Juin 2026, virement bancaire.",
+    waitFor: "save:reversal",
+    success: "Reversement enregistré et situation propriétaire mise à jour.",
+  },
+  {
+    key: "reports-layout",
+    tracks: ["Rapports"],
+    page: "Rapports",
+    target: "reports-layout",
+    title: "Rapports",
+    body: "Les rapports regroupent les vues de pilotage : portefeuille, loyers, impayés, charges, visites, échéances et situations propriétaires.",
+    task: "Choisissez un rapport, appliquez les filtres, puis exportez.",
+  },
+  {
+    key: "reports-export",
+    tracks: ["Rapports"],
+    page: "Rapports",
+    target: "reports-export-button",
+    title: "Exporter un rapport",
+    body: "L'export respecte le rapport affiché, les filtres actifs et la période sélectionnée.",
+    task: "Cliquez sur Exporter rapport et choisissez PDF, Excel ou impression.",
+    waitFor: "action:exporter rapport",
+    success: "Export lancé pour le rapport affiché.",
+  },
+  {
+    key: "admin-users",
+    tracks: ["Plus"],
+    page: "Plus",
+    adminTab: "Utilisateurs",
+    target: "admin-workspace",
+    title: "Utilisateurs",
+    body: "Cette vue sert à créer, modifier, désactiver et suivre les utilisateurs qui accèdent à l'application.",
+    task: "Vérifiez le rôle et le statut avant toute invitation.",
+  },
+  {
+    key: "admin-user",
+    tracks: ["Plus"],
+    page: "Plus",
+    adminTab: "Utilisateurs",
+    target: "admin-action-user",
+    title: "Ajouter un utilisateur",
+    body: "Ce bouton crée un utilisateur avec nom, email, téléphone, rôle, statut et invitation.",
+    task: "Cliquez sur Ajouter utilisateur. Exemple : Fatoumata Diarra, gestionnaire, invitation par email.",
+    waitFor: "save:user",
+    success: "Utilisateur créé dans l'administration.",
+  },
+  {
+    key: "admin-roles",
+    tracks: ["Plus"],
+    page: "Plus",
+    adminTab: "Rôles & permissions",
+    target: "admin-workspace",
+    title: "Rôles et permissions",
+    body: "Les cases de permissions se cochent directement. Le bouton Sauvegarder enregistre les droits du rôle sélectionné.",
+    task: "Utilisez cette vue pour limiter les actions sensibles comme validation, export ou suppression.",
+  },
+  {
+    key: "admin-models",
+    tracks: ["Plus", "Contrats"],
+    page: "Plus",
+    adminTab: "Modèles documents",
+    target: "admin-workspace",
+    title: "Modèles documents",
+    body: "Les modèles administrés ici alimentent l'atelier Docs. Un modèle archivé ne sera plus proposé à la génération.",
+    task: "Utilisez Générer PDF pour tester un modèle et Archiver pour le retirer de la génération.",
+  },
+  {
+    key: "end",
+    page: "Dashboard",
+    target: "demo-button",
+    title: "Parcours terminé",
+    body: "Vous avez parcouru la logique de travail : lire le dashboard, créer et suivre les biens, gérer clients, documents, finance, rapports et administration.",
+    task: "Cliquez sur Terminer pour quitter la visite ou relancez un module précis depuis Mode DEMO.",
+  },
 ];
 
 function getDemoStepsForTrack(track = "complete") {
-  const intro = interactiveDemoSteps.find((step) => step.key === "intro");
-  const end = interactiveDemoSteps.find((step) => step.key === "end");
-  if (track === "complete") return interactiveDemoSteps;
-  const pageSteps = interactiveDemoSteps.filter((step) => step.tracks?.includes(track));
+  const intro = guidedDemoSteps.find((step) => step.key === "intro");
+  const end = guidedDemoSteps.find((step) => step.key === "end");
+  if (track === "complete") return guidedDemoSteps;
+  const pageSteps = guidedDemoSteps.filter((step) => step.tracks?.includes(track));
   return [intro, ...pageSteps, end].filter(Boolean);
 }
 
@@ -7902,14 +8545,14 @@ function DashboardPage({ onAction, onOpenProperty, propertiesList = properties }
   const summaryValues = financeSummaryByPeriod[kpiPeriod] ?? financeSummaryByPeriod.Mois;
 
   const kpis = [
-    { label: "Portefeuille suivi", value: kpiValues[0], icon: Building2, tone: "purple", details: kpiDetails[0] },
-    { label: "Biens disponibles", value: kpiValues[1], icon: KeyRound, tone: "gray", details: kpiDetails[1] },
-    { label: "Gestion locative", value: kpiValues[2], icon: Home, tone: "purple", details: kpiDetails[2] },
-    { label: "Flux attendus", value: kpiValues[3], icon: Banknote, tone: "gray", details: kpiDetails[3] },
-    { label: "Impayés", value: kpiValues[4], icon: AlertTriangle, tone: "danger", details: kpiDetails[4] },
-    { label: "Honoraires générés", value: kpiValues[5], icon: WalletCards, tone: "gray", details: kpiDetails[5] },
-    { label: "Charges et interventions", value: kpiValues[6], icon: ReceiptText, tone: "gray", details: kpiDetails[6] },
-    { label: "Reversements en attente", value: kpiValues[7], icon: RefreshCw, tone: "gray", details: kpiDetails[7] },
+    { label: "Portefeuille suivi", value: kpiValues[0], icon: Building2, tone: "purple", details: kpiDetails[0], demoTarget: "dashboard-kpi-portfolio" },
+    { label: "Biens disponibles", value: kpiValues[1], icon: KeyRound, tone: "gray", details: kpiDetails[1], demoTarget: "dashboard-kpi-available" },
+    { label: "Gestion locative", value: kpiValues[2], icon: Home, tone: "purple", details: kpiDetails[2], demoTarget: "dashboard-kpi-rental" },
+    { label: "Flux attendus", value: kpiValues[3], icon: Banknote, tone: "gray", details: kpiDetails[3], demoTarget: "dashboard-kpi-cashflow" },
+    { label: "Impayés", value: kpiValues[4], icon: AlertTriangle, tone: "danger", details: kpiDetails[4], demoTarget: "dashboard-kpi-arrears" },
+    { label: "Honoraires générés", value: kpiValues[5], icon: WalletCards, tone: "gray", details: kpiDetails[5], demoTarget: "dashboard-kpi-fees" },
+    { label: "Charges et interventions", value: kpiValues[6], icon: ReceiptText, tone: "gray", details: kpiDetails[6], demoTarget: "dashboard-kpi-charges" },
+    { label: "Reversements en attente", value: kpiValues[7], icon: RefreshCw, tone: "gray", details: kpiDetails[7], demoTarget: "dashboard-kpi-reversals" },
   ];
 
   const alerts = [
@@ -7967,7 +8610,7 @@ function DashboardPage({ onAction, onOpenProperty, propertiesList = properties }
 
       <section className="three-grid dashboard-bottom">
         <Panel title="Biens à suivre" toolbar={<ArrowRight size={17} />}>
-          <div className="watch-list">
+          <div className="watch-list" data-demo="dashboard-watch-list">
             {propertiesList.slice(0, 4).map((property) => (
               <button className="watch-row" key={property.code} onClick={() => onOpenProperty(property)}>
                 <img src={property.image} alt="" />
@@ -7989,14 +8632,25 @@ function DashboardPage({ onAction, onOpenProperty, propertiesList = properties }
                   <strong>{title}</strong>
                   <small>{text}</small>
                 </span>
-                <button data-demo={title === "Loyers en retard" ? "dashboard-alert-relance" : undefined} onClick={() => onAction(title)}>{action}</button>
+                <button
+                  data-demo={
+                    title === "Loyers en retard"
+                      ? "dashboard-alert-relance"
+                      : title === "Documents manquants"
+                        ? "dashboard-alert-document"
+                        : undefined
+                  }
+                  onClick={() => onAction(title)}
+                >
+                  {action}
+                </button>
               </div>
             ))}
           </div>
         </Panel>
 
         <Panel title="Résumé financier">
-          <div className="finance-summary">
+          <div className="finance-summary" data-demo="dashboard-finance-summary">
             {[
               ["Factures émises", summaryValues[0], FileText, "dark"],
               ["Paiements reçus", summaryValues[1], CheckCircle2, "muted"],
@@ -8217,7 +8871,7 @@ function PropertiesPage({
       <PageIntro
         title="Biens immobiliers"
         actions={
-          <Button variant="primary" onClick={() => onAction("Ajouter un bien")}>
+          <Button variant="primary" data-demo="property-add-button" onClick={() => onAction("Ajouter un bien")}>
             <Plus size={18} /> Ajouter un bien
           </Button>
         }
@@ -8305,7 +8959,7 @@ function PropertiesPage({
             <Building2 size={24} />
             <h3>Aucun bien enregistré</h3>
             <p>Ajoutez un premier bien ou chargez les données de démonstration depuis le mode DEMO.</p>
-            <Button variant="primary" onClick={() => onAction("Ajouter un bien")}><Plus size={17} /> Ajouter un bien</Button>
+          <Button variant="primary" data-demo="property-add-button" onClick={() => onAction("Ajouter un bien")}><Plus size={17} /> Ajouter un bien</Button>
           </div>
         </Panel>
       ) : display === "cartes" ? (
@@ -8415,40 +9069,40 @@ function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, on
           </div>
         </div>
         <div className="action-row" data-demo="property-actions">
-          <Button variant="primary" onClick={() => onAction("Modifier le bien")}>
+          <Button variant="primary" data-demo="property-action-edit" onClick={() => onAction("Modifier le bien")}>
             <Pencil size={17} /> Modifier
           </Button>
-          <Button onClick={() => onAction("Planifier une visite")}>
+          <Button data-demo="property-action-visit" onClick={() => onAction("Planifier une visite")}>
             <CalendarDays size={17} /> Planifier visite
           </Button>
-          <Button onClick={() => onAction("Ajouter locataire")}>
+          <Button data-demo="property-action-tenant" onClick={() => onAction("Ajouter locataire")}>
             <UsersRound size={17} /> Ajouter locataire
           </Button>
-          <Button onClick={() => onAction("Créer contrat")}>
+          <Button data-demo="property-action-contract" onClick={() => onAction("Créer contrat")}>
             <FileText size={17} /> Créer contrat
           </Button>
           {isAgencyCollectedProperty(property.name, propertiesList) ? (
-            <Button onClick={() => onAction("Enregistrer paiement", { property })}>
+            <Button data-demo="property-action-payment" onClick={() => onAction("Enregistrer paiement", { property })}>
               <Banknote size={17} /> Paiement
             </Button>
           ) : (
-            <Button onClick={() => onAction("Enregistrer paiement", { property })}>
+            <Button data-demo="property-action-payment" onClick={() => onAction("Enregistrer paiement", { property })}>
               <Banknote size={17} /> Paiement
             </Button>
           )}
-          <Button onClick={() => onAction("Ajouter entretien", { property })}>
+          <Button data-demo="property-action-maintenance" onClick={() => onAction("Ajouter entretien", { property })}>
             <Wrench size={17} /> Ajouter entretien
           </Button>
-          <Button onClick={() => onAction("Ajouter charge", { property })}>
+          <Button data-demo="property-action-charge" onClick={() => onAction("Ajouter charge", { property })}>
             <ReceiptText size={17} /> Ajouter charge
           </Button>
-          <Button onClick={() => onAction("Générer document")}>
+          <Button data-demo="property-action-document" onClick={() => onAction("Générer document")}>
             <FileText size={17} /> Générer document
           </Button>
-          <Button onClick={() => onAction("Fiche bien PDF", { property })}>
+          <Button data-demo="property-action-pdf" onClick={() => onAction("Fiche bien PDF", { property })}>
             <Download size={17} /> Fiche PDF
           </Button>
-          <Button onClick={() => onAction("Archiver le bien", { property })} disabled={isArchived}>
+          <Button data-demo="property-action-archive" onClick={() => onAction("Archiver le bien", { property })} disabled={isArchived}>
             <Archive size={17} /> {isArchived ? "Archivé" : "Archiver"}
           </Button>
         </div>
@@ -8991,7 +9645,11 @@ function PropertyDocuments({ property, onAction, propertyPdfArchives = [], missi
     ]);
 
   return (
-    <Panel title={`Documents - ${property.code}`} toolbar={<Button compact onClick={() => onAction("Importer document", { property })}><Upload size={16} /> Importer</Button>}>
+    <Panel
+      title={`Documents - ${property.code}`}
+      data-demo="property-documents-panel"
+      toolbar={<Button compact data-demo="property-document-import-button" onClick={() => onAction("Importer document", { property })}><Upload size={16} /> Importer</Button>}
+    >
       <DataTable
         columns={["Document", "Type", "Date", "Statut", "Actions"]}
         rows={[
@@ -9226,7 +9884,7 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
       <PageIntro
         title="Gestion des Clients"
         actions={
-          <Button variant="primary" onClick={() => onAction(actionTitle)}>
+          <Button variant="primary" data-demo="client-primary-action" onClick={() => onAction(actionTitle)}>
             <Plus size={18} /> {actionLabel}
           </Button>
         }
@@ -9234,7 +9892,7 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
       <Tabs tabs={tabs} active={activeTab} onChange={onTab} demo="client-tabs" />
       {detailContent ?? (
         <>
-      <Panel className="filter-panel">
+      <Panel className="filter-panel" data-demo="client-filter-panel">
         <div className="filters-row">
           <label className="field search-field mid">
             <Search size={19} />
@@ -9973,7 +10631,7 @@ function OwnerProfilePanel({ owner, initialTab = "Résumé", situationPeriod = n
 
 function TenantsView({ tenantsList = tenants, onOpenDetail, rentRowsList = rentRows }) {
   return (
-    <section className="client-list-workspace">
+    <section className="client-list-workspace" data-demo="tenant-workspace">
       <Panel title="Liste des locataires">
         <DataTable
           columns={["Locataire", "Téléphone", "Bien occupé", "Propriétaire", "Loyer", "Impayé", "Contrat actif", "Statut", "Action"]}
@@ -14053,10 +14711,10 @@ function FinancePage({ activeTab, onTab, onAction, paymentsList = paymentRecords
   const effectiveTab = tabs.includes(activeTab) ? activeTab : "Loyers";
   const agencyRentRows = rentRowsList.filter((row) => isAgencyCollectedProperty(row.property));
   const financeActions = {
-    Paiements: <Button variant="primary" onClick={() => onAction("Enregistrer paiement", { row: agencyRentRows[0] })}><Banknote size={17} /> Enregistrer un paiement</Button>,
-    Charges: <Button variant="primary" onClick={() => onAction("Ajouter une charge")}><Plus size={17} /> Ajouter une charge</Button>,
-    Entretiens: <Button variant="primary" onClick={() => onAction("Ajouter un entretien")}><Wrench size={17} /> Ajouter un entretien</Button>,
-    Reversements: <Button variant="primary" onClick={() => onAction("Préparer un reversement")}><RefreshCw size={17} /> Préparer un reversement</Button>,
+    Paiements: <Button variant="primary" data-demo="finance-action-payment" onClick={() => onAction("Enregistrer paiement", { row: agencyRentRows[0] })}><Banknote size={17} /> Enregistrer un paiement</Button>,
+    Charges: <Button variant="primary" data-demo="finance-action-charge" onClick={() => onAction("Ajouter une charge")}><Plus size={17} /> Ajouter une charge</Button>,
+    Entretiens: <Button variant="primary" data-demo="finance-action-maintenance" onClick={() => onAction("Ajouter un entretien")}><Wrench size={17} /> Ajouter un entretien</Button>,
+    Reversements: <Button variant="primary" data-demo="finance-action-reversal" onClick={() => onAction("Préparer un reversement")}><RefreshCw size={17} /> Préparer un reversement</Button>,
   };
   const financeDataCount = {
     Loyers: agencyRentRows.length,
@@ -14096,7 +14754,7 @@ function FinancePage({ activeTab, onTab, onAction, paymentsList = paymentRecords
         actions={financeActions[effectiveTab] ?? null}
       />
       <Tabs tabs={tabs} active={effectiveTab} onChange={onTab} demo="finance-tabs" />
-      {effectiveTab === "Loyers" && <FinanceTable title="Loyers attendus par E.K immo" onAction={onAction} rows={agencyRentRows.map((row) => [row.period, row.tenant, row.property, row.owner, row.expected, row.paid, row.balance, <Badge label={row.status} />, <RentActions row={row} onAction={onAction} />])} columns={["Période", "Locataire", "Bien", "Propriétaire", "Attendu", "Payé", "Solde", "Statut", "Actions"]} />}
+      {effectiveTab === "Loyers" && <FinanceTable demo="finance-rents-workspace" title="Loyers attendus par E.K immo" onAction={onAction} rows={agencyRentRows.map((row) => [row.period, row.tenant, row.property, row.owner, row.expected, row.paid, row.balance, <Badge label={row.status} />, <RentActions row={row} onAction={onAction} />])} columns={["Période", "Locataire", "Bien", "Propriétaire", "Attendu", "Payé", "Solde", "Statut", "Actions"]} />}
       {effectiveTab === "Paiements" && <PaymentForm onAction={onAction} paymentsList={paymentsList} rentRowsList={rentRowsList} paymentRequest={paymentRequest} />}
       {effectiveTab === "Impayés" && <ArrearsView onAction={onAction} rentRowsList={rentRowsList} relancesList={relancesList} arrearsStatuses={arrearsStatuses} arrearsPromises={arrearsPromises} arrearsHistories={arrearsHistories} />}
       {effectiveTab === "Commissions" && <CommissionsView onAction={onAction} commissionsList={commissionsList} />}
@@ -14131,7 +14789,7 @@ function MaintenanceActions({ row, onAction }) {
   );
 }
 
-function FinanceTable({ title, columns, rows, onAction }) {
+function FinanceTable({ title, columns, rows, onAction, demo }) {
   const [query, setQuery] = useState("");
   const [period, setPeriod] = useState("Toutes périodes");
   const [status, setStatus] = useState("Tous statuts");
@@ -14200,7 +14858,7 @@ function FinanceTable({ title, columns, rows, onAction }) {
           </div>
         )}
       </Panel>
-      <Panel title={title}>
+      <Panel title={title} data-demo={demo}>
         <DataTable columns={columns} rows={filteredRows} />
       </Panel>
     </>
@@ -14226,7 +14884,7 @@ function CommissionsView({ onAction, commissionsList = commissions }) {
   }
 
   return (
-    <section className="client-list-workspace">
+    <section className="client-list-workspace" data-demo="finance-commissions-workspace">
       <div>
         <div className="summary-strip finance-summary">
           <Info label="Total encaissé" value="41 600 000 FCFA" />
@@ -15788,7 +16446,7 @@ function ArrearsView({ onAction, rentRowsList = rentRows, relancesList = [], arr
   }
 
   return (
-    <section className="client-list-workspace">
+    <section className="client-list-workspace" data-demo="finance-arrears-workspace">
       <Panel title="Impayés & relances">
         <DataTable
           columns={["Locataire", "Bien", "Propriétaire", "Montant dû", "Ancienneté", "Dernière relance", "Prochaine action", "Statut", "Actions"]}
@@ -16148,6 +16806,7 @@ function ReportsPage({
           <div className="inline-menu-wrapper">
             <Button
               variant="primary"
+              data-demo="reports-export-button"
               onClick={openExportMenu}
               aria-haspopup="menu"
               aria-expanded={exportMenuOpen}
@@ -16231,7 +16890,7 @@ function AdminPage({ activeTab, onTab, onAction, usersList = users, userHistorie
         title="Plus / Administration"
         actions={
           activeTab === "Utilisateurs" ? (
-            <Button variant="primary" onClick={() => onAction("Ajouter utilisateur")}>
+            <Button variant="primary" data-demo="admin-action-user" onClick={() => onAction("Ajouter utilisateur")}>
               <Plus size={18} /> Ajouter utilisateur
             </Button>
           ) : null
@@ -17099,7 +17758,7 @@ function ChangePasswordModal({ onClose }) {
 function StatCard({ item }) {
   const Icon = item.icon;
   return (
-    <article className={`stat-card ${item.tone}`}>
+    <article className={`stat-card ${item.tone}`} data-demo={item.demoTarget}>
       <div className="stat-card-top">
         <div className="stat-icon">
           <Icon size={20} />
@@ -17237,7 +17896,7 @@ function RentBars() {
   });
 
   return (
-    <div className="rent-chart">
+    <div className="rent-chart" data-demo="dashboard-rent-chart">
       <div className="bars">
         {bars.map((bar) => (
           <button
@@ -17268,7 +17927,7 @@ function RentBars() {
 
 function PipelineChart({ data }) {
   return (
-    <div className="pipeline-layout">
+    <div className="pipeline-layout" data-demo="dashboard-pipeline-chart">
       <div
         className="donut"
         style={{ background: buildPipelineGradient(data.items, data.total) }}
