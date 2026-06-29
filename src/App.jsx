@@ -3152,15 +3152,38 @@ function getDashboardPropertyStats(propertiesList = [], period = "Mois") {
   };
 }
 
+function createDashboardPipeline(title, items) {
+  const normalizedItems = items.map(([label, value, tone]) => [label, Math.max(0, value), tone]);
+  return {
+    title,
+    items: normalizedItems,
+    total: normalizedItems.reduce((sum, [, value]) => sum + value, 0),
+  };
+}
+
 function buildDashboardProfile(currentUser, propertiesList, period) {
   const role = currentUser?.role ?? "Administrateur";
   const stats = getDashboardPropertyStats(propertiesList, period);
   const zeroAmount = "0 FCFA";
+  const overdueFiles = stats.arrearsEstimate ? Math.max(1, Math.ceil(stats.rented * 0.08)) : 0;
+  const otherPortfolio = Math.max(0, stats.total - stats.available - stats.rented - stats.reserved - stats.maintenanceOnly - stats.sale);
 
   if (role === "Gestion locative & recouvrement") {
     return {
-      pipelineKey: "Loyers",
       chartTitle: "Suivi des loyers",
+      pipelineData: createDashboardPipeline("Pipeline loyers, relances & interventions", [
+        ["À encaisser", Math.max(0, stats.rentalManaged - stats.rented), "pale"],
+        ["Paiements à contrôler", stats.rented, "soft"],
+        ["Relances ouvertes", overdueFiles, "purple"],
+        ["En retard", overdueFiles, "red"],
+        ["Interventions", stats.maintenanceOnly, "silver"],
+        ["Reversements", stats.rented ? 1 : 0, "dark"],
+      ]),
+      tableTitles: {
+        watch: "Dossiers locatifs à suivre",
+        alerts: "Actions de recouvrement",
+        summary: "Synthèse gestion locative",
+      },
       kpis: [
         { label: "Biens en gestion locative", value: String(stats.rentalManaged), icon: Building2, tone: "purple", details: [["Loués", String(stats.rented)], ["Réservés", String(stats.reserved)]], demoTarget: "dashboard-kpi-portfolio" },
         { label: "Loyers à suivre", value: stats.rentAmount ? formatFCFA(stats.rentAmount) : zeroAmount, icon: Banknote, tone: "gray", details: [["Biens concernés", String(stats.rentalManaged)], ["Période", period]], demoTarget: "dashboard-kpi-cashflow" },
@@ -3190,8 +3213,20 @@ function buildDashboardProfile(currentUser, propertiesList, period) {
 
   if (role === "Communication & prospection") {
     return {
-      pipelineKey: "Biens",
       chartTitle: "Biens à promouvoir",
+      pipelineData: createDashboardPipeline("Pipeline publication, prospects & visites", [
+        ["Nouveaux biens", stats.total, "pale"],
+        ["À publier", stats.available, "soft"],
+        ["En diffusion", Math.max(0, stats.total - stats.available - stats.maintenanceOnly), "purple"],
+        ["Visites à organiser", stats.available + stats.reserved, "silver"],
+        ["Réservés", stats.reserved, "dark"],
+        ["Hors diffusion", stats.maintenanceOnly, "red"],
+      ]),
+      tableTitles: {
+        watch: "Biens à publier",
+        alerts: "Actions commerciales",
+        summary: "Synthèse prospection",
+      },
       kpis: [
         { label: "Biens visibles", value: String(stats.total), icon: Building2, tone: "purple", details: [["Disponibles", String(stats.available)], ["Réservés", String(stats.reserved)]], demoTarget: "dashboard-kpi-portfolio" },
         { label: "Biens à publier", value: String(stats.toPublish), icon: Upload, tone: "gray", details: [["Location", String(stats.available)], ["Vente", String(stats.sale)]], demoTarget: "dashboard-kpi-available" },
@@ -3220,8 +3255,20 @@ function buildDashboardProfile(currentUser, propertiesList, period) {
   }
 
   return {
-    pipelineKey: "Commercial & visites",
     chartTitle: "Suivi des loyers",
+    pipelineData: createDashboardPipeline("Pipeline portefeuille & activité", [
+      ["Disponibles", stats.available, "pale"],
+      ["Loués", stats.rented, "dark"],
+      ["Réservés", stats.reserved, "purple"],
+      ["Entretien seul", stats.maintenanceOnly, "soft"],
+      ["Vente", stats.sale, "silver"],
+      ["Autres", otherPortfolio, "red"],
+    ]),
+    tableTitles: {
+      watch: "Biens à suivre",
+      alerts: "Alertes importantes",
+      summary: "Résumé financier",
+    },
     kpis: [
       { label: "Portefeuille suivi", value: String(stats.total), icon: Building2, tone: "purple", details: [["Gestion locative", String(stats.rentalManaged)], ["Entretien seul", String(stats.maintenanceOnly)]], demoTarget: "dashboard-kpi-portfolio" },
       { label: "Biens disponibles", value: String(stats.available), icon: KeyRound, tone: "gray", details: [["Location", String(Math.max(0, stats.available - stats.sale))], ["Vente", String(stats.sale)]], demoTarget: "dashboard-kpi-available" },
@@ -3291,14 +3338,16 @@ function formatCompactFCFA(value) {
 }
 
 function buildPipelineGradient(items, total) {
+  const denominator = total > 0 ? total : 1;
   let cursor = 0;
   const parts = items.map(([, value, tone]) => {
     const start = cursor;
-    const end = cursor + (value / total) * 100;
+    const end = cursor + (value / denominator) * 100;
     cursor = end;
     return `${pipelineToneColors[tone] ?? pipelineToneColors.purple} ${start.toFixed(2)}% ${end.toFixed(2)}%`;
   });
-  return `radial-gradient(circle, var(--surface) 0 47%, transparent 48%), conic-gradient(${parts.join(", ")})`;
+  const gradientParts = parts.length && total > 0 ? parts.join(", ") : `${pipelineToneColors.pale} 0% 100%`;
+  return `radial-gradient(circle, var(--surface) 0 47%, transparent 48%), conic-gradient(${gradientParts})`;
 }
 
 function getPipelineData(type, period) {
@@ -9217,7 +9266,7 @@ function DashboardPage({ currentUser = users[0], onAction, onOpenProperty, prope
     () => buildDashboardProfile(currentUser, propertiesList, kpiPeriod),
     [currentUser, kpiPeriod, propertiesList]
   );
-  const selectedPipeline = getPipelineData(dashboardProfile.pipelineKey, kpiPeriod);
+  const selectedPipeline = dashboardProfile.pipelineData;
   const kpis = dashboardProfile.kpis;
   const alerts = dashboardProfile.alerts;
 
@@ -9267,7 +9316,7 @@ function DashboardPage({ currentUser = users[0], onAction, onOpenProperty, prope
       </section>
 
       <section className="three-grid dashboard-bottom">
-        <Panel title="Biens à suivre" toolbar={<ArrowRight size={17} />}>
+        <Panel title={dashboardProfile.tableTitles.watch} toolbar={<ArrowRight size={17} />}>
           <div className="watch-list" data-demo="dashboard-watch-list">
             {propertiesList.slice(0, 4).map((property) => (
               <button className="watch-row" key={property.code} onClick={() => onOpenProperty(property)}>
@@ -9282,7 +9331,7 @@ function DashboardPage({ currentUser = users[0], onAction, onOpenProperty, prope
           </div>
         </Panel>
 
-        <Panel title="Alertes importantes" toolbar={<span className="counter">{alerts.length}</span>} data-demo="dashboard-alerts">
+        <Panel title={dashboardProfile.tableTitles.alerts} toolbar={<span className="counter">{alerts.length}</span>} data-demo="dashboard-alerts">
           <div className="alert-list">
             {alerts.map(({ title, text, action, tone, target }) => (
               <div className={`alert-row ${tone}`} key={title}>
@@ -9307,7 +9356,7 @@ function DashboardPage({ currentUser = users[0], onAction, onOpenProperty, prope
           </div>
         </Panel>
 
-        <Panel title="Résumé financier">
+        <Panel title={dashboardProfile.tableTitles.summary}>
           <div className="finance-summary" data-demo="dashboard-finance-summary">
             {dashboardProfile.summaryItems.map(([label, value, Icon, tone]) => (
               <p key={label} className={tone}>
