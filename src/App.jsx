@@ -4229,6 +4229,7 @@ function App() {
     () => allUsers.find((user) => user.id === currentUserId) ?? users.find((user) => user.id === currentUserId) ?? users[0],
     [allUsers, currentUserId]
   );
+  const canUseDemoMode = currentUser?.role === "Administrateur";
   const currentAccess = getRoleAccess(currentUser);
   const accessibleNavItems = useMemo(
     () => navItems.filter((item) => currentAccess.pages.includes(item.page)),
@@ -5248,10 +5249,12 @@ function App() {
   };
 
   const openDemoMenu = () => {
+    if (!canUseDemoMode) return;
     setModal("Mode DEMO");
   };
 
   const loadDemoData = () => {
+    if (!canUseDemoMode) return;
     setDemoDataLoaded(true);
     setSelectedProperty((current) => current ?? properties[0]);
     setSelectedOwner((current) => current ?? owners[0]);
@@ -5259,6 +5262,7 @@ function App() {
   };
 
   const startDemo = (track = "complete") => {
+    if (!canUseDemoMode) return;
     loadDemoData();
     setDemoTrack(track);
     setDemoIndex(0);
@@ -8003,6 +8007,14 @@ function App() {
     };
   }, [demoActive, effectiveDemoStep, modal, activePage, propertyView, propertyTab, clientTab, contractTab, financeTab, adminTab, reportType]);
 
+  useEffect(() => {
+    if (canUseDemoMode) return;
+    setDemoActive(false);
+    setDemoRect(null);
+    setDemoModalPhase(0);
+    if (modal === "Mode DEMO") setModal(null);
+  }, [canUseDemoMode, modal]);
+
   if (!isAuthenticated || showLogin) {
     return <LoginScreen onLogin={handleLogin} usersList={allUsers} />;
   }
@@ -8018,6 +8030,7 @@ function App() {
         onLogout={handleLogout}
         onStartDemo={openDemoMenu}
         demoActive={demoActive}
+        canUseDemoMode={canUseDemoMode}
         currentUser={currentUser}
         navItemsList={accessibleNavItems}
         notifications={topbarNotifications}
@@ -8137,7 +8150,7 @@ function App() {
       </main>
 
       <Footer />
-      {demoActive && effectiveDemoStep && (
+      {canUseDemoMode && demoActive && effectiveDemoStep && (
         <DemoTour
           step={effectiveDemoStep}
           index={demoIndex}
@@ -8152,12 +8165,14 @@ function App() {
         />
       )}
       {modal && (modal === "Mode DEMO" ? (
-        <DemoModeModal
-          dataLoaded={demoDataLoaded}
-          onLoadData={loadDemoData}
-          onStartTrack={startDemo}
-          onClose={() => setModal(null)}
-        />
+        canUseDemoMode ? (
+          <DemoModeModal
+            dataLoaded={demoDataLoaded}
+            onLoadData={loadDemoData}
+            onStartTrack={startDemo}
+            onClose={() => setModal(null)}
+          />
+        ) : null
       ) : ["Ajouter une charge"].includes(modal) || modal.startsWith("Modifier charge") ? (
         <ChargeFormModal
           title={modal}
@@ -9072,7 +9087,7 @@ function DemoTour({ step, index, total, subIndex = null, subTotal = null, rect, 
   );
 }
 
-function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onLogout, onStartDemo, demoActive, currentUser = users[0], navItemsList = navItems, notifications = notificationAlerts, searchDataset }) {
+function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onLogout, onStartDemo, demoActive, canUseDemoMode = false, currentUser = users[0], navItemsList = navItems, notifications = notificationAlerts, searchDataset }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -9120,10 +9135,12 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onLog
       </nav>
 
       <div className="topbar-actions">
-        <button className={demoActive ? "demo-launch active" : "demo-launch"} onClick={onStartDemo} data-demo="demo-button">
-          <Sparkles size={18} />
-          <span>Mode DEMO</span>
-        </button>
+        {canUseDemoMode && (
+          <button className={demoActive ? "demo-launch active" : "demo-launch"} onClick={onStartDemo} data-demo="demo-button">
+            <Sparkles size={18} />
+            <span>Mode DEMO</span>
+          </button>
+        )}
         <div className="search-menu">
           <button
             className={searchOpen ? "icon-only active" : "icon-only"}
