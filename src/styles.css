@@ -2426,7 +2426,8 @@ a {
 
 .linked-property-card,
 .linked-lots-strip button,
-.form-structure-preview {
+.form-structure-preview,
+.property-photo-preview {
   display: flex;
   align-items: center;
   gap: 14px;
@@ -2444,7 +2445,8 @@ a {
 
 .linked-property-card img,
 .linked-lots-strip img,
-.form-structure-preview img {
+.form-structure-preview img,
+.property-photo-preview img {
   width: 92px;
   height: 70px;
   flex: 0 0 auto;
@@ -2453,7 +2455,8 @@ a {
 }
 
 .linked-property-card div,
-.form-structure-preview div {
+.form-structure-preview div,
+.property-photo-preview span {
   display: grid;
   gap: 4px;
   min-width: 0;
@@ -2462,6 +2465,7 @@ a {
 
 .linked-property-card span,
 .form-structure-preview span,
+.property-photo-preview small,
 .linked-lots-strip small {
   color: var(--muted);
   font-size: 0.86rem;
@@ -2469,6 +2473,7 @@ a {
 
 .linked-property-card strong,
 .form-structure-preview strong,
+.property-photo-preview strong,
 .linked-lots-strip strong {
   overflow: hidden;
   color: var(--text);

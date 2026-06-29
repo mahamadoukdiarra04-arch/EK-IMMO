@@ -3094,6 +3094,140 @@ const financeSummaryByPeriod = {
   "Période personnalisée": ["54.2M FCFA", "43.8M FCFA", "10.4M FCFA", "6.3M FCFA", "18.9M FCFA"],
 };
 
+function getDashboardPropertyStats(propertiesList = [], period = "Mois") {
+  const multiplier = periodWeight[period] ?? 1;
+  const maintenanceOnly = propertiesList.filter((property) => property.status === "Entretien seul" || property.financialMode === "Contrat entretien seul");
+  const available = propertiesList.filter((property) => ["Disponible", "Réservé"].includes(property.status));
+  const rented = propertiesList.filter((property) => ["Loué", "Gestion multi-lots"].includes(property.status));
+  const sale = propertiesList.filter((property) => property.period?.includes("vente") || property.status === "Vendu");
+  const reserved = propertiesList.filter((property) => property.status === "Réservé");
+  const maintenanceAmount = maintenanceOnly.reduce((sum, property) => sum + parseFCFA(property.price), 0);
+  const rentAmount = propertiesList.reduce((sum, property) => {
+    if (property.period?.includes("vente")) return sum;
+    return sum + parseFCFA(property.price);
+  }, 0);
+  const periodRentAmount = Math.round(rentAmount * multiplier);
+  const periodMaintenanceAmount = Math.round(maintenanceAmount * multiplier);
+  const commissionAmount = Math.round(periodRentAmount * 0.05);
+  const arrearsEstimate = Math.round(periodRentAmount * (propertiesList.length ? 0.04 : 0));
+  const chargeEstimate = Math.round((periodMaintenanceAmount || periodRentAmount * 0.018));
+  const ownerNet = Math.max(0, periodRentAmount - commissionAmount - chargeEstimate);
+
+  return {
+    total: propertiesList.length,
+    available: available.length,
+    rented: rented.length,
+    reserved: reserved.length,
+    sale: sale.length,
+    maintenanceOnly: maintenanceOnly.length,
+    rentalManaged: Math.max(0, propertiesList.length - maintenanceOnly.length),
+    toPublish: available.length + reserved.length,
+    rentAmount: periodRentAmount,
+    maintenanceAmount: periodMaintenanceAmount,
+    commissionAmount,
+    arrearsEstimate,
+    chargeEstimate,
+    ownerNet,
+  };
+}
+
+function buildDashboardProfile(currentUser, propertiesList, period) {
+  const role = currentUser?.role ?? "Administrateur";
+  const stats = getDashboardPropertyStats(propertiesList, period);
+  const zeroAmount = "0 FCFA";
+
+  if (role === "Gestion locative & recouvrement") {
+    return {
+      pipelineKey: "Loyers",
+      chartTitle: "Suivi des loyers",
+      kpis: [
+        { label: "Biens en gestion locative", value: String(stats.rentalManaged), icon: Building2, tone: "purple", details: [["Loués", String(stats.rented)], ["Réservés", String(stats.reserved)]], demoTarget: "dashboard-kpi-portfolio" },
+        { label: "Loyers à suivre", value: stats.rentAmount ? formatFCFA(stats.rentAmount) : zeroAmount, icon: Banknote, tone: "gray", details: [["Biens concernés", String(stats.rentalManaged)], ["Période", period]], demoTarget: "dashboard-kpi-cashflow" },
+        { label: "Paiements à contrôler", value: String(stats.rented), icon: CheckCircle2, tone: "purple", details: [["Locataires actifs", String(stats.rented)], ["Disponibles", String(stats.available)]], demoTarget: "dashboard-kpi-rental" },
+        { label: "Impayés estimés", value: stats.arrearsEstimate ? formatFCFA(stats.arrearsEstimate) : zeroAmount, icon: AlertTriangle, tone: "danger", details: [["Dossiers à relancer", String(stats.arrearsEstimate ? Math.max(1, Math.ceil(stats.rented * 0.08)) : 0)], ["Priorité", stats.arrearsEstimate ? "À suivre" : "RAS"]], demoTarget: "dashboard-kpi-arrears" },
+        { label: "Dossiers locataires", value: String(stats.rented), icon: UserRound, tone: "gray", details: [["Actifs", String(stats.rented)], ["À rattacher", String(Math.max(0, stats.available - stats.reserved))]], demoTarget: "dashboard-kpi-fees" },
+        { label: "Courriers et reçus", value: String(stats.rented + stats.reserved), icon: FileText, tone: "gray", details: [["À produire", String(stats.rented)], ["Archives", "À jour"]], demoTarget: "dashboard-kpi-charges" },
+        { label: "Interventions à suivre", value: String(stats.maintenanceOnly), icon: Wrench, tone: "gray", details: [["Entretien seul", String(stats.maintenanceOnly)], ["Charges estimées", formatFCFA(stats.chargeEstimate)]], demoTarget: "dashboard-kpi-charges" },
+        { label: "Reversements à préparer", value: formatFCFA(stats.ownerNet), icon: RefreshCw, tone: "gray", details: [["Net propriétaire", formatFCFA(stats.ownerNet)], ["Commissions", formatFCFA(stats.commissionAmount)]], demoTarget: "dashboard-kpi-reversals" },
+      ],
+      alerts: [
+        { title: "Loyers en retard", text: `${formatFCFA(stats.arrearsEstimate)} à suivre`, action: "Relancer", tone: "danger", target: "Loyers en retard" },
+        { title: "Paiements à contrôler", text: `${stats.rented} dossier(s) locatif(s)`, action: "Voir", tone: "muted", target: "Enregistrer paiement" },
+        { title: "États des lieux", text: `${stats.available} bien(s) disponible(s)`, action: "Voir", tone: "dark", target: "Planifier visite" },
+        { title: "Interventions", text: `${stats.maintenanceOnly} bien(s) en entretien seul`, action: "Action", tone: "danger", target: "Maintenance urgente" },
+        { title: "Documents manquants", text: "Pièces locataires, reçus ou courriers à compléter", action: "Demander", tone: "muted", target: "Documents manquants" },
+      ],
+      summaryItems: [
+        ["Loyers suivis", formatFCFA(stats.rentAmount), Banknote, "dark"],
+        ["Paiements à contrôler", String(stats.rented), CheckCircle2, "muted"],
+        ["Retards estimés", formatFCFA(stats.arrearsEstimate), AlertTriangle, "danger"],
+        ["Charges liées", formatFCFA(stats.chargeEstimate), ReceiptText, "dark"],
+        ["Reversements nets", formatFCFA(stats.ownerNet), RefreshCw, "muted"],
+      ],
+    };
+  }
+
+  if (role === "Communication & prospection") {
+    return {
+      pipelineKey: "Biens",
+      chartTitle: "Biens à promouvoir",
+      kpis: [
+        { label: "Biens visibles", value: String(stats.total), icon: Building2, tone: "purple", details: [["Disponibles", String(stats.available)], ["Réservés", String(stats.reserved)]], demoTarget: "dashboard-kpi-portfolio" },
+        { label: "Biens à publier", value: String(stats.toPublish), icon: Upload, tone: "gray", details: [["Location", String(stats.available)], ["Vente", String(stats.sale)]], demoTarget: "dashboard-kpi-available" },
+        { label: "Prospection active", value: String(Math.max(0, stats.available + stats.reserved)), icon: UsersRound, tone: "purple", details: [["Quartiers", String(uniqueValues(propertiesList.map((property) => property.district)).length)], ["Biens à proposer", String(stats.available)]], demoTarget: "dashboard-kpi-rental" },
+        { label: "Visites à organiser", value: String(stats.available), icon: CalendarDays, tone: "gray", details: [["Disponibles", String(stats.available)], ["Réservés", String(stats.reserved)]], demoTarget: "dashboard-kpi-cashflow" },
+        { label: "Photos à compléter", value: String(propertiesList.filter((property) => !property.image).length), icon: Upload, tone: "gray", details: [["Cartes prêtes", String(propertiesList.filter((property) => property.image).length)], ["À vérifier", String(stats.total)]], demoTarget: "dashboard-kpi-arrears" },
+        { label: "Biens entretien seul", value: String(stats.maintenanceOnly), icon: Wrench, tone: "gray", details: [["À expliquer", String(stats.maintenanceOnly)], ["Prestataires", "À suivre"]], demoTarget: "dashboard-kpi-fees" },
+        { label: "Documents à préparer", value: String(stats.total), icon: FileText, tone: "gray", details: [["Fiches", String(stats.total)], ["Archives", "À classer"]], demoTarget: "dashboard-kpi-charges" },
+        { label: "Portefeuille à valoriser", value: stats.rentAmount ? formatFCFA(stats.rentAmount) : zeroAmount, icon: BarChart3, tone: "gray", details: [["Valeur mensuelle", formatFCFA(stats.rentAmount)], ["Biens", String(stats.total)]], demoTarget: "dashboard-kpi-reversals" },
+      ],
+      alerts: [
+        { title: "Biens à publier", text: `${stats.toPublish} fiche(s) à valoriser`, action: "Voir", tone: "dark", target: "Ajouter un bien" },
+        { title: "Visites du jour", text: `${stats.available} bien(s) disponible(s) à proposer`, action: "Voir", tone: "muted", target: "Visites du jour" },
+        { title: "Photos à compléter", text: "Vérifier la photo principale des biens créés", action: "Action", tone: "danger", target: "Importer document" },
+        { title: "Prospection", text: "Préparer les propositions commerciales", action: "Voir", tone: "muted", target: "Nouveau prospect" },
+        { title: "Documents manquants", text: "Fiches, photos et justificatifs à archiver", action: "Demander", tone: "muted", target: "Documents manquants" },
+      ],
+      summaryItems: [
+        ["Biens à publier", String(stats.toPublish), Upload, "dark"],
+        ["Visites à organiser", String(stats.available), CalendarDays, "muted"],
+        ["Prospects à alimenter", String(stats.available + stats.reserved), UsersRound, "dark"],
+        ["Photos à vérifier", String(stats.total), Upload, "muted"],
+        ["Documents à archiver", String(stats.total), Archive, "dark"],
+      ],
+    };
+  }
+
+  return {
+    pipelineKey: "Commercial & visites",
+    chartTitle: "Suivi des loyers",
+    kpis: [
+      { label: "Portefeuille suivi", value: String(stats.total), icon: Building2, tone: "purple", details: [["Gestion locative", String(stats.rentalManaged)], ["Entretien seul", String(stats.maintenanceOnly)]], demoTarget: "dashboard-kpi-portfolio" },
+      { label: "Biens disponibles", value: String(stats.available), icon: KeyRound, tone: "gray", details: [["Location", String(Math.max(0, stats.available - stats.sale))], ["Vente", String(stats.sale)]], demoTarget: "dashboard-kpi-available" },
+      { label: "Gestion locative", value: String(stats.rented + stats.reserved), icon: Home, tone: "purple", details: [["Loués", String(stats.rented)], ["Réservés", String(stats.reserved)]], demoTarget: "dashboard-kpi-rental" },
+      { label: "Flux attendus", value: stats.rentAmount ? formatFCFA(stats.rentAmount) : zeroAmount, icon: Banknote, tone: "gray", details: [["Loyers", formatFCFA(Math.max(0, stats.rentAmount - stats.maintenanceAmount))], ["Entretien", formatFCFA(stats.maintenanceAmount)]], demoTarget: "dashboard-kpi-cashflow" },
+      { label: "Impayés", value: formatFCFA(stats.arrearsEstimate), icon: AlertTriangle, tone: "danger", details: [["Loyers", formatFCFA(stats.arrearsEstimate)], ["Forfaits", zeroAmount]], demoTarget: "dashboard-kpi-arrears" },
+      { label: "Honoraires générés", value: formatFCFA(stats.commissionAmount), icon: WalletCards, tone: "gray", details: [["Commissions", formatFCFA(stats.commissionAmount)], ["Forfaits", zeroAmount]], demoTarget: "dashboard-kpi-fees" },
+      { label: "Charges et interventions", value: formatFCFA(stats.chargeEstimate), icon: ReceiptText, tone: "gray", details: [["Entretiens", formatFCFA(stats.chargeEstimate)], ["Refacturations", zeroAmount]], demoTarget: "dashboard-kpi-charges" },
+      { label: "Reversements en attente", value: formatFCFA(stats.ownerNet), icon: RefreshCw, tone: "gray", details: [["Propriétaires", formatFCFA(stats.ownerNet)], ["Déductions", formatFCFA(stats.chargeEstimate)]], demoTarget: "dashboard-kpi-reversals" },
+    ],
+    alerts: [
+      { title: "Loyers en retard", text: `${formatFCFA(stats.arrearsEstimate)} à suivre`, action: "Relancer", tone: "danger", target: "Loyers en retard" },
+      { title: "Visites du jour", text: `${stats.available} visite(s) possible(s)`, action: "Voir", tone: "muted", target: "Visites du jour" },
+      { title: "Contrats à échéance", text: `${stats.rented} contrat(s) actif(s) à suivre`, action: "Gérer", tone: "dark", target: "Contrats à échéance" },
+      { title: "Maintenance urgente", text: `${stats.maintenanceOnly} bien(s) en entretien seul`, action: "Action", tone: "danger", target: "Maintenance urgente" },
+      { title: "Documents manquants", text: "Dossiers et justificatifs à compléter", action: "Demander", tone: "muted", target: "Documents manquants" },
+    ],
+    summaryItems: [
+      ["Factures émises", formatFCFA(stats.rentAmount + stats.commissionAmount), FileText, "dark"],
+      ["Paiements reçus", formatFCFA(Math.max(0, stats.rentAmount - stats.arrearsEstimate)), CheckCircle2, "muted"],
+      ["Restant dû", formatFCFA(stats.arrearsEstimate), AlertTriangle, "danger"],
+      ["Charges enregistrées", formatFCFA(stats.chargeEstimate), ReceiptText, "dark"],
+      ["Reversements en attente", formatFCFA(stats.ownerNet), RefreshCw, "muted"],
+    ],
+  };
+}
+
 const periodWeight = {
   Jour: 0.22,
   Semaine: 0.48,
@@ -9053,29 +9187,13 @@ function DashboardPage({ currentUser = users[0], onAction, onOpenProperty, prope
   const [dashboardState, setDashboardState] = useState("Données");
   const hasDashboardData = propertiesList.length > 0;
   const effectiveDashboardState = hasDashboardData || ["Chargement", "Erreur"].includes(dashboardState) ? dashboardState : "Vide";
-  const kpiValues = dashboardKpisByPeriod[kpiPeriod] ?? dashboardKpisByPeriod.Mois;
-  const kpiDetails = dashboardKpiDetailsByPeriod[kpiPeriod] ?? dashboardKpiDetailsByPeriod.Mois;
-  const selectedPipeline = getPipelineData("Commercial & visites", kpiPeriod);
-  const summaryValues = financeSummaryByPeriod[kpiPeriod] ?? financeSummaryByPeriod.Mois;
-
-  const kpis = [
-    { label: "Portefeuille suivi", value: kpiValues[0], icon: Building2, tone: "purple", details: kpiDetails[0], demoTarget: "dashboard-kpi-portfolio" },
-    { label: "Biens disponibles", value: kpiValues[1], icon: KeyRound, tone: "gray", details: kpiDetails[1], demoTarget: "dashboard-kpi-available" },
-    { label: "Gestion locative", value: kpiValues[2], icon: Home, tone: "purple", details: kpiDetails[2], demoTarget: "dashboard-kpi-rental" },
-    { label: "Flux attendus", value: kpiValues[3], icon: Banknote, tone: "gray", details: kpiDetails[3], demoTarget: "dashboard-kpi-cashflow" },
-    { label: "Impayés", value: kpiValues[4], icon: AlertTriangle, tone: "danger", details: kpiDetails[4], demoTarget: "dashboard-kpi-arrears" },
-    { label: "Honoraires générés", value: kpiValues[5], icon: WalletCards, tone: "gray", details: kpiDetails[5], demoTarget: "dashboard-kpi-fees" },
-    { label: "Charges et interventions", value: kpiValues[6], icon: ReceiptText, tone: "gray", details: kpiDetails[6], demoTarget: "dashboard-kpi-charges" },
-    { label: "Reversements en attente", value: kpiValues[7], icon: RefreshCw, tone: "gray", details: kpiDetails[7], demoTarget: "dashboard-kpi-reversals" },
-  ];
-
-  const alerts = [
-    ["Loyers en retard", "3 locataires - 3.2M FCFA", "Relancer", "danger"],
-    ["Visites du jour", "4 visites programmées", "Voir", "muted"],
-    ["Contrats à échéance", "2 baux se terminent ce mois", "Gérer", "dark"],
-    ["Maintenance urgente", "Fuite d'eau signalée (Studio Badalabougou)", "Action", "danger"],
-    ["Documents manquants", "Assurance habitation dossier LOC-2026-018", "Demander", "muted"],
-  ];
+  const dashboardProfile = useMemo(
+    () => buildDashboardProfile(currentUser, propertiesList, kpiPeriod),
+    [currentUser, kpiPeriod, propertiesList]
+  );
+  const selectedPipeline = getPipelineData(dashboardProfile.pipelineKey, kpiPeriod);
+  const kpis = dashboardProfile.kpis;
+  const alerts = dashboardProfile.alerts;
 
   return (
     <>
@@ -9114,7 +9232,7 @@ function DashboardPage({ currentUser = users[0], onAction, onOpenProperty, prope
       </section>
 
       <section className="two-grid" data-demo="dashboard-charts">
-        <Panel title="Suivi des loyers">
+        <Panel title={dashboardProfile.chartTitle}>
           <RentBars period={kpiPeriod} />
         </Panel>
         <Panel title={selectedPipeline.title}>
@@ -9138,9 +9256,9 @@ function DashboardPage({ currentUser = users[0], onAction, onOpenProperty, prope
           </div>
         </Panel>
 
-        <Panel title="Alertes importantes" toolbar={<span className="counter">5</span>} data-demo="dashboard-alerts">
+        <Panel title="Alertes importantes" toolbar={<span className="counter">{alerts.length}</span>} data-demo="dashboard-alerts">
           <div className="alert-list">
-            {alerts.map(([title, text, action, tone]) => (
+            {alerts.map(({ title, text, action, tone, target }) => (
               <div className={`alert-row ${tone}`} key={title}>
                 <span>
                   <strong>{title}</strong>
@@ -9154,7 +9272,7 @@ function DashboardPage({ currentUser = users[0], onAction, onOpenProperty, prope
                         ? "dashboard-alert-document"
                         : undefined
                   }
-                  onClick={() => onAction(title)}
+                  onClick={() => onAction(target ?? title)}
                 >
                   {action}
                 </button>
@@ -9165,13 +9283,7 @@ function DashboardPage({ currentUser = users[0], onAction, onOpenProperty, prope
 
         <Panel title="Résumé financier">
           <div className="finance-summary" data-demo="dashboard-finance-summary">
-            {[
-              ["Factures émises", summaryValues[0], FileText, "dark"],
-              ["Paiements reçus", summaryValues[1], CheckCircle2, "muted"],
-              ["Restant dû", summaryValues[2], AlertTriangle, "danger"],
-              ["Charges enregistrées", summaryValues[3], ReceiptText, "dark"],
-              ["Reversements prop. en attente", summaryValues[4], RefreshCw, "muted"],
-            ].map(([label, value, Icon, tone]) => (
+            {dashboardProfile.summaryItems.map(([label, value, Icon, tone]) => (
               <p key={label} className={tone}>
                 <span>{label}</span>
                 <strong>{value}</strong>
@@ -23516,6 +23628,8 @@ function PropertyFormModal({
   }));
   const [confirmSensitiveChange, setConfirmSensitiveChange] = useState(false);
   const [pendingDraft, setPendingDraft] = useState(false);
+  const [imagePreview, setImagePreview] = useState(property?.image ?? "");
+  const [photoFileName, setPhotoFileName] = useState("");
 
   const sensitiveOptions = {
     status: ["Disponible", "Loué", "Réservé", "Gestion multi-lots", "Entretien seul", "Vendu", "En travaux", "Indisponible"],
@@ -23543,6 +23657,23 @@ function PropertyFormModal({
 
   const updateValue = (key) => (event) => {
     setFormValues((current) => ({ ...current, [key]: event.target.value }));
+  };
+
+  const updateMainPhoto = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setPhotoFileName("Format non pris en charge");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImagePreview(String(reader.result));
+      setPhotoFileName(file.name);
+    };
+    reader.readAsDataURL(file);
   };
 
   const withCurrentOption = (key) => Array.from(new Set([sensitiveValues[key], ...(sensitiveOptions[key] ?? [])].filter(Boolean)));
@@ -23590,7 +23721,7 @@ function PropertyFormModal({
       baths: parseNumber(formValues.baths) || formValues.baths,
       condition: formValues.condition,
       tags: tags.length ? tags : ["À compléter"],
-      image: property?.image ?? selectedImage,
+      image: imagePreview || property?.image || selectedImage,
       parentCode: propertyNature === "Appartement rattaché" ? formValues.parentCode : undefined,
       parentName: parent?.name,
       block: propertyNature === "Appartement rattaché" ? formValues.block : undefined,
@@ -23717,7 +23848,16 @@ function PropertyFormModal({
             <label>État général<select value={formValues.condition} onChange={updateValue("condition")}><option>Bon</option><option>À rafraîchir</option><option>En travaux</option><option>À rénover</option></select></label>
             <label>Équipements<input value={formValues.tags} onChange={updateValue("tags")} /></label>
             <label className="full">Observations<textarea value={formValues.observations} onChange={updateValue("observations")} /></label>
-            <label>Photos du bien<input type="file" multiple /></label>
+            <label className="full">Photo principale du bien<input type="file" accept="image/*" onChange={updateMainPhoto} /><small>{photoFileName || "Aucune photo sélectionnée"}</small></label>
+            {(imagePreview || property?.image) && (
+              <div className="property-photo-preview full">
+                <img src={imagePreview || property?.image} alt="" />
+                <span>
+                  <strong>Aperçu de la photo principale</strong>
+                  <small>Cette image sera utilisée sur la carte, la fiche bien et la fiche PDF.</small>
+                </span>
+              </div>
+            )}
             <label>Titre foncier<input type="file" /></label>
             <label>Mandat<input type="file" /></label>
             <label>Autres documents<input type="file" multiple /></label>
