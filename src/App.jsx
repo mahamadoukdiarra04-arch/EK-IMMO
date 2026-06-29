@@ -69,6 +69,7 @@ const roleAccessProfiles = {
     clientTabs: ["Propriétaires", "Locataires", "Prospects", "Visites"],
     contractTabs: ["Contrats", "Génération de document", "Archives"],
     financeTabs: ["Loyers", "Paiements", "Impayés", "Commissions", "Charges", "Entretiens", "Reversements"],
+    reports: "all",
   },
   "Gestion locative & recouvrement": {
     defaultPage: "Finance",
@@ -76,6 +77,7 @@ const roleAccessProfiles = {
     clientTabs: ["Propriétaires", "Locataires", "Visites"],
     contractTabs: ["Contrats", "Génération de document", "Archives"],
     financeTabs: ["Loyers", "Paiements", "Impayés", "Charges", "Entretiens", "Reversements"],
+    reports: ["Rapport des biens", "Rapport des propriétaires", "Rapport des locataires", "Rapport des loyers", "Rapport des impayés", "Rapport des charges", "Rapport des entretiens", "Rapport des visites", "Situation propriétaire", "Contrats à échéance", "Reversements propriétaires"],
   },
   "Communication & prospection": {
     defaultPage: "Biens",
@@ -83,6 +85,7 @@ const roleAccessProfiles = {
     clientTabs: ["Prospects", "Visites"],
     contractTabs: ["Génération de document", "Archives"],
     financeTabs: [],
+    reports: ["Rapport des biens", "Rapport des visites"],
   },
 };
 
@@ -2838,6 +2841,21 @@ const reports = [
   ["Reversements propriétaires", "Préparation des états de reversement", RefreshCw],
 ];
 
+function getReportTitlesForUser(user) {
+  const allReportTitles = reports.map(([title]) => title);
+  if (user?.reportAccessMode === "Tous rapports") return allReportTitles;
+
+  const access = getRoleAccess(user);
+  if (access.reports === "all") return allReportTitles;
+  if (Array.isArray(user?.reportAccess) && user.reportAccess.length) {
+    return user.reportAccess.filter((title) => allReportTitles.includes(title));
+  }
+  if (Array.isArray(access.reports)) {
+    return access.reports.filter((title) => allReportTitles.includes(title));
+  }
+  return [];
+}
+
 const users = [
   {
     id: "USR-2026-001",
@@ -2850,6 +2868,7 @@ const users = [
     role: "Administrateur",
     status: "Actif",
     lastLogin: "29/06/2026 08:00",
+    reportAccessMode: "Tous rapports",
     scope: "Administration complète, paramétrage, suivi global et validation.",
   },
   {
@@ -2863,6 +2882,7 @@ const users = [
     role: "Gestion locative & recouvrement",
     status: "Actif",
     lastLogin: "29/06/2026 07:42",
+    reportAccessMode: "Selon le rôle",
     scope: "Gestion locative, loyers, paiements, relances, dossiers locataires, courriers, visites et états des lieux.",
   },
   {
@@ -2876,6 +2896,7 @@ const users = [
     role: "Communication & prospection",
     status: "Actif",
     lastLogin: "29/06/2026 07:30",
+    reportAccessMode: "Selon le rôle",
     scope: "Mise en ligne des biens, contenus immobiliers, communication digitale, prospection et visites.",
   },
 ];
@@ -4164,6 +4185,7 @@ function App() {
     () => navItems.filter((item) => currentAccess.pages.includes(item.page)),
     [currentAccess.pages]
   );
+  const availableReports = useMemo(() => getReportTitlesForUser(currentUser), [currentUser]);
   const propertiesWithArchiveState = useMemo(() => [...createdProperties, ...demoBaseProperties].map((property) => {
     const propertyWithOverride = { ...property, ...(propertyOverrides[property.code] ?? {}) };
     const archive = archivedProperties[property.code];
@@ -4200,7 +4222,10 @@ function App() {
     if (!currentAccess.pages.includes("Plus") && adminTab !== "Utilisateurs") {
       setAdminTab("Utilisateurs");
     }
-  }, [activePage, adminTab, clientTab, contractTab, currentAccess, financeTab, isAuthenticated]);
+    if (availableReports.length && !availableReports.includes(reportType)) {
+      setReportType(availableReports[0]);
+    }
+  }, [activePage, adminTab, availableReports, clientTab, contractTab, currentAccess, financeTab, isAuthenticated, reportType]);
 
   useEffect(() => {
     setSelectedProperty((current) => {
@@ -8045,6 +8070,7 @@ function App() {
           <ReportsPage
             selected={reportType}
             onSelect={setReportType}
+            availableReports={availableReports}
             onAction={openAction}
             propertiesList={propertiesWithArchiveState}
             ownersList={allOwners}
@@ -17379,6 +17405,7 @@ function buildReportHtml(payload, mode) {
 function ReportsPage({
   selected,
   onSelect,
+  availableReports = reports.map(([title]) => title),
   onAction,
   propertiesList = properties,
   ownersList = owners,
@@ -17404,7 +17431,19 @@ function ReportsPage({
   });
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [exportMessage, setExportMessage] = useState("");
-  const reportRows = useMemo(() => buildReportRows(selected, {
+  const visibleReports = useMemo(
+    () => reports.filter(([title]) => availableReports.includes(title)),
+    [availableReports]
+  );
+  const effectiveSelected = visibleReports.some(([title]) => title === selected)
+    ? selected
+    : visibleReports[0]?.[0] ?? "";
+
+  useEffect(() => {
+    if (selected !== effectiveSelected) onSelect(effectiveSelected);
+  }, [effectiveSelected, onSelect, selected]);
+
+  const reportRows = useMemo(() => buildReportRows(effectiveSelected, {
     propertiesList,
     ownersList,
     tenantsList,
@@ -17416,9 +17455,9 @@ function ReportsPage({
     maintenancesList,
     visitsList,
     reversalsList,
-  }), [chargesList, commissionsList, contractsList, maintenancesList, ownersList, paymentsList, propertiesList, rentRowsList, reversalsList, selected, tenantsList, visitsList]);
+  }), [chargesList, commissionsList, contractsList, effectiveSelected, maintenancesList, ownersList, paymentsList, propertiesList, rentRowsList, reversalsList, tenantsList, visitsList]);
   const filteredRows = useMemo(() => filterReportRows(reportRows, filters), [filters, reportRows]);
-  const exportPayload = useMemo(() => buildReportExportPayload({ selected, rows: filteredRows, filters }), [filteredRows, filters, selected]);
+  const exportPayload = useMemo(() => buildReportExportPayload({ selected: effectiveSelected, rows: filteredRows, filters }), [effectiveSelected, filteredRows, filters]);
   const updateFilter = (field) => (event) => setFilters((current) => ({ ...current, [field]: event.target.value }));
   const exportActions = {
     PDF: () => openReportPrintView(exportPayload, "pdf"),
@@ -17426,7 +17465,7 @@ function ReportsPage({
     Impression: () => openReportPrintView(exportPayload, "print"),
   };
   const openExportMenu = () => {
-    if (!selected) {
+    if (!effectiveSelected) {
       setExportMessage("Sélectionnez un rapport avant export.");
       return;
     }
@@ -17467,19 +17506,26 @@ function ReportsPage({
       />
       <section className="reports-layout" data-demo="reports-layout">
         <div className="report-grid">
-          {reports.map(([title, text, Icon]) => (
-            <button className={selected === title ? "report-card active" : "report-card"} key={title} onClick={() => onSelect(title)}>
+          {visibleReports.map(([title, text, Icon]) => (
+            <button className={effectiveSelected === title ? "report-card active" : "report-card"} key={title} onClick={() => onSelect(title)}>
               <span><Icon size={21} /></span>
               <strong>{title}</strong>
               <small>{text}</small>
             </button>
           ))}
+          {visibleReports.length === 0 && (
+            <div className="empty-state compact-empty">
+              <BarChart3 size={24} />
+              <h3>Aucun rapport autorisé</h3>
+              <p>Demandez à l'administrateur d'activer les rapports nécessaires à ce rôle.</p>
+            </div>
+          )}
         </div>
         <Panel title="Aperçu & filtres" className="report-preview">
           <div className="report-selected">
             <BarChart3 size={28} />
             <div>
-              <h3>{selected || "Aucun rapport sélectionné"}</h3>
+              <h3>{effectiveSelected || "Aucun rapport sélectionné"}</h3>
               {exportMessage && <p className="form-alert">{exportMessage}</p>}
             </div>
           </div>
@@ -17601,6 +17647,9 @@ function UserProfilePanel({ user, history = [], onAction }) {
       : user.role === "Gestion locative & recouvrement"
         ? "Biens, locataires, loyers, impayés, visites, documents"
         : "Biens, prospects, visites, documents, rapports";
+  const reportAccess = user.reportAccessMode === "Tous rapports"
+    ? "Tous rapports"
+    : getReportTitlesForUser(user).join(", ");
 
   return (
     <Panel title="Fiche utilisateur" className="profile-panel">
@@ -17611,6 +17660,7 @@ function UserProfilePanel({ user, history = [], onAction }) {
           ["Statut", user.status],
           ["Dernière connexion", user.lastLogin],
           ["Périmètre", modules],
+          ["Rapports", reportAccess || "Selon le rôle"],
         ]}
       />
       <div className="simple-list">
@@ -17619,6 +17669,7 @@ function UserProfilePanel({ user, history = [], onAction }) {
         <p><span>Téléphone</span><strong>{user.phone}</strong></p>
         <p><span>Rôle attribué</span><strong>{user.role}</strong></p>
         <p><span>Permissions principales</span><strong>{modules}</strong></p>
+        <p><span>Rapports autorisés</span><strong>{reportAccess || "Selon le rôle"}</strong></p>
         <p><span>Missions principales</span><strong>{user.scope ?? "Accès attribués selon le poste"}</strong></p>
         <p><span>Statut du compte</span><Badge label={user.status} /></p>
         <p><span>Dernière connexion</span><strong>{user.lastLogin}</strong></p>
@@ -18024,6 +18075,7 @@ function UserFormAdminModal({ mode = "create", user = null, sequence = 1, onCrea
     phone: user?.phone ?? "",
     role: user?.role ?? "Gestion locative & recouvrement",
     status: user?.status ?? "Actif",
+    reportAccessMode: user?.reportAccessMode ?? (user?.role === "Administrateur" ? "Tous rapports" : "Selon le rôle"),
     invitationMode: "Invitation par email",
     temporaryPassword: "EKIMMO-2026",
   });
@@ -18038,6 +18090,7 @@ function UserFormAdminModal({ mode = "create", user = null, sequence = 1, onCrea
       phone: values.phone || "+223 70 00 00 00",
       role: values.role,
       status: values.status,
+      reportAccessMode: values.reportAccessMode,
       lastLogin: sendInvitation ? "Invitation en attente" : "Jamais connecté",
       invitationMode: values.invitationMode,
       temporaryPassword: values.temporaryPassword,
@@ -18053,6 +18106,7 @@ function UserFormAdminModal({ mode = "create", user = null, sequence = 1, onCrea
         phone: values.phone,
         role: values.role,
         status: values.status,
+        reportAccessMode: values.reportAccessMode,
       },
     });
   };
@@ -18070,6 +18124,7 @@ function UserFormAdminModal({ mode = "create", user = null, sequence = 1, onCrea
           <label>Téléphone<input value={values.phone} onChange={update("phone")} placeholder="+223 70 00 00 00" /></label>
           <label>Rôle<select value={values.role} onChange={update("role")}>{roleProfiles.map((role) => <option key={role}>{role}</option>)}</select></label>
           <label>Statut<select value={values.status} onChange={update("status")}><option>Actif</option><option>Suspendu</option></select></label>
+          <label>Accès rapports<select value={values.reportAccessMode} onChange={update("reportAccessMode")}><option>Selon le rôle</option><option>Tous rapports</option></select></label>
           {!isEdit && (
             <>
               <label>Activation<select value={values.invitationMode} onChange={update("invitationMode")}><option>Invitation par email</option><option>Mot de passe temporaire</option></select></label>
