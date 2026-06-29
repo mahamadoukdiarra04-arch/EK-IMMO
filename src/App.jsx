@@ -62,6 +62,53 @@ const navItems = [
   { page: "Plus", label: "Plus" },
 ];
 
+const roleAccessProfiles = {
+  Administrateur: {
+    defaultPage: "Dashboard",
+    pages: ["Dashboard", "Biens", "Clients", "Contrats", "Finance", "Rapports", "Plus"],
+    clientTabs: ["Propriétaires", "Locataires", "Prospects", "Visites"],
+    contractTabs: ["Contrats", "Génération de document", "Archives"],
+    financeTabs: ["Loyers", "Paiements", "Impayés", "Commissions", "Charges", "Entretiens", "Reversements"],
+  },
+  "Gestion locative & recouvrement": {
+    defaultPage: "Finance",
+    pages: ["Dashboard", "Biens", "Clients", "Contrats", "Finance", "Rapports"],
+    clientTabs: ["Propriétaires", "Locataires", "Visites"],
+    contractTabs: ["Contrats", "Génération de document", "Archives"],
+    financeTabs: ["Loyers", "Paiements", "Impayés", "Charges", "Entretiens", "Reversements"],
+  },
+  "Communication & prospection": {
+    defaultPage: "Biens",
+    pages: ["Dashboard", "Biens", "Clients", "Contrats", "Rapports"],
+    clientTabs: ["Prospects", "Visites"],
+    contractTabs: ["Génération de document", "Archives"],
+    financeTabs: [],
+  },
+};
+
+function getRoleAccess(user) {
+  return roleAccessProfiles[user?.role] ?? roleAccessProfiles.Administrateur;
+}
+
+function getDefaultPageForUser(user) {
+  return getRoleAccess(user).defaultPage;
+}
+
+function userCanAccessPage(user, page) {
+  return getRoleAccess(user).pages.includes(page);
+}
+
+function getUserInitials(user) {
+  if (user?.initials) return user.initials;
+  return (user?.name ?? "Utilisateur")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+}
+
 const demoSteps = [
   {
     page: "Dashboard",
@@ -2794,39 +2841,42 @@ const reports = [
 const users = [
   {
     id: "USR-2026-001",
-    name: "Aïssata Diarra",
-    email: "admin@ekimmo.ml",
-    phone: "+223 76 12 45 89",
+    identifier: "NIARE",
+    password: "123456",
+    name: "Niaré Admin",
+    initials: "NA",
+    email: "admin@ekimmo-mali.com",
+    phone: "+223 72 77 71 77",
     role: "Administrateur",
     status: "Actif",
-    lastLogin: "28/05/2026 07:42",
+    lastLogin: "29/06/2026 08:00",
+    scope: "Administration complète, paramétrage, suivi global et validation.",
   },
   {
     id: "USR-2026-002",
-    name: "Mariam Traoré",
-    email: "mariam.traore@ekimmo.ml",
-    phone: "+223 74 15 33 90",
-    role: "Agent immobilier",
+    identifier: "Makan",
+    password: "123456",
+    name: "Makan Sissoko",
+    initials: "MS",
+    email: "makan.sissoko@ekimmo-mali.com",
+    phone: "+223 76 12 45 89",
+    role: "Gestion locative & recouvrement",
     status: "Actif",
-    lastLogin: "27/05/2026 18:20",
+    lastLogin: "29/06/2026 07:42",
+    scope: "Gestion locative, loyers, paiements, relances, dossiers locataires, courriers, visites et états des lieux.",
   },
   {
     id: "USR-2026-003",
-    name: "Issa Maïga",
-    email: "issa.maiga@ekimmo.ml",
-    phone: "+223 66 44 17 21",
-    role: "Directeur / Manager",
-    status: "Actif",
-    lastLogin: "27/05/2026 16:01",
-  },
-  {
-    id: "USR-2026-004",
-    name: "Néné Coulibaly",
-    email: "caisse@ekimmo.ml",
+    identifier: "Aboubacar",
+    password: "123456",
+    name: "Aboubacar Sidiki Diallo",
+    initials: "AD",
+    email: "aboubacar.diallo@ekimmo-mali.com",
     phone: "+223 70 24 18 66",
-    role: "Caisse / Encaissement",
-    status: "Suspendu",
-    lastLogin: "18/05/2026 11:44",
+    role: "Communication & prospection",
+    status: "Actif",
+    lastLogin: "29/06/2026 07:30",
+    scope: "Mise en ligne des biens, contenus immobiliers, communication digitale, prospection et visites.",
   },
 ];
 
@@ -2846,10 +2896,8 @@ const templates = [
 
 const roleProfiles = [
   "Administrateur",
-  "Directeur / Manager",
-  "Agent immobilier",
-  "Caisse / Encaissement",
-  "Assistant administratif",
+  "Gestion locative & recouvrement",
+  "Communication & prospection",
 ];
 
 function getUserKey(user) {
@@ -2866,8 +2914,8 @@ function getDefaultUserHistory(user) {
     },
     {
       date: "27/05/2026 17:10",
-      type: "Action réalisée",
-      detail: user?.role === "Caisse / Encaissement" ? "Enregistrement et contrôle de reçus" : "Consultation des dossiers clients",
+      type: "Périmètre métier",
+      detail: user?.scope ?? "Accès attribués selon les tâches du poste",
       by: user?.name ?? "Système",
     },
     {
@@ -2890,15 +2938,32 @@ const permissionDefinitions = [
 ];
 
 function buildRolePermissionMatrix(roleName) {
+  const access = roleAccessProfiles[roleName];
   return Object.fromEntries(roleModules.map((module, moduleIndex) => [
     module,
-    Object.fromEntries(permissionDefinitions.map(({ key }) => [
-      key,
-      roleName === "Administrateur" ||
-        (roleName === "Directeur / Manager" && key !== "supprimer") ||
-        moduleIndex < 3 ||
-        key === "exporter",
-    ])),
+    Object.fromEntries(permissionDefinitions.map(({ key }) => {
+      if (roleName === "Administrateur") return [key, true];
+      if (!access) return [key, key === "voir" || key === "exporter"];
+
+      const linkedPage = module === "Administration" ? "Plus" : module;
+      const canSeeModule = access.pages.includes(linkedPage);
+      const canDelete = false;
+      const canValidate = roleName === "Gestion locative & recouvrement" && ["Finance", "Contrats"].includes(module);
+      const canCreateOrEdit = roleName === "Gestion locative & recouvrement"
+        ? ["Biens", "Clients", "Contrats", "Finance", "Rapports"].includes(module)
+        : ["Biens", "Clients", "Contrats", "Rapports"].includes(module);
+
+      return [
+        key,
+        canSeeModule && (
+          key === "voir" ||
+          key === "exporter" ||
+          (["creer", "modifier"].includes(key) && canCreateOrEdit) ||
+          (key === "valider" && canValidate) ||
+          (key === "supprimer" && canDelete)
+        ),
+      ];
+    })),
   ]));
 }
 
@@ -3770,9 +3835,10 @@ function visitMatchesQuickFilter(visit, quickFilter) {
 }
 
 function App() {
-  const [activePage, setActivePage] = useState("Dashboard");
+  const [activePage, setActivePage] = useState(() => getDefaultPageForUser(users.find((user) => user.id === window.sessionStorage.getItem("ekimmo-user-id")) ?? users[0]));
   const [showLogin, setShowLogin] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(() => window.sessionStorage.getItem("ekimmo-session") !== "logged-out");
+  const [currentUserId, setCurrentUserId] = useState(() => window.sessionStorage.getItem("ekimmo-user-id") ?? users[0].id);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => window.sessionStorage.getItem("ekimmo-session") === "active" && Boolean(window.sessionStorage.getItem("ekimmo-user-id")));
   const [modal, setModal] = useState(null);
   const [demoDataLoaded, setDemoDataLoaded] = useState(false);
   const [demoTrack, setDemoTrack] = useState("complete");
@@ -3879,7 +3945,7 @@ function App() {
   const demoBaseCharges = demoDataLoaded ? charges : [];
   const demoBaseMaintenances = demoDataLoaded ? maintenances : [];
   const demoBaseReversals = demoDataLoaded ? reversals : [];
-  const demoBaseUsers = demoDataLoaded ? users : [];
+  const demoBaseUsers = users;
   const activeDemoSteps = useMemo(() => getDemoStepsForTrack(demoTrack), [demoTrack]);
   const demoStep = activeDemoSteps[demoIndex];
   const modalGuidancePhases = demoActive && demoStep?.waitFor ? modalDemoGuidance[modal] : null;
@@ -3955,6 +4021,15 @@ function App() {
     const applyOverride = (user) => ({ ...user, ...(userOverrides[getUserKey(user)] ?? {}) });
     return [...createdUsers.map(applyOverride), ...demoBaseUsers.map(applyOverride)];
   }, [createdUsers, demoBaseUsers, userOverrides]);
+  const currentUser = useMemo(
+    () => allUsers.find((user) => user.id === currentUserId) ?? users.find((user) => user.id === currentUserId) ?? users[0],
+    [allUsers, currentUserId]
+  );
+  const currentAccess = getRoleAccess(currentUser);
+  const accessibleNavItems = useMemo(
+    () => navItems.filter((item) => currentAccess.pages.includes(item.page)),
+    [currentAccess.pages]
+  );
   const propertiesWithArchiveState = useMemo(() => [...createdProperties, ...demoBaseProperties].map((property) => {
     const propertyWithOverride = { ...property, ...(propertyOverrides[property.code] ?? {}) };
     const archive = archivedProperties[property.code];
@@ -3972,6 +4047,26 @@ function App() {
     () => propertiesWithArchiveState.filter((property) => !property.archived),
     [propertiesWithArchiveState]
   );
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    if (!currentAccess.pages.includes(activePage)) {
+      setActivePage(currentAccess.defaultPage);
+    }
+    if (!currentAccess.clientTabs.includes(clientTab)) {
+      setClientTab(currentAccess.clientTabs[0] ?? "Propriétaires");
+    }
+    if (!currentAccess.contractTabs.includes(contractTab)) {
+      setContractTab(currentAccess.contractTabs[0] ?? "Contrats");
+    }
+    if (currentAccess.financeTabs.length && !currentAccess.financeTabs.includes(financeTab)) {
+      setFinanceTab(currentAccess.financeTabs[0]);
+    }
+    if (!currentAccess.pages.includes("Plus") && adminTab !== "Utilisateurs") {
+      setAdminTab("Utilisateurs");
+    }
+  }, [activePage, adminTab, clientTab, contractTab, currentAccess, financeTab, isAuthenticated]);
 
   useEffect(() => {
     setSelectedProperty((current) => {
@@ -4993,6 +5088,7 @@ function App() {
 
   const handleNav = (item) => {
     if (!isAuthenticated) return;
+    if (!userCanAccessPage(currentUser, item)) return;
     setActivePage(item);
     if (item === "Biens") {
       setPropertyReturnContext(null);
@@ -5000,15 +5096,24 @@ function App() {
     }
   };
 
-  const handleLogin = () => {
+  const handleLogin = (user) => {
+    const authenticatedUser = user ?? users[0];
+    const access = getRoleAccess(authenticatedUser);
     window.sessionStorage.setItem("ekimmo-session", "active");
+    window.sessionStorage.setItem("ekimmo-user-id", authenticatedUser.id);
+    setCurrentUserId(authenticatedUser.id);
     setIsAuthenticated(true);
     setShowLogin(false);
+    setActivePage(access.defaultPage);
+    setClientTab(access.clientTabs[0] ?? "Propriétaires");
+    setContractTab(access.contractTabs[0] ?? "Contrats");
+    if (access.financeTabs.length) setFinanceTab(access.financeTabs[0]);
     window.history.replaceState({ ekimmoSession: "active" }, "", window.location.href);
   };
 
   const handleLogout = () => {
     window.sessionStorage.setItem("ekimmo-session", "logged-out");
+    window.sessionStorage.removeItem("ekimmo-user-id");
     setIsAuthenticated(false);
     setShowLogin(true);
     setModal(null);
@@ -5024,7 +5129,7 @@ function App() {
       [key]: [
         {
           date: "25/06/2026 10:30",
-          by: "Aïssata Diarra",
+          by: currentUser?.name ?? "Admin E.K immo",
           ...event,
         },
         ...(current[key] ?? getDefaultUserHistory(user)),
@@ -5041,7 +5146,7 @@ function App() {
           date: "25/06/2026 10:30",
           type: "Création",
           detail: sendInvitation ? "Utilisateur créé et invitation envoyée par email" : "Utilisateur créé avec mot de passe temporaire",
-          by: "Aïssata Diarra",
+          by: currentUser?.name ?? "Admin E.K immo",
         },
         {
           date: "25/06/2026 10:30",
@@ -7691,7 +7796,7 @@ function App() {
   }, [demoActive, effectiveDemoStep, modal, activePage, propertyView, propertyTab, clientTab, contractTab, financeTab, adminTab, reportType]);
 
   if (!isAuthenticated || showLogin) {
-    return <LoginScreen onLogin={handleLogin} />;
+    return <LoginScreen onLogin={handleLogin} usersList={allUsers} />;
   }
 
   return (
@@ -7705,6 +7810,8 @@ function App() {
         onLogout={handleLogout}
         onStartDemo={openDemoMenu}
         demoActive={demoActive}
+        currentUser={currentUser}
+        navItemsList={accessibleNavItems}
         notifications={topbarNotifications}
         searchDataset={{
           propertiesList: propertiesWithArchiveState,
@@ -7717,7 +7824,7 @@ function App() {
       />
 
       <main className={activePage === "Dashboard" ? "page-shell dashboard-shell" : "page-shell"}>
-        {activePage === "Dashboard" && <DashboardPage onAction={openAction} onOpenProperty={showPropertyDetail} propertiesList={activeProperties} />}
+        {activePage === "Dashboard" && <DashboardPage currentUser={currentUser} onAction={openAction} onOpenProperty={showPropertyDetail} propertiesList={activeProperties} />}
         {activePage === "Biens" && (
           <PropertiesPage
             query={globalQuery}
@@ -7750,6 +7857,7 @@ function App() {
           <ClientsPage
             activeTab={clientTab}
             onTab={setClientTab}
+            availableTabs={currentAccess.clientTabs}
             selectedOwner={selectedOwner}
             onOwner={setSelectedOwner}
             ownersList={allOwners}
@@ -7780,6 +7888,7 @@ function App() {
           <ContractsPage
             activeTab={contractTab}
             onTab={setContractTab}
+            availableTabs={currentAccess.contractTabs}
             onAction={openAction}
             demoDataLoaded={demoDataLoaded}
             contractsList={allContracts}
@@ -7797,7 +7906,7 @@ function App() {
             onFilterRequestConsumed={() => setContractFilterRequest(null)}
           />
         )}
-        {activePage === "Finance" && <FinancePage activeTab={financeTab} onTab={setFinanceTab} onAction={openAction} paymentsList={allPayments} paymentRequest={paymentDetailRequest} detailRequest={financeDetailRequest} onDetailRequestConsumed={() => setFinanceDetailRequest(null)} rentRowsList={allRentRows} commissionsList={allCommissions} chargesList={allCharges} maintenancesList={allMaintenances} reversalsList={allReversals} relancesList={tenantRelances} arrearsStatuses={arrearsStatusOverrides} arrearsPromises={arrearsPromises} arrearsHistories={arrearsHistories} />}
+        {activePage === "Finance" && <FinancePage activeTab={financeTab} onTab={setFinanceTab} availableTabs={currentAccess.financeTabs} onAction={openAction} paymentsList={allPayments} paymentRequest={paymentDetailRequest} detailRequest={financeDetailRequest} onDetailRequestConsumed={() => setFinanceDetailRequest(null)} rentRowsList={allRentRows} commissionsList={allCommissions} chargesList={allCharges} maintenancesList={allMaintenances} reversalsList={allReversals} relancesList={tenantRelances} arrearsStatuses={arrearsStatusOverrides} arrearsPromises={arrearsPromises} arrearsHistories={arrearsHistories} />}
         {activePage === "Rapports" && (
           <ReportsPage
             selected={reportType}
@@ -8528,7 +8637,7 @@ function App() {
           }}
         />
       ) : modal === "Mon profil" ? (
-        <UserProfileModal onClose={() => setModal(null)} />
+          <UserProfileModal user={currentUser} onClose={() => setModal(null)} />
       ) : modal === "Changer mot de passe" ? (
         <ChangePasswordModal onClose={() => setModal(null)} />
       ) : modal === "Choisir document" ? (
@@ -8754,7 +8863,7 @@ function DemoTour({ step, index, total, subIndex = null, subTotal = null, rect, 
   );
 }
 
-function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onLogout, onStartDemo, demoActive, notifications = notificationAlerts, searchDataset }) {
+function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onLogout, onStartDemo, demoActive, currentUser = users[0], navItemsList = navItems, notifications = notificationAlerts, searchDataset }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -8794,7 +8903,7 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onLog
       </button>
 
       <nav className="nav-tabs" aria-label="Navigation principale" data-demo="main-nav">
-        {navItems.map((item) => (
+        {navItemsList.map((item) => (
           <button className={activePage === item.page ? "active" : ""} key={item.page} onClick={() => onNav(item.page)}>
             {item.label}
           </button>
@@ -8902,9 +9011,11 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onLog
             </section>
           )}
         </div>
-        <button className="icon-only" aria-label="Paramètres" onClick={() => onNav("Plus")}>
-          <Settings size={20} />
-        </button>
+        {navItemsList.some((item) => item.page === "Plus") && (
+          <button className="icon-only" aria-label="Paramètres" onClick={() => onNav("Plus")}>
+            <Settings size={20} />
+          </button>
+        )}
         <div className="user-menu">
           <button
             className={userMenuOpen ? "avatar-button active" : "avatar-button"}
@@ -8916,7 +9027,7 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onLog
             aria-label="Menu utilisateur"
             aria-expanded={userMenuOpen}
           >
-            <span>AD</span>
+            <span>{getUserInitials(currentUser)}</span>
           </button>
           {userMenuOpen && (
             <section className="user-panel" onKeyDown={(event) => event.key === "Escape" && setUserMenuOpen(false)}>
@@ -8937,7 +9048,7 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onLog
   );
 }
 
-function DashboardPage({ onAction, onOpenProperty, propertiesList = properties }) {
+function DashboardPage({ currentUser = users[0], onAction, onOpenProperty, propertiesList = properties }) {
   const [kpiPeriod, setKpiPeriod] = useState("Mois");
   const [dashboardState, setDashboardState] = useState("Données");
   const hasDashboardData = propertiesList.length > 0;
@@ -8970,7 +9081,7 @@ function DashboardPage({ onAction, onOpenProperty, propertiesList = properties }
     <>
       <PageIntro
         eyebrow="Tableau de bord"
-        title="Bienvenue, Aïssata"
+        title={`Bienvenue, ${(currentUser.name ?? "Utilisateur").split(" ")[0]}`}
         actions={
           <DashboardFilterBar
             period={kpiPeriod}
@@ -10092,8 +10203,9 @@ function PropertyHistory({ property, historyItems = [] }) {
   );
 }
 
-function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = owners, selectedTenant, onTenant, tenantsList = tenants, prospectsList = prospects, prospectProposals = {}, prospectActivities = {}, prospectConversions = {}, visitsList = visits, visitHistories = {}, detailRequest = null, filterRequest = null, onFilterRequestConsumed, tenantRelances = [], tenantReceiptArchives = [], missingDocumentRequests = [], onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, chargesList = charges, reversalsList = reversals }) {
-  const tabs = ["Propriétaires", "Locataires", "Prospects", "Visites"];
+function ClientsPage({ activeTab, onTab, availableTabs = ["Propriétaires", "Locataires", "Prospects", "Visites"], selectedOwner, onOwner, ownersList = owners, selectedTenant, onTenant, tenantsList = tenants, prospectsList = prospects, prospectProposals = {}, prospectActivities = {}, prospectConversions = {}, visitsList = visits, visitHistories = {}, detailRequest = null, filterRequest = null, onFilterRequestConsumed, tenantRelances = [], tenantReceiptArchives = [], missingDocumentRequests = [], onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, chargesList = charges, reversalsList = reversals }) {
+  const tabs = availableTabs.length ? availableTabs : ["Propriétaires", "Locataires", "Prospects", "Visites"];
+  const effectiveTab = tabs.includes(activeTab) ? activeTab : tabs[0];
   const [detailView, setDetailView] = useState(null);
   const [selectedProspect, setSelectedProspect] = useState(prospects[0]);
   const [selectedVisit, setSelectedVisit] = useState(visits[0]);
@@ -10123,14 +10235,18 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
     Prospects: ["Nouveau prospect", "Nouveau prospect"],
     Visites: ["Planifier visite", "Planifier visite"],
   };
-  const [actionLabel, actionTitle] = actionByTab[activeTab] ?? ["Nouveau client", "Nouveau client"];
+  const [actionLabel, actionTitle] = actionByTab[effectiveTab] ?? ["Nouveau client", "Nouveau client"];
+
+  useEffect(() => {
+    if (activeTab !== effectiveTab) onTab(effectiveTab);
+  }, [activeTab, effectiveTab, onTab]);
 
   useEffect(() => {
     setDetailView(null);
     setClientSearch("");
     setClientFilterOpen(false);
     setClientExportOpen(false);
-  }, [activeTab]);
+  }, [effectiveTab]);
 
   useEffect(() => {
     if (!detailRequest) return;
@@ -10150,7 +10266,7 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
 
   useEffect(() => {
     if (!filterRequest?.filters) return;
-    if (filterRequest.tab && filterRequest.tab !== activeTab) onTab(filterRequest.tab);
+    if (filterRequest.tab && tabs.includes(filterRequest.tab) && filterRequest.tab !== effectiveTab) onTab(filterRequest.tab);
     setDetailView(null);
     setClientSearch("");
     setClientFilterOpen(true);
@@ -10227,7 +10343,7 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
   }, [clientFilters, clientSearch, visitsList]);
 
   const clientExportPayload = useMemo(() => buildClientExportPayload({
-    activeTab,
+    activeTab: effectiveTab,
     filters: clientFilters,
     search: clientSearch,
     ownersList: filteredOwners,
@@ -10235,7 +10351,7 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
     prospectsList: filteredProspects,
     visitsList: filteredVisits,
     rentRowsList,
-  }), [activeTab, clientFilters, clientSearch, filteredOwners, filteredProspects, filteredTenants, filteredVisits, rentRowsList]);
+  }), [effectiveTab, clientFilters, clientSearch, filteredOwners, filteredProspects, filteredTenants, filteredVisits, rentRowsList]);
 
   const openDetail = (type, item) => {
     setSavedScroll(window.scrollY);
@@ -10292,7 +10408,7 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
           </Button>
         }
       />
-      <Tabs tabs={tabs} active={activeTab} onChange={onTab} demo="client-tabs" />
+      <Tabs tabs={tabs} active={effectiveTab} onChange={onTab} demo="client-tabs" />
       {detailContent ?? (
         <>
       <Panel className="filter-panel" data-demo="client-filter-panel">
@@ -10300,7 +10416,7 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
           <label className="field search-field mid">
             <Search size={19} />
             <input
-              placeholder={`Rechercher dans ${activeTab.toLowerCase()}...`}
+              placeholder={`Rechercher dans ${effectiveTab.toLowerCase()}...`}
               value={clientSearch}
               onChange={(event) => setClientSearch(event.target.value)}
             />
@@ -10320,7 +10436,7 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
         </div>
         {clientFilterOpen && (
           <ClientFilterControls
-            activeTab={activeTab}
+            activeTab={effectiveTab}
             filters={clientFilters}
             onChange={updateClientFilter}
             onReset={resetClientFilters}
@@ -10331,10 +10447,10 @@ function ClientsPage({ activeTab, onTab, selectedOwner, onOwner, ownersList = ow
           />
         )}
       </Panel>
-      {activeTab === "Propriétaires" && <OwnersView ownersList={filteredOwners} selected={selectedOwner} onOpenDetail={(owner) => openDetail("owner", owner)} />}
-      {activeTab === "Locataires" && <TenantsView tenantsList={filteredTenants} onOpenDetail={(tenant) => openDetail("tenant", tenant)} rentRowsList={rentRowsList} />}
-      {activeTab === "Prospects" && <ProspectsView prospectsList={filteredProspects} onOpenDetail={(prospect) => openDetail("prospect", prospect)} onAction={onAction} />}
-      {activeTab === "Visites" && <VisitsView visitsList={filteredVisits} onOpenDetail={(visit) => openDetail("visit", visit)} onAction={onAction} />}
+      {effectiveTab === "Propriétaires" && <OwnersView ownersList={filteredOwners} selected={selectedOwner} onOpenDetail={(owner) => openDetail("owner", owner)} />}
+      {effectiveTab === "Locataires" && <TenantsView tenantsList={filteredTenants} onOpenDetail={(tenant) => openDetail("tenant", tenant)} rentRowsList={rentRowsList} />}
+      {effectiveTab === "Prospects" && <ProspectsView prospectsList={filteredProspects} onOpenDetail={(prospect) => openDetail("prospect", prospect)} onAction={onAction} />}
+      {effectiveTab === "Visites" && <VisitsView visitsList={filteredVisits} onOpenDetail={(visit) => openDetail("visit", visit)} onAction={onAction} />}
         </>
       )}
     </>
@@ -11611,6 +11727,7 @@ function VisitReminderModal({ visit, onSave, onClose }) {
 function ContractsPage({
   activeTab,
   onTab,
+  availableTabs = ["Contrats", "Génération de document", "Archives"],
   onAction,
   demoDataLoaded = true,
   contractsList = contracts,
@@ -11627,9 +11744,14 @@ function ContractsPage({
   filterRequest = null,
   onFilterRequestConsumed,
 }) {
-  const tabs = ["Contrats", "Génération de document", "Archives"];
-  const effectiveTab = activeTab === "Factures & reçus" ? "Archives" : activeTab;
+  const tabs = availableTabs.length ? availableTabs : ["Contrats", "Génération de document", "Archives"];
+  const requestedTab = activeTab === "Factures & reçus" ? "Archives" : activeTab;
+  const effectiveTab = tabs.includes(requestedTab) ? requestedTab : tabs[0];
   const activeContracts = contractsList.filter((contract) => contract.status !== "Archivé");
+  useEffect(() => {
+    if (requestedTab !== effectiveTab) onTab(effectiveTab);
+  }, [effectiveTab, onTab, requestedTab]);
+
   return (
     <>
       <PageIntro
@@ -15109,8 +15231,8 @@ function InvoiceActions({ invoice, onAction }) {
   );
 }
 
-function FinancePage({ activeTab, onTab, onAction, paymentsList = paymentRecords, paymentRequest = null, detailRequest = null, onDetailRequestConsumed, rentRowsList = rentRows, commissionsList = commissions, chargesList = charges, maintenancesList = maintenances, reversalsList = reversals, relancesList = [], arrearsStatuses = {}, arrearsPromises = {}, arrearsHistories = {} }) {
-  const tabs = ["Loyers", "Paiements", "Impayés", "Commissions", "Charges", "Entretiens", "Reversements"];
+function FinancePage({ activeTab, onTab, availableTabs = ["Loyers", "Paiements", "Impayés", "Commissions", "Charges", "Entretiens", "Reversements"], onAction, paymentsList = paymentRecords, paymentRequest = null, detailRequest = null, onDetailRequestConsumed, rentRowsList = rentRows, commissionsList = commissions, chargesList = charges, maintenancesList = maintenances, reversalsList = reversals, relancesList = [], arrearsStatuses = {}, arrearsPromises = {}, arrearsHistories = {} }) {
+  const tabs = availableTabs.length ? availableTabs : ["Loyers", "Paiements", "Impayés", "Commissions", "Charges", "Entretiens", "Reversements"];
   const effectiveTab = tabs.includes(activeTab) ? activeTab : "Loyers";
   const agencyRentRows = rentRowsList.filter((row) => isAgencyCollectedProperty(row.property));
   const financeActions = {
@@ -15129,6 +15251,10 @@ function FinancePage({ activeTab, onTab, onAction, paymentsList = paymentRecords
     Reversements: reversalsList.length,
   };
   const isFinanceEmpty = (financeDataCount[effectiveTab] ?? 0) === 0;
+
+  useEffect(() => {
+    if (!tabs.includes(activeTab)) onTab(effectiveTab);
+  }, [activeTab, effectiveTab, onTab, tabs]);
 
   if (isFinanceEmpty) {
     return (
@@ -17360,9 +17486,9 @@ function UserProfilePanel({ user, history = [], onAction }) {
   const modules =
     user.role === "Administrateur"
       ? "Tous modules"
-      : user.role === "Caisse / Encaissement"
-        ? "Finance, paiements, reçus"
-        : "Biens, clients, contrats, rapports";
+      : user.role === "Gestion locative & recouvrement"
+        ? "Biens, locataires, loyers, impayés, visites, documents"
+        : "Biens, prospects, visites, documents, rapports";
 
   return (
     <Panel title="Fiche utilisateur" className="profile-panel">
@@ -17381,6 +17507,7 @@ function UserProfilePanel({ user, history = [], onAction }) {
         <p><span>Téléphone</span><strong>{user.phone}</strong></p>
         <p><span>Rôle attribué</span><strong>{user.role}</strong></p>
         <p><span>Permissions principales</span><strong>{modules}</strong></p>
+        <p><span>Missions principales</span><strong>{user.scope ?? "Accès attribués selon le poste"}</strong></p>
         <p><span>Statut du compte</span><Badge label={user.status} /></p>
         <p><span>Dernière connexion</span><strong>{user.lastLogin}</strong></p>
       </div>
@@ -17406,11 +17533,9 @@ function RolesAdmin() {
     name: role,
     description: role === "Administrateur"
       ? "Accès complet à tous les modules et réglages sensibles."
-      : role === "Directeur / Manager"
-        ? "Pilotage opérationnel, validations et exports sans suppression globale."
-        : role === "Caisse / Encaissement"
-          ? "Encaissements, reçus, finance courante et états de paiement."
-          : "Accès ciblé aux opérations quotidiennes de l'agence.",
+      : role === "Gestion locative & recouvrement"
+        ? "Gestion des loyers, paiements, relances, dossiers locataires, visites et courriers."
+        : "Mise en ligne des biens, prospection, visites, contenus et visibilité commerciale.",
     status: "Actif",
   })));
   const [profile, setProfile] = useState(roleProfiles[0]);
@@ -17449,7 +17574,7 @@ function RolesAdmin() {
     const name = values.name.trim() || `Nouveau rôle ${roles.length + 1}`;
     const sourceMatrix = values.copyPermissions === "Oui"
       ? draftPermissions[values.sourceRole] ?? buildRolePermissionMatrix(values.sourceRole)
-      : buildRolePermissionMatrix("Assistant administratif");
+      : buildRolePermissionMatrix("Communication & prospection");
     const nextRole = {
       name,
       description: values.description || "Rôle personnalisé E.K immo.",
@@ -17785,7 +17910,7 @@ function UserFormAdminModal({ mode = "create", user = null, sequence = 1, onCrea
     name: user?.name ?? "",
     email: user?.email ?? "",
     phone: user?.phone ?? "",
-    role: user?.role ?? "Agent immobilier",
+    role: user?.role ?? "Gestion locative & recouvrement",
     status: user?.status ?? "Actif",
     invitationMode: "Invitation par email",
     temporaryPassword: "EKIMMO-2026",
@@ -17795,6 +17920,8 @@ function UserFormAdminModal({ mode = "create", user = null, sequence = 1, onCrea
     const nextUser = {
       id: `USR-2026-${String(sequence).padStart(3, "0")}`,
       name: values.name || "Nouvel utilisateur",
+      identifier: (values.name || `Utilisateur ${sequence}`).split(" ")[0],
+      password: values.temporaryPassword || "123456",
       email: values.email || `utilisateur${sequence}@ekimmo.ml`,
       phone: values.phone || "+223 70 00 00 00",
       role: values.role,
@@ -17951,13 +18078,33 @@ function UserHistoryModal({ user, history = [], onClose }) {
   );
 }
 
-function LoginScreen({ onLogin }) {
+function LoginScreen({ onLogin, usersList = users }) {
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+
+  const submitLogin = (event) => {
+    event.preventDefault();
+    const normalizedIdentifier = normalizeSearch(identifier);
+    const matchedUser = usersList.find((user) => {
+      const identifiers = [user.identifier, user.email, user.name].filter(Boolean).map(normalizeSearch);
+      return identifiers.includes(normalizedIdentifier);
+    });
+
+    if (!matchedUser || matchedUser.password !== password || matchedUser.status !== "Actif") {
+      setLoginError("Identifiant ou mot de passe incorrect.");
+      return;
+    }
+
+    setLoginError("");
+    onLogin(matchedUser);
+  };
 
   return (
     <>
       <main className="login-screen">
-        <section className="login-card">
+        <form className="login-card" onSubmit={submitLogin}>
           <div className="login-brand">
             <img src={ekimmoAssets.logo} alt="E.K immo" />
             <div>
@@ -17967,12 +18114,33 @@ function LoginScreen({ onLogin }) {
           </div>
           <h1>Connexion</h1>
           <p>Accédez à votre espace de gestion immobilière.</p>
-          <label>Email ou identifiant<input defaultValue="admin@ekimmo.ml" /></label>
-          <label>Mot de passe<input type="password" defaultValue="demo2026" /></label>
-          <button className="primary-wide" onClick={onLogin}>Se connecter</button>
+          <label>Email ou identifiant
+            <input
+              value={identifier}
+              onChange={(event) => {
+                setIdentifier(event.target.value);
+                setLoginError("");
+              }}
+              placeholder="NIARE, Makan ou Aboubacar"
+              autoComplete="username"
+            />
+          </label>
+          <label>Mot de passe
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                setLoginError("");
+              }}
+              placeholder="Mot de passe"
+              autoComplete="current-password"
+            />
+          </label>
+          <button className="primary-wide" type="submit">Se connecter</button>
           <button className="link-button" type="button" onClick={() => setForgotPasswordOpen(true)}>Mot de passe oublié ?</button>
-          <div className="error-demo">Identifiants incorrects.</div>
-        </section>
+          {loginError && <div className="error-demo">{loginError}</div>}
+        </form>
       </main>
       {forgotPasswordOpen && <ForgotPasswordModal onClose={() => setForgotPasswordOpen(false)} />}
     </>
@@ -18049,15 +18217,15 @@ function ForgotPasswordModal({ onClose }) {
   );
 }
 
-function UserProfileModal({ onClose }) {
+function UserProfileModal({ user = users[0], onClose }) {
   const [editing, setEditing] = useState(false);
   const [values, setValues] = useState({
-    name: "Aïssata Diarra",
-    email: "admin@ekimmo.ml",
-    role: "Administratrice",
-    phone: "+223 72 77 71 77",
-    lastLogin: "21/06/2026 à 09:42",
-    status: "Actif",
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    phone: user.phone,
+    lastLogin: user.lastLogin,
+    status: user.status,
   });
   const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
 
@@ -18066,7 +18234,7 @@ function UserProfileModal({ onClose }) {
       <section className="modal-card compact-modal profile-account-modal" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title" onMouseDown={(event) => event.stopPropagation()}>
         <button className="modal-close" onClick={onClose}>×</button>
         <div className="profile-modal-head">
-          <Avatar name={values.name} initials="AD" />
+          <Avatar name={values.name} initials={getUserInitials(user)} />
           <div>
             <span>Compte utilisateur</span>
             <h2 id="profile-modal-title">Mon profil</h2>
