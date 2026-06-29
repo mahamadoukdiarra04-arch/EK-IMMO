@@ -18109,7 +18109,7 @@ function LoginScreen({ onLogin, usersList = users }) {
             <img src={ekimmoAssets.logo} alt="E.K immo" />
             <div>
               <strong>E.K immo</strong>
-              <span>Gestion immobilière de prestige</span>
+              <span>Gestion immobilière</span>
             </div>
           </div>
           <h1>Connexion</h1>
@@ -18121,7 +18121,7 @@ function LoginScreen({ onLogin, usersList = users }) {
                 setIdentifier(event.target.value);
                 setLoginError("");
               }}
-              placeholder="NIARE, Makan ou Aboubacar"
+              placeholder="Identifiant utilisateur"
               autoComplete="username"
             />
           </label>

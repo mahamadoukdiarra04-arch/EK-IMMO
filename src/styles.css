@@ -6334,22 +6334,23 @@ td:last-child {
 }
 
 .login-brand {
-  display: grid;
-  grid-template-columns: minmax(0, 230px) minmax(0, 1fr);
-  align-items: center;
-  gap: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
   margin-bottom: 30px;
 }
 
 .login-brand img {
-  width: 100%;
-  max-width: 230px;
+  width: min(100%, 300px);
+  max-width: 300px;
   height: auto;
   object-fit: contain;
 }
 
 .login-brand > div {
   min-width: 0;
+  max-width: 300px;
 }
 
 .brand-mark {
@@ -6365,12 +6366,17 @@ td:last-child {
 .login-brand strong {
   display: block;
   color: var(--purple);
-  font-size: 1.6rem;
+  font-size: 1.35rem;
 }
 
 .login-brand span,
 .login-card p {
   color: var(--muted);
+}
+
+.login-brand span {
+  display: block;
+  line-height: 1.25;
 }
 
 .login-card h1 {
