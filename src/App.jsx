@@ -5317,6 +5317,10 @@ function App() {
     setIsAuthenticated(true);
     setShowLogin(false);
     setActivePage(access.defaultPage);
+    setPropertyView("list");
+    setPropertyReturnContext(null);
+    setPropertyTab("Résumé");
+    setModal(null);
     setClientTab(access.clientTabs[0] ?? "Propriétaires");
     setContractTab(access.contractTabs[0] ?? "Contrats");
     if (access.financeTabs.length) setFinanceTab(access.financeTabs[0]);
@@ -6376,28 +6380,59 @@ function App() {
     ]);
   };
 
-  const handleTenantAttachment = ({ tenantName, tenantProfile, rent, deposit, entryDate, createContract }) => {
-    setSelectedProperty((current) => ({
-      ...current,
+  const handleTenantAttachment = ({ tenantName, tenantProfile = {}, rent, deposit, entryDate, createContract }) => {
+    if (!selectedProperty) return;
+
+    const nextTenantProfile = {
+      ...tenantProfile,
+      name: tenantName,
+      property: selectedProperty.name,
+      owner: selectedProperty.owner,
+      rent: rent || tenantProfile.rent || selectedProperty.price,
+      deposit: deposit || tenantProfile.deposit || selectedProperty.deposit,
+      entryDate,
+      contract: createContract ? "À créer maintenant" : "À créer",
+      paymentStatus: tenantProfile.paymentStatus ?? "À jour",
+    };
+    const historyEntry = ["Locataire rattaché", `${tenantName} rattaché au bien. Statut passé à Loué.`, "18/06/2026"];
+    const propertyPatch = {
       tenant: tenantName,
       status: "Loué",
-      price: rent || current.price,
-      deposit: deposit || current.deposit,
-      attachedTenant: {
-        ...tenantProfile,
-        name: tenantName,
-        rent: rent || tenantProfile.rent || current.price,
-        deposit: deposit || tenantProfile.deposit || current.deposit,
-        entryDate,
-        contract: createContract ? "À créer maintenant" : "À créer",
-        paymentStatus: tenantProfile.paymentStatus ?? "À jour",
-      },
-      history: [
-        ...(current.history ?? []),
-        ["Locataire rattaché", `${tenantName} rattaché au bien. Statut passé à Loué.`, "18/06/2026"],
-      ],
+      price: rent || selectedProperty.price,
+      deposit: deposit || selectedProperty.deposit,
+      attachedTenant: nextTenantProfile,
       lastAction: `Locataire ${tenantName} rattaché`,
-    }));
+    };
+
+    setPropertyOverrides((current) => {
+      const existingOverride = current[selectedProperty.code] ?? {};
+      return {
+        ...current,
+        [selectedProperty.code]: {
+          ...existingOverride,
+          ...propertyPatch,
+          history: [...(existingOverride.history ?? selectedProperty.history ?? []), historyEntry],
+        },
+      };
+    });
+
+    setSelectedProperty((current) => {
+      const source = current?.code === selectedProperty.code ? current : selectedProperty;
+      return {
+        ...source,
+        ...propertyPatch,
+        history: [...(source.history ?? []), historyEntry],
+      };
+    });
+
+    if (nextTenantProfile.id && !tenants.some((tenant) => tenant.id === nextTenantProfile.id || tenant.name === nextTenantProfile.name)) {
+      setCreatedTenants((current) => {
+        if (current.some((tenant) => tenant.id === nextTenantProfile.id || tenant.name === nextTenantProfile.name)) return current;
+        return [nextTenantProfile, ...current];
+      });
+    }
+
+    setSelectedTenant(nextTenantProfile);
     setPropertyTab("Locataire");
     setPropertyView("detail");
     setActivePage("Biens");
@@ -8729,7 +8764,7 @@ function App() {
           }}
         />
       ) : modal === "Ajouter locataire" ? (
-        <AttachTenantModal property={selectedProperty} onClose={() => setModal(null)} onAttach={handleTenantAttachment} />
+        <AttachTenantModal property={selectedProperty} tenantsList={allTenants} onClose={() => setModal(null)} onAttach={handleTenantAttachment} />
       ) : modal === "Créer contrat" ? (
         <ContractFormModal
           property={selectedProperty}
@@ -22007,9 +22042,10 @@ function TenantSituationDocument({ tenant, property, period, paymentsList = paym
   );
 }
 
-function AttachTenantModal({ property, onClose, onAttach }) {
+function AttachTenantModal({ property, tenantsList = tenants, onClose, onAttach }) {
+  const tenantOptions = tenantsList.length ? tenantsList : tenants;
   const [mode, setMode] = useState("Locataire existant");
-  const [existingTenantName, setExistingTenantName] = useState(tenants[0].name);
+  const [existingTenantName, setExistingTenantName] = useState(tenantOptions[0].name);
   const [contractNow, setContractNow] = useState("Oui");
   const [existingValues, setExistingValues] = useState({
     entryDate: "2026-06-18",
@@ -22027,7 +22063,7 @@ function AttachTenantModal({ property, onClose, onAttach }) {
     deposit: property.deposit,
     observations: `Création et rattachement au bien ${property.name}.`,
   });
-  const selectedTenant = tenants.find((tenant) => tenant.name === existingTenantName) ?? tenants[0];
+  const selectedTenant = tenantOptions.find((tenant) => tenant.name === existingTenantName) ?? tenantOptions[0];
 
   const updateExisting = (key, value) => setExistingValues((current) => ({ ...current, [key]: value }));
   const updateNew = (key, value) => setNewValues((current) => ({ ...current, [key]: value }));
@@ -22086,7 +22122,7 @@ function AttachTenantModal({ property, onClose, onAttach }) {
           <div className="form-section" data-demo="modal-tenant-attach-details">
             <h3>Cas 1 — Locataire existant</h3>
             <div className="form-grid compact-form">
-              <label>Sélectionner locataire<select value={existingTenantName} onChange={(event) => setExistingTenantName(event.target.value)}>{tenants.map((tenant) => <option key={tenant.id}>{tenant.name}</option>)}</select></label>
+              <label>Sélectionner locataire<select value={existingTenantName} onChange={(event) => setExistingTenantName(event.target.value)}>{tenantOptions.map((tenant) => <option key={tenant.id}>{tenant.name}</option>)}</select></label>
               <label>Date d'entrée<input type="date" value={existingValues.entryDate} onChange={(event) => updateExisting("entryDate", event.target.value)} /></label>
               <label>Loyer mensuel<input value={existingValues.rent} onChange={(event) => updateExisting("rent", event.target.value)} /></label>
               <label>Caution<input value={existingValues.deposit} onChange={(event) => updateExisting("deposit", event.target.value)} /></label>
