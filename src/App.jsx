@@ -3118,20 +3118,20 @@ const financeSummaryByPeriod = {
 function getDashboardPropertyStats(propertiesList = [], period = "Mois") {
   const multiplier = periodWeight[period] ?? 1;
   const maintenanceOnly = propertiesList.filter((property) => property.status === "Entretien seul" || property.financialMode === "Contrat entretien seul");
-  const available = propertiesList.filter((property) => ["Disponible", "Réservé"].includes(property.status));
+  const available = propertiesList.filter((property) => property.status === "Disponible");
   const rented = propertiesList.filter((property) => ["Loué", "Gestion multi-lots"].includes(property.status));
   const sale = propertiesList.filter((property) => property.period?.includes("vente") || property.status === "Vendu");
   const reserved = propertiesList.filter((property) => property.status === "Réservé");
   const maintenanceAmount = maintenanceOnly.reduce((sum, property) => sum + parseFCFA(property.price), 0);
-  const rentAmount = propertiesList.reduce((sum, property) => {
-    if (property.period?.includes("vente")) return sum;
+  const rentAmount = rented.reduce((sum, property) => {
+    if (property.period?.includes("vente") || property.financialMode?.includes("direct propriétaire")) return sum;
     return sum + parseFCFA(property.price);
   }, 0);
   const periodRentAmount = Math.round(rentAmount * multiplier);
   const periodMaintenanceAmount = Math.round(maintenanceAmount * multiplier);
   const commissionAmount = Math.round(periodRentAmount * 0.05);
-  const arrearsEstimate = Math.round(periodRentAmount * (propertiesList.length ? 0.04 : 0));
-  const chargeEstimate = Math.round((periodMaintenanceAmount || periodRentAmount * 0.018));
+  const arrearsEstimate = rented.length ? Math.round(periodRentAmount * 0.04) : 0;
+  const chargeEstimate = Math.round(periodMaintenanceAmount || (periodRentAmount ? periodRentAmount * 0.018 : 0));
   const ownerNet = Math.max(0, periodRentAmount - commissionAmount - chargeEstimate);
 
   return {
@@ -3385,6 +3385,28 @@ function getPropertyByCode(code, propertiesList = properties) {
   return propertiesList.find((property) => property.code === code);
 }
 
+function getActiveProperties(propertiesList = []) {
+  return Array.isArray(propertiesList) ? propertiesList.filter((property) => property && !property.archived) : [];
+}
+
+function makeEmptyProperty(overrides = {}) {
+  return {
+    code: "",
+    name: "Aucun bien selectionne",
+    type: "",
+    status: "",
+    owner: "",
+    tenant: "",
+    address: "",
+    location: "",
+    price: "",
+    deposit: "",
+    financialMode: "",
+    serviceProvider: {},
+    ...overrides,
+  };
+}
+
 function isBuildingProperty(property) {
   return property?.structure?.kind === "building";
 }
@@ -3426,7 +3448,8 @@ function isMaintenanceOnlyProperty(property) {
 
 function isAgencyCollectedProperty(name, propertiesList = properties) {
   const property = getPropertyByName(name, propertiesList);
-  return !property || (!property.financialMode.includes("direct par le propriétaire") && !property.financialMode.includes("entretien seul"));
+  const financialMode = String(property?.financialMode ?? "");
+  return Boolean(property) && (!financialMode.includes("direct par le propriétaire") && !financialMode.includes("entretien seul"));
 }
 
 function getAgencyRentRows() {
@@ -3534,8 +3557,9 @@ function contractMatchesDueFilter(contract, dueFilter) {
   return getContractDueLabel(contract).includes(dueFilter.replace("Échéance ", ""));
 }
 
-function makeMaintenanceCharge(maintenance, sequence = 1) {
-  const property = getPropertyByName(maintenance.property) ?? properties[0];
+function makeMaintenanceCharge(maintenance, sequence = 1, propertiesList = []) {
+  const property = getPropertyByName(maintenance.property, propertiesList)
+    ?? makeEmptyProperty({ name: maintenance.property ?? "Bien a selectionner" });
   const payer = maintenance.payer === "À déterminer" ? "À valider" : maintenance.payer;
 
   return {
@@ -3923,7 +3947,8 @@ function getProspectDelay(prospect) {
   return prospect?.delay ?? "30 jours";
 }
 
-function getCompatibleProperties(prospect, filters = {}) {
+function getCompatibleProperties(prospect, filters = {}, propertiesList = []) {
+  const sourceProperties = Array.isArray(propertiesList) ? propertiesList.filter((property) => !property.archived) : [];
   const prospectNeed = normalizeSearch(prospect?.propertyType ?? prospect?.need ?? "");
   const prospectDistrict = normalizeSearch(prospect?.district ?? "");
   const firstNeedWord = prospectNeed.split(" ")[0] ?? "";
@@ -3935,7 +3960,7 @@ function getCompatibleProperties(prospect, filters = {}) {
 
   return Array.from(
     new Map(
-      properties
+      sourceProperties
         .filter((property) => {
           const haystack = normalizeSearch(`${property.type} ${property.name} ${property.district} ${property.address}`);
           const matchesProspect =
@@ -3948,14 +3973,14 @@ function getCompatibleProperties(prospect, filters = {}) {
           const matchesBudget = !budgetLimit || parseFCFA(property.price) <= budgetLimit;
           return matchesProspect && matchesDistrict && matchesType && matchesStatus && matchesBudget;
         })
-        .concat(properties.filter((property) => property.status === "Disponible"))
+        .concat(sourceProperties.filter((property) => property.status === "Disponible"))
         .map((property) => [property.code, property])
     ).values()
   ).slice(0, 8);
 }
 
-function getDefaultProspectProposals(prospect) {
-  return getCompatibleProperties(prospect)
+function getDefaultProspectProposals(prospect, propertiesList = []) {
+  return getCompatibleProperties(prospect, {}, propertiesList)
     .slice(0, 2)
     .map((property) => ({
       code: property.code,
@@ -4419,7 +4444,7 @@ function App() {
 
     if (normalizedAction === "maintenance urgente") {
       setMaintenanceContext({
-        property: properties.find((property) => property.name === "Studio Badalabougou") ?? selectedProperty,
+        property: selectedProperty ?? propertiesWithArchiveState[0] ?? null,
         maintenance: {
           type: "Plomberie",
           priority: "Critique",
@@ -4437,7 +4462,7 @@ function App() {
 
     if (normalizedAction === "documents manquants") {
       const tenant = allTenants.find((item) => item.id === "LOC-2026-018") ?? allTenants.find((item) => item.name === "Oumar Sidibé") ?? allTenants[0];
-      const property = propertiesWithArchiveState.find((item) => item.name === tenant?.property) ?? properties.find((item) => item.name === tenant?.property) ?? selectedProperty;
+      const property = propertiesWithArchiveState.find((item) => item.name === tenant?.property) ?? selectedProperty;
       setMissingDocumentContext({
         id: "DOCREQ-LOC-2026-018-ASSURANCE",
         dossier: tenant?.id ?? "LOC-2026-018",
@@ -4474,7 +4499,7 @@ function App() {
       "imprimer recu paiement",
     ].includes(normalizedAction)) {
       setPaymentActionContext({
-        payment: context.payment ?? allPayments[0] ?? paymentRecords[0],
+        payment: context.payment ?? allPayments[0] ?? null,
         row: context.row ?? null,
         printOnOpen: normalizedAction === "imprimer recu paiement",
       });
@@ -4573,7 +4598,7 @@ function App() {
     }
 
     if (normalizedAction === "situation commission" && context.commission) {
-      const owner = allOwners.find((item) => item.name === context.commission.owner) ?? owners.find((item) => item.name === context.commission.owner);
+      const owner = allOwners.find((item) => item.name === context.commission.owner);
       if (owner) {
         setSelectedOwner(owner);
         setClientTab("Propriétaires");
@@ -4686,7 +4711,7 @@ function App() {
     }
 
     if (["proposer un bien", "proposer bien"].includes(normalizedAction)) {
-      setProspectProposalContext(context.prospect ?? prospectProposalContext ?? prospects[0]);
+      setProspectProposalContext(context.prospect ?? prospectProposalContext ?? allProspects[0] ?? null);
       setModal("Proposer un bien prospect");
       return;
     }
@@ -4725,7 +4750,7 @@ function App() {
       "convertir prospect",
     ].includes(normalizedAction)) {
       setProspectActionContext({
-        prospect: context.prospect ?? prospectProposalContext ?? prospects[0],
+        prospect: context.prospect ?? prospectProposalContext ?? allProspects[0] ?? null,
         proposal: context.proposal ?? null,
         property: context.property ?? null,
       });
@@ -4743,7 +4768,7 @@ function App() {
       "reporter visite",
       "reporter",
     ].includes(normalizedAction)) {
-      setVisitActionContext({ visit: context.visit ?? allVisits[0] ?? visits[0] });
+      setVisitActionContext({ visit: context.visit ?? allVisits[0] ?? null });
       setModal(normalizedAction === "reporter" ? "Reporter visite" : label);
       return;
     }
@@ -4766,7 +4791,7 @@ function App() {
     }
 
     if (normalizedAction === "creer contrat visite" && context.visit) {
-      const property = properties.find((item) => item.name === context.visit.property) ?? selectedProperty;
+      const property = propertiesWithArchiveState.find((item) => item.name === context.visit.property || item.code === context.visit.propertyCode) ?? selectedProperty;
       setSelectedProperty(property);
       setModal("Créer contrat");
       return;
@@ -4774,19 +4799,19 @@ function App() {
 
     if (normalizedAction === "convertir prospect visite" && context.visit) {
       const prospect = allProspects.find((item) => item.name === context.visit.client) ?? allProspects[0];
-      setProspectActionContext({ prospect, proposal: null, property: properties.find((item) => item.name === context.visit.property) ?? null });
+      setProspectActionContext({ prospect, proposal: null, property: propertiesWithArchiveState.find((item) => item.name === context.visit.property || item.code === context.visit.propertyCode) ?? null });
       setModal("Convertir prospect");
       return;
     }
 
     if (normalizedAction === "ouvrir bien contrat" && context.contract) {
-      const property = propertiesWithArchiveState.find((item) => item.name === context.contract.property) ?? properties.find((item) => item.name === context.contract.property);
+      const property = propertiesWithArchiveState.find((item) => item.name === context.contract.property);
       if (property) showPropertyDetail(property);
       return;
     }
 
     if (normalizedAction === "ouvrir proprietaire contrat" && context.contract) {
-      const owner = allOwners.find((item) => item.name === context.contract.owner) ?? owners.find((item) => item.name === context.contract.owner);
+      const owner = allOwners.find((item) => item.name === context.contract.owner);
       if (owner) {
         setSelectedOwner(owner);
         setClientTab("Propriétaires");
@@ -4797,7 +4822,7 @@ function App() {
     }
 
     if (normalizedAction === "ouvrir locataire contrat" && context.contract) {
-      const tenant = allTenants.find((item) => item.name === context.contract.client) ?? tenants.find((item) => item.name === context.contract.client);
+      const tenant = allTenants.find((item) => item.name === context.contract.client);
       if (tenant) {
         setSelectedTenant(tenant);
         setClientTab("Locataires");
@@ -4848,7 +4873,7 @@ function App() {
       "archiver contrat",
     ].includes(normalizedAction)) {
       setContractActionContext({
-        contract: context.contract ?? allContracts[0] ?? contracts[0],
+        contract: context.contract ?? allContracts[0] ?? null,
         sourceProperty: context.property ?? null,
         returnTo: context.returnTo ?? null,
       });
@@ -5105,10 +5130,10 @@ function App() {
 
     if (normalizedAction === "ajouter relance") {
       const rowTenant = context.row?.tenant
-        ? allTenants.find((tenant) => tenant.name === context.row.tenant) ?? tenants.find((tenant) => tenant.name === context.row.tenant)
+        ? allTenants.find((tenant) => tenant.name === context.row.tenant)
         : null;
       const rowProperty = context.row?.property
-        ? propertiesWithArchiveState.find((property) => property.name === context.row.property) ?? properties.find((property) => property.name === context.row.property)
+        ? propertiesWithArchiveState.find((property) => property.name === context.row.property)
         : null;
       setTenantActionContext({ tenant: context.tenant ?? rowTenant ?? selectedTenant, property: context.property ?? rowProperty, contract: context.contract, row: context.row, activeTenantTab: context.activeTenantTab ?? "Impayés & relances" });
       setModal("Relance locataire");
@@ -5195,7 +5220,7 @@ function App() {
         : null;
 
       setPaymentContext({
-        property: context.property ?? (context.row || rowFromLabel ? properties.find((property) => property.name === (context.row ?? rowFromLabel).property) : selectedProperty),
+        property: context.property ?? (context.row || rowFromLabel ? propertiesWithArchiveState.find((property) => property.name === (context.row ?? rowFromLabel).property) : selectedProperty),
         row: context.row ?? rowFromLabel ?? null,
         payment: context.payment ?? null,
       });
@@ -5890,7 +5915,7 @@ function App() {
     }));
 
     setProspectProposals((current) => {
-      const existing = current[key] ?? getDefaultProspectProposals(prospect);
+      const existing = current[key] ?? [];
       const byCode = new Map(existing.map((item) => [item.code, item]));
       proposedItems.forEach((item) => byCode.set(item.code, item));
       return { ...current, [key]: Array.from(byCode.values()) };
@@ -5912,7 +5937,7 @@ function App() {
     const key = getProspectKey(prospect);
     setProspectProposals((current) => ({
       ...current,
-      [key]: (current[key] ?? getDefaultProspectProposals(prospect)).filter((item) => item.code !== proposal.code),
+      [key]: (current[key] ?? []).filter((item) => item.code !== proposal.code),
     }));
     addProspectActivity(prospect, {
       title: "Proposition retirée",
@@ -5924,7 +5949,7 @@ function App() {
     const key = getProspectKey(prospect);
     setProspectProposals((current) => ({
       ...current,
-      [key]: (current[key] ?? getDefaultProspectProposals(prospect)).map((item) => (
+      [key]: (current[key] ?? []).map((item) => (
         item.code === proposal.code ? { ...item, return: "Intéressé" } : item
       )),
     }));
@@ -5947,11 +5972,12 @@ function App() {
   };
 
   const handleProspectVisitSave = ({ prospect, visit }) => {
-    const selectedVisitProperty = properties.find((item) => item.name === visit.property) ?? selectedProperty;
+    const selectedVisitProperty = propertiesWithArchiveState.find((item) => item.name === visit.property || item.code === visit.propertyCode) ?? selectedProperty;
+    if (!selectedVisitProperty) return;
     const existingProspect = allProspects.find((item) => item.name === visit.prospectName);
     const prospectName = (visit.clientMode === "new" ? visit.newProspectName : visit.prospectName) || prospect?.name || "Nouveau prospect";
     const targetProspect = existingProspect ?? prospect ?? {
-      id: `PRS-2026-${String(prospects.length + createdProspects.length + 1).padStart(3, "0")}`,
+      id: makeDocumentNumber("PRS", allProspects.length + 1),
       name: prospectName,
       initials: getInitials(prospectName),
       phone: visit.phone,
@@ -5963,7 +5989,7 @@ function App() {
       next: visit.nextAction,
     };
     const nextVisit = {
-      id: `VIS-2026-${String(visits.length + scheduledProspectVisits.length + 1).padStart(3, "0")}`,
+      id: makeDocumentNumber("VIS", allVisits.length + 1),
       client: prospectName,
       phone: visit.phone,
       need: visit.need,
@@ -6020,7 +6046,7 @@ function App() {
   const updateVisit = (visit, patch, history) => {
     const key = getVisitKey(visit);
     const nextVisit = { ...visit, ...patch };
-    const property = properties.find((item) => item.name === nextVisit.property);
+    const property = propertiesWithArchiveState.find((item) => item.name === nextVisit.property || item.code === nextVisit.propertyCode);
 
     setVisitOverrides((current) => ({
       ...current,
@@ -6214,7 +6240,12 @@ function App() {
     });
 
     if (values.createContract === "Oui") {
-      const property = properties.find((item) => item.name === values.property) ?? selectedProperty;
+      const property = propertiesWithArchiveState.find((item) => item.name === values.property) ?? selectedProperty;
+      if (!property) {
+        setModal(null);
+        setProspectActionContext(null);
+        return;
+      }
       setSelectedProperty(property);
       setModal("Créer contrat");
       setProspectActionContext(null);
@@ -6659,7 +6690,7 @@ function App() {
 
   const handleContractTerminationSave = ({ contract, values }) => {
     const terminationReference = values.generateDocument === "Oui" ? makeDocumentNumber("RES", allContracts.length + 1) : "";
-    const property = propertiesWithArchiveState.find((item) => item.name === contract.property) ?? properties.find((item) => item.name === contract.property);
+    const property = propertiesWithArchiveState.find((item) => item.name === contract.property);
     const tenant = allTenants.find((item) => item.name === contract.client);
     const detachTenant = values.detachTenant === "Oui";
 
@@ -7092,8 +7123,9 @@ function App() {
   };
 
   const handleFinanceReceiptAction = ({ payment, values, action }) => {
-    const tenant = allTenants.find((item) => item.name === payment.tenant) ?? tenants[0];
-    const property = propertiesWithArchiveState.find((item) => item.name === payment.property) ?? properties.find((item) => item.name === payment.property) ?? properties[0];
+    const tenant = allTenants.find((item) => item.name === payment.tenant);
+    const property = propertiesWithArchiveState.find((item) => item.name === payment.property);
+    if (!tenant || !property) return;
     const receiptNumber = values.numero || payment.receipt || makeDocumentNumber("REC", allPayments.length + 140);
 
     if (action === "archive-tenant") {
@@ -7214,7 +7246,8 @@ function App() {
   };
 
   const handleArrearsStatementArchive = ({ row, values }) => {
-    const property = propertiesWithArchiveState.find((item) => item.name === row.property) ?? properties[0];
+    const property = propertiesWithArchiveState.find((item) => item.name === row.property);
+    if (!property) return;
     const reference = makeDocumentNumber("IMP", 500 + Object.keys(arrearsHistories).length + 1);
     setPropertyDocumentArchives((current) => [
       {
@@ -7337,7 +7370,7 @@ function App() {
       }, "Modification : formulaire entretien mis à jour.");
 
       if (createCharge) {
-        setMaintenanceCharges((current) => [makeMaintenanceCharge(nextMaintenance, current.length + 1), ...current]);
+        setMaintenanceCharges((current) => [makeMaintenanceCharge(nextMaintenance, current.length + 1, propertiesWithArchiveState), ...current]);
       }
 
       setMaintenanceContext(null);
@@ -7356,7 +7389,7 @@ function App() {
     setScheduledMaintenances((current) => [nextMaintenance, ...current]);
 
     if (createCharge) {
-      setMaintenanceCharges((current) => [makeMaintenanceCharge(nextMaintenance, current.length + 1), ...current]);
+      setMaintenanceCharges((current) => [makeMaintenanceCharge(nextMaintenance, current.length + 1, propertiesWithArchiveState), ...current]);
     }
 
     setPropertyHistoryOverrides((current) => ({
@@ -7439,7 +7472,7 @@ function App() {
     }, `Coût : estimation ${values.estimatedCost}, réel ${values.realCost || "non renseigné"}.`);
 
     if (values.createCharge === "Oui") {
-      setMaintenanceCharges((current) => [makeMaintenanceCharge(nextMaintenance, current.length + 1), ...current]);
+      setMaintenanceCharges((current) => [makeMaintenanceCharge(nextMaintenance, current.length + 1, propertiesWithArchiveState), ...current]);
     }
 
     closeMaintenanceAction();
@@ -8138,6 +8171,7 @@ function App() {
             rentRowsList={allRentRows}
             chargesList={allCharges}
             reversalsList={allReversals}
+            propertiesList={propertiesWithArchiveState}
           />
         )}
         {activePage === "Contrats" && (
@@ -8149,6 +8183,9 @@ function App() {
             demoDataLoaded={demoDataLoaded}
             contractsList={allContracts}
             paymentsList={allPayments}
+            propertiesList={propertiesWithArchiveState}
+            ownersList={allOwners}
+            tenantsList={allTenants}
             documentDraft={documentDraft}
             propertyPdfArchives={allPropertyDocumentArchives}
             onArchiveDocument={handleGeneratedDocumentArchive}
@@ -8162,7 +8199,7 @@ function App() {
             onFilterRequestConsumed={() => setContractFilterRequest(null)}
           />
         )}
-        {activePage === "Finance" && <FinancePage activeTab={financeTab} onTab={setFinanceTab} availableTabs={currentAccess.financeTabs} onAction={openAction} paymentsList={allPayments} paymentRequest={paymentDetailRequest} detailRequest={financeDetailRequest} onDetailRequestConsumed={() => setFinanceDetailRequest(null)} rentRowsList={allRentRows} commissionsList={allCommissions} chargesList={allCharges} maintenancesList={allMaintenances} reversalsList={allReversals} relancesList={tenantRelances} arrearsStatuses={arrearsStatusOverrides} arrearsPromises={arrearsPromises} arrearsHistories={arrearsHistories} />}
+        {activePage === "Finance" && <FinancePage activeTab={financeTab} onTab={setFinanceTab} availableTabs={currentAccess.financeTabs} onAction={openAction} paymentsList={allPayments} paymentRequest={paymentDetailRequest} detailRequest={financeDetailRequest} onDetailRequestConsumed={() => setFinanceDetailRequest(null)} rentRowsList={allRentRows} commissionsList={allCommissions} chargesList={allCharges} maintenancesList={allMaintenances} reversalsList={allReversals} relancesList={tenantRelances} arrearsStatuses={arrearsStatusOverrides} arrearsPromises={arrearsPromises} arrearsHistories={arrearsHistories} propertiesList={propertiesWithArchiveState} ownersList={allOwners} />}
         {activePage === "Rapports" && (
           <ReportsPage
             selected={reportType}
@@ -8317,7 +8354,8 @@ function App() {
         />
       ) : modal === "Proposer un bien prospect" ? (
         <ProspectProposalModal
-          prospect={prospectProposalContext ?? prospects[0]}
+          prospect={prospectProposalContext ?? allProspects[0] ?? null}
+          propertiesList={propertiesWithArchiveState}
           onSave={handleProspectProposalSave}
           onClose={() => {
             setProspectProposalContext(null);
@@ -8348,6 +8386,7 @@ function App() {
           proposal={prospectActionContext?.proposal}
           property={prospectActionContext?.property ?? selectedProperty}
           prospectsList={allProspects}
+          propertiesList={propertiesWithArchiveState}
           onSave={handleProspectVisitSave}
           onClose={() => {
             setProspectActionContext(null);
@@ -8399,7 +8438,7 @@ function App() {
         />
       ) : modal === "Ajouter commentaire prospect" ? (
         <ProspectCommentModal
-          prospect={prospectActionContext?.prospect ?? prospects[0]}
+          prospect={prospectActionContext?.prospect ?? allProspects[0] ?? null}
           onSave={handleProspectCommentSave}
           onClose={() => {
             setProspectActionContext(null);
@@ -8408,7 +8447,7 @@ function App() {
         />
       ) : modal === "Changer statut prospect" ? (
         <ProspectStatusModal
-          prospect={prospectActionContext?.prospect ?? prospects[0]}
+          prospect={prospectActionContext?.prospect ?? allProspects[0] ?? null}
           onSave={handleProspectStatusSave}
           onClose={() => {
             setProspectActionContext(null);
@@ -8417,7 +8456,8 @@ function App() {
         />
       ) : modal === "Convertir prospect" ? (
         <ProspectConversionModal
-          prospect={prospectActionContext?.prospect ?? prospects[0]}
+          prospect={prospectActionContext?.prospect ?? allProspects[0] ?? null}
+          propertiesList={propertiesWithArchiveState}
           onSave={handleProspectConversionSave}
           onClose={() => {
             setProspectActionContext(null);
@@ -8523,6 +8563,7 @@ function App() {
         <TenantFormModal
           tenant={tenantActionContext?.tenant ?? selectedTenant}
           property={tenantActionContext?.property}
+          propertiesList={propertiesWithArchiveState}
           onSave={handleTenantSave}
           onClose={() => {
             setTenantActionContext(null);
@@ -8702,6 +8743,7 @@ function App() {
           payment={tenantActionContext?.payment}
           paymentsList={allPayments}
           rentRowsList={allRentRows}
+          propertiesList={propertiesWithArchiveState}
           onSave={handlePaymentRegistration}
           onClose={() => {
             setTenantActionContext(null);
@@ -8715,6 +8757,7 @@ function App() {
           payment={tenantActionContext?.payment}
           paymentsList={allPayments}
           rentRowsList={allRentRows}
+          propertiesList={propertiesWithArchiveState}
           archivedReceipts={tenantReceiptArchives}
           onArchive={handleTenantReceiptArchive}
           onClose={() => {
@@ -8734,6 +8777,7 @@ function App() {
           tenant={tenantActionContext?.tenant ?? selectedTenant}
           property={tenantActionContext?.property}
           row={tenantActionContext?.row}
+          propertiesList={propertiesWithArchiveState}
           onSave={handleTenantRelanceSave}
           onClose={() => {
             setTenantActionContext(null);
@@ -8756,6 +8800,7 @@ function App() {
           property={tenantActionContext?.property}
           paymentsList={allPayments}
           rentRowsList={allRentRows}
+          propertiesList={propertiesWithArchiveState}
           relancesList={tenantRelances}
           archivedReceipts={tenantReceiptArchives}
           onClose={() => {
@@ -8772,6 +8817,7 @@ function App() {
           propertiesList={propertiesWithArchiveState}
           ownersList={allOwners}
           tenantsList={allTenants}
+          prospectsList={allProspects}
           onGenerate={handleContractGeneration}
           onDraft={handleContractDraftSave}
           onClose={() => setModal(null)}
@@ -8783,19 +8829,19 @@ function App() {
       ) : modal === "Document signe contrat" ? (
         <ContractDocumentModal contract={contractActionContext?.contract ?? allContracts[0]} action={contractActionContext?.documentAction} onImport={handleContractSignedDocumentImport} onSignedAction={handleContractSignedDocumentAction} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "PDF contrat" ? (
-        <ContractPdfModal contract={contractActionContext?.contract ?? allContracts[0]} onPdfAction={handleContractPdfAction} onClose={() => { setContractActionContext(null); setModal(null); }} />
+        <ContractPdfModal contract={contractActionContext?.contract ?? allContracts[0]} propertiesList={propertiesWithArchiveState} ownersList={allOwners} tenantsList={allTenants} onPdfAction={handleContractPdfAction} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "Imprimer contrat" ? (
         <ContractPrintModal contract={contractActionContext?.contract ?? allContracts[0]} onPrint={handleContractPrint} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "Archiver contrat" ? (
         <ContractArchiveModal contract={contractActionContext?.contract ?? allContracts[0]} onArchive={handleContractArchive} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "Modifier contrat" ? (
-        <ContractEditModal contract={contractActionContext?.contract ?? allContracts[0]} onSave={handleContractEditSave} onClose={() => { setContractActionContext(null); setModal(null); }} />
+        <ContractEditModal contract={contractActionContext?.contract ?? allContracts[0]} propertiesList={propertiesWithArchiveState} ownersList={allOwners} tenantsList={allTenants} prospectsList={allProspects} onSave={handleContractEditSave} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "Renouveler contrat" ? (
         <ContractRenewalModal contract={contractActionContext?.contract ?? allContracts[0]} onSave={handleContractRenewalSave} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "Resilier contrat" ? (
         <ContractTerminationModal contract={contractActionContext?.contract ?? allContracts[0]} onSave={handleContractTerminationSave} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "Enregistrer paiement" ? (
-        <PaymentRegistrationModal context={paymentContext} paymentsList={allPayments} rentRowsList={allRentRows} onSave={handlePaymentRegistration} onClose={() => setModal(null)} />
+        <PaymentRegistrationModal context={paymentContext} paymentsList={allPayments} rentRowsList={allRentRows} propertiesList={propertiesWithArchiveState} tenantsList={allTenants} onSave={handlePaymentRegistration} onClose={() => setModal(null)} />
       ) : modal === "Responsable entretien" ? (
         <MaintenanceResponsibleModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onSave={handleMaintenanceResponsibleSave} onClose={closeMaintenanceAction} />
       ) : modal === "Cout entretien" ? (
@@ -8809,13 +8855,13 @@ function App() {
       ) : modal === "Terminer entretien" ? (
         <MaintenanceCompletionModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onSave={handleMaintenanceCompletionSave} onClose={closeMaintenanceAction} />
       ) : modal === "Rapport entretien" ? (
-        <MaintenanceReportModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onArchive={handleMaintenanceReportArchive} onClose={closeMaintenanceAction} />
+        <MaintenanceReportModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} propertiesList={propertiesWithArchiveState} onArchive={handleMaintenanceReportArchive} onClose={closeMaintenanceAction} />
       ) : modal === "Annuler entretien" ? (
         <MaintenanceCancelModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onSave={handleMaintenanceCancelSave} onClose={closeMaintenanceAction} />
       ) : modal === "Ajouter entretien" ? (
-        <MaintenanceFormModal context={maintenanceContext} onSave={handleMaintenanceSchedule} onClose={() => { setMaintenanceContext(null); setModal(null); }} />
+        <MaintenanceFormModal context={maintenanceContext} propertiesList={propertiesWithArchiveState} onSave={handleMaintenanceSchedule} onClose={() => { setMaintenanceContext(null); setModal(null); }} />
       ) : modal === "Intervention urgente" ? (
-        <UrgentMaintenanceModal context={maintenanceContext} onSave={handleMaintenanceSchedule} onClose={() => setModal(null)} />
+        <UrgentMaintenanceModal context={maintenanceContext} propertiesList={propertiesWithArchiveState} onSave={handleMaintenanceSchedule} onClose={() => setModal(null)} />
       ) : modal === "Document manquant" ? (
         <MissingDocumentModal
           request={missingDocumentContext}
@@ -10442,12 +10488,12 @@ function PropertyHistory({ property, historyItems = [] }) {
   );
 }
 
-function ClientsPage({ activeTab, onTab, availableTabs = ["Propriétaires", "Locataires", "Prospects", "Visites"], selectedOwner, onOwner, ownersList = owners, selectedTenant, onTenant, tenantsList = tenants, prospectsList = prospects, prospectProposals = {}, prospectActivities = {}, prospectConversions = {}, visitsList = visits, visitHistories = {}, detailRequest = null, filterRequest = null, onFilterRequestConsumed, tenantRelances = [], tenantReceiptArchives = [], missingDocumentRequests = [], onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, chargesList = charges, reversalsList = reversals }) {
+function ClientsPage({ activeTab, onTab, availableTabs = ["Propriétaires", "Locataires", "Prospects", "Visites"], selectedOwner, onOwner, ownersList = owners, selectedTenant, onTenant, tenantsList = tenants, prospectsList = prospects, prospectProposals = {}, prospectActivities = {}, prospectConversions = {}, visitsList = visits, visitHistories = {}, detailRequest = null, filterRequest = null, onFilterRequestConsumed, tenantRelances = [], tenantReceiptArchives = [], missingDocumentRequests = [], onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, chargesList = charges, reversalsList = reversals, propertiesList = [] }) {
   const tabs = availableTabs.length ? availableTabs : ["Propriétaires", "Locataires", "Prospects", "Visites"];
   const effectiveTab = tabs.includes(activeTab) ? activeTab : tabs[0];
   const [detailView, setDetailView] = useState(null);
-  const [selectedProspect, setSelectedProspect] = useState(prospects[0]);
-  const [selectedVisit, setSelectedVisit] = useState(visits[0]);
+  const [selectedProspect, setSelectedProspect] = useState(prospectsList[0] ?? null);
+  const [selectedVisit, setSelectedVisit] = useState(visitsList[0] ?? null);
   const [savedScroll, setSavedScroll] = useState(0);
   const [clientSearch, setClientSearch] = useState("");
   const [clientFilterOpen, setClientFilterOpen] = useState(false);
@@ -10568,7 +10614,7 @@ function ClientsPage({ activeTab, onTab, availableTabs = ["Propriétaires", "Loc
   const filteredVisits = useMemo(() => {
     const search = normalizeSearch(clientSearch);
     return visitsList.filter((visit) => {
-      const property = properties.find((item) => item.name === visit.property);
+      const property = propertiesList.find((item) => item.name === visit.property || item.code === visit.propertyCode);
       const haystack = normalizeSearch(`${visit.client} ${visit.property} ${property?.district ?? ""} ${visit.agent} ${visit.status} ${visit.feedback} ${visit.next}`);
       const searchMatch = !search || haystack.includes(search);
       const periodMatch = visitMatchesPeriod(visit, clientFilters.visitPeriod);
@@ -10579,7 +10625,7 @@ function ClientsPage({ activeTab, onTab, availableTabs = ["Propriétaires", "Loc
       const quickMatch = visitMatchesQuickFilter(visit, clientFilters.visitQuick);
       return searchMatch && periodMatch && statusMatch && agentMatch && propertyMatch && prospectMatch && quickMatch;
     });
-  }, [clientFilters, clientSearch, visitsList]);
+  }, [clientFilters, clientSearch, propertiesList, visitsList]);
 
   const clientExportPayload = useMemo(() => buildClientExportPayload({
     activeTab: effectiveTab,
@@ -10590,7 +10636,8 @@ function ClientsPage({ activeTab, onTab, availableTabs = ["Propriétaires", "Loc
     prospectsList: filteredProspects,
     visitsList: filteredVisits,
     rentRowsList,
-  }), [effectiveTab, clientFilters, clientSearch, filteredOwners, filteredProspects, filteredTenants, filteredVisits, rentRowsList]);
+    propertiesList,
+  }), [effectiveTab, clientFilters, clientSearch, filteredOwners, filteredProspects, filteredTenants, filteredVisits, propertiesList, rentRowsList]);
 
   const openDetail = (type, item) => {
     setSavedScroll(window.scrollY);
@@ -10618,7 +10665,7 @@ function ClientsPage({ activeTab, onTab, availableTabs = ["Propriétaires", "Loc
     </DetailPageShell>
   ) : detailView === "tenant" ? (
     <DetailPageShell title="Fiche locataire" subtitle={selectedTenant.name} onBack={closeDetail}>
-      <TenantProfilePanel tenant={selectedTenant} onAction={onAction} contractsList={contractsList} paymentsList={paymentsList} rentRowsList={rentRowsList} relancesList={tenantRelances} archivedReceipts={tenantReceiptArchives} missingDocumentRequests={missingDocumentRequests} />
+      <TenantProfilePanel tenant={selectedTenant} propertiesList={propertiesList} onAction={onAction} contractsList={contractsList} paymentsList={paymentsList} rentRowsList={rentRowsList} relancesList={tenantRelances} archivedReceipts={tenantReceiptArchives} missingDocumentRequests={missingDocumentRequests} />
     </DetailPageShell>
   ) : detailView === "prospect" ? (
     <DetailPageShell title="Fiche prospect" subtitle={selectedProspect.name} onBack={closeDetail}>
@@ -10628,12 +10675,13 @@ function ClientsPage({ activeTab, onTab, availableTabs = ["Propriétaires", "Loc
         activities={prospectActivities[getProspectKey(selectedProspect)]}
         conversion={prospectConversions[getProspectKey(selectedProspect)]}
         visitsList={visitsList}
+        propertiesList={propertiesList}
         onAction={onAction}
       />
     </DetailPageShell>
   ) : detailView === "visit" ? (
     <DetailPageShell title="Fiche visite" subtitle={`${currentSelectedVisit.client} · ${currentSelectedVisit.property}`} onBack={closeDetail}>
-      <VisitProfilePanel visit={currentSelectedVisit} histories={visitHistories[getVisitKey(currentSelectedVisit)] ?? []} onAction={onAction} />
+      <VisitProfilePanel visit={currentSelectedVisit} histories={visitHistories[getVisitKey(currentSelectedVisit)] ?? []} propertiesList={propertiesList} onAction={onAction} />
     </DetailPageShell>
   ) : null;
 
@@ -10687,9 +10735,9 @@ function ClientsPage({ activeTab, onTab, availableTabs = ["Propriétaires", "Loc
         )}
       </Panel>
       {effectiveTab === "Propriétaires" && <OwnersView ownersList={filteredOwners} selected={selectedOwner} onOpenDetail={(owner) => openDetail("owner", owner)} />}
-      {effectiveTab === "Locataires" && <TenantsView tenantsList={filteredTenants} onOpenDetail={(tenant) => openDetail("tenant", tenant)} rentRowsList={rentRowsList} />}
+      {effectiveTab === "Locataires" && <TenantsView tenantsList={filteredTenants} propertiesList={propertiesList} onOpenDetail={(tenant) => openDetail("tenant", tenant)} rentRowsList={rentRowsList} />}
       {effectiveTab === "Prospects" && <ProspectsView prospectsList={filteredProspects} onOpenDetail={(prospect) => openDetail("prospect", prospect)} onAction={onAction} />}
-      {effectiveTab === "Visites" && <VisitsView visitsList={filteredVisits} onOpenDetail={(visit) => openDetail("visit", visit)} onAction={onAction} />}
+      {effectiveTab === "Visites" && <VisitsView visitsList={filteredVisits} propertiesList={propertiesList} onOpenDetail={(visit) => openDetail("visit", visit)} onAction={onAction} />}
         </>
       )}
     </>
@@ -10827,7 +10875,7 @@ function ClientExportMenu({ payload, onClose }) {
   );
 }
 
-function buildClientExportPayload({ activeTab, filters, search, ownersList, tenantsList, prospectsList, visitsList, rentRowsList }) {
+function buildClientExportPayload({ activeTab, filters, search, ownersList, tenantsList, prospectsList, visitsList, rentRowsList, propertiesList = [] }) {
   const exportedAt = new Date();
   const basePayload = {
     activeTab,
@@ -10865,7 +10913,7 @@ function buildClientExportPayload({ activeTab, filters, search, ownersList, tena
         tenant.phone,
         tenant.email,
         tenant.property,
-        properties.find((property) => property.name === tenant.property)?.owner ?? tenant.owner ?? "-",
+        tenant.owner ?? "-",
         tenant.rent,
         rentRowsList.find((row) => row.tenant === tenant.name)?.balance ?? "0 FCFA",
         tenant.contract,
@@ -10895,13 +10943,13 @@ function buildClientExportPayload({ activeTab, filters, search, ownersList, tena
     ...basePayload,
     columns: ["Date", "Heure", "Client / prospect", "Bien", "Quartier", "Agent", "Statut", "Retour client", "Prochaine action"],
     rows: visitsList.map((visit) => {
-      const property = properties.find((item) => item.name === visit.property);
+      const property = propertiesList.find((item) => item.name === visit.property || item.code === visit.propertyCode);
       return [
         visit.date,
         visit.time,
         visit.client,
         visit.property,
-        property?.district ?? "-",
+        property?.district ?? visit.district ?? "-",
         visit.agent,
         visit.status,
         visit.feedback,
@@ -11387,7 +11435,7 @@ function OwnerProfilePanel({ owner, initialTab = "Résumé", situationPeriod = n
   );
 }
 
-function TenantsView({ tenantsList = tenants, onOpenDetail, rentRowsList = rentRows }) {
+function TenantsView({ tenantsList = tenants, propertiesList = [], onOpenDetail, rentRowsList = rentRows }) {
   return (
     <section className="client-list-workspace" data-demo="tenant-workspace">
       <Panel title="Liste des locataires">
@@ -11400,7 +11448,7 @@ function TenantsView({ tenantsList = tenants, onOpenDetail, rentRowsList = rentR
             </button>,
             tenant.phone,
             tenant.property,
-            properties.find((property) => property.name === tenant.property)?.owner ?? "-",
+            propertiesList.find((property) => property.name === tenant.property)?.owner ?? tenant.owner ?? "-",
             tenant.rent,
             rentRowsList.find((row) => row.tenant === tenant.name)?.balance ?? (tenant.paymentStatus === "À jour" ? "0 FCFA" : "0 FCFA"),
             tenant.contract,
@@ -11413,11 +11461,18 @@ function TenantsView({ tenantsList = tenants, onOpenDetail, rentRowsList = rentR
   );
 }
 
-function TenantProfilePanel({ tenant, onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, relancesList = [], archivedReceipts = [], missingDocumentRequests = [] }) {
+function TenantProfilePanel({ tenant, propertiesList = [], onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, relancesList = [], archivedReceipts = [], missingDocumentRequests = [] }) {
   const [tab, setTab] = useState("Résumé");
-  const property = properties.find((item) => item.name === tenant.property) ?? properties[0];
+  const property = propertiesList.find((item) => item.name === tenant.property) ?? {
+    name: tenant.property,
+    owner: tenant.owner ?? "Non renseigné",
+    address: tenant.address ?? "Non renseignée",
+    district: tenant.district ?? "Non renseigné",
+    price: tenant.rent ?? "0 FCFA",
+    deposit: tenant.deposit ?? "0 FCFA",
+  };
   const tenantContracts = contractsList.filter((item) => item.client === tenant.name);
-  const contract = tenantContracts.find((item) => item.number === tenant.contract) ?? tenantContracts[0] ?? contracts.find((item) => item.number === tenant.contract) ?? contracts[0];
+  const contract = tenantContracts.find((item) => item.number === tenant.contract) ?? tenantContracts[0] ?? null;
   const paymentRows = rentRowsList.filter((row) => row.tenant === tenant.name);
   const tenantPayments = paymentsList.filter((payment) => payment.tenant === tenant.name);
   const tenantRelances = relancesList.filter((relance) => relance.tenantId === tenant.id || relance.tenant === tenant.name);
@@ -11452,7 +11507,7 @@ function TenantProfilePanel({ tenant, onAction, contractsList = contracts, payme
           ["Loyer", tenant.rent],
           ["Statut", tenant.paymentStatus],
           ["Solde dû", paymentRows.find((row) => row.balance !== "0 FCFA")?.balance ?? "0 FCFA"],
-          ["Contrat", contract.number],
+          ["Contrat", contract?.number ?? "À créer"],
         ]}
       />
       <MiniTabs tabs={tabs} active={tab} onChange={setTab} />
@@ -11463,7 +11518,7 @@ function TenantProfilePanel({ tenant, onAction, contractsList = contracts, payme
           <p><span>Profession</span><strong>Client locataire</strong></p>
           <p><span>Bien occupé</span><strong>{tenant.property}</strong></p>
           <p><span>Adresse</span><strong>{property.address}</strong></p>
-          <p><span>Date d'entrée</span><strong>{contract.start}</strong></p>
+          <p><span>Date d'entrée</span><strong>{contract?.start ?? tenant.entryDate ?? "Non renseignée"}</strong></p>
           <p><span>Montant du loyer</span><strong>{tenant.rent}</strong></p>
           <p><span>Caution</span><strong>{tenant.deposit}</strong></p>
           <p><span>Statut général</span><Badge label={tenant.paymentStatus} /></p>
@@ -11471,12 +11526,12 @@ function TenantProfilePanel({ tenant, onAction, contractsList = contracts, payme
       )}
       {tab === "Contrat" && (
         <div className="simple-list">
-          <p><span>Contrat actif</span><strong>{contract.number}</strong></p>
-          <p><span>Date début</span><strong>{contract.start}</strong></p>
-          <p><span>Date fin</span><strong>{contract.end}</strong></p>
-          <p><span>Conditions particulières</span><strong>Paiement au plus tard le 05</strong></p>
-          <p><span>Document signé</span><Badge label="Archivé" /></p>
-          <p><span>Statut</span><Badge label={contract.status} /></p>
+          <p><span>Contrat actif</span><strong>{contract?.number ?? "À créer"}</strong></p>
+          <p><span>Date début</span><strong>{contract?.start ?? "Non renseignée"}</strong></p>
+          <p><span>Date fin</span><strong>{contract?.end ?? "Non renseignée"}</strong></p>
+          <p><span>Conditions particulières</span><strong>{contract ? "Paiement au plus tard le 05" : "À renseigner lors de la création du contrat"}</strong></p>
+          <p><span>Document signé</span><Badge label={contract ? "Archivé" : "Non disponible"} /></p>
+          <p><span>Statut</span><Badge label={contract?.status ?? "À créer"} /></p>
         </div>
       )}
       {tab === "Paiements" && (
@@ -11572,8 +11627,8 @@ function ProspectsView({ prospectsList = prospects, onOpenDetail, onAction }) {
   );
 }
 
-function ProspectProfilePanel({ prospect, proposals, activities, conversion, visitsList = visits, onAction }) {
-  const proposedProperties = proposals ?? getDefaultProspectProposals(prospect);
+function ProspectProfilePanel({ prospect, proposals, activities, conversion, visitsList = visits, propertiesList = [], onAction }) {
+  const proposedProperties = proposals ?? getDefaultProspectProposals(prospect, propertiesList);
   const prospectVisits = visitsList.filter((visit) => visit.client === prospect.name);
   const timelineItems = activities?.length ? activities : getDefaultProspectTimeline(prospect);
   const objective = getProspectObjective(prospect);
@@ -11614,7 +11669,7 @@ function ProspectProfilePanel({ prospect, proposals, activities, conversion, vis
         </div>
         <div className="prospect-proposal-list">
           {proposedProperties.map((proposal) => {
-            const property = properties.find((item) => item.code === proposal.code) ?? properties[0];
+            const property = propertiesList.find((item) => item.code === proposal.code || item.name === proposal.name);
             return (
               <article className="prospect-proposal-row" key={proposal.code}>
                 <div>
@@ -11623,7 +11678,7 @@ function ProspectProfilePanel({ prospect, proposals, activities, conversion, vis
                 </div>
                 <Badge label={proposal.status} />
                 <div className="proposal-row-actions">
-                  <Button compact onClick={() => onAction("Ouvrir fiche bien prospect", { prospect, property })}><Eye size={15} /> Fiche</Button>
+                  <Button compact disabled={!property} onClick={() => onAction("Ouvrir fiche bien prospect", { prospect, property })}><Eye size={15} /> Fiche</Button>
                   <Button compact onClick={() => onAction("Retirer proposition prospect", { prospect, proposal })}>Retirer</Button>
                   <Button compact onClick={() => onAction("Marquer proposition intéressée", { prospect, proposal })}>Intéressé</Button>
                   <Button compact onClick={() => onAction("Planifier visite prospect", { prospect, proposal })}><CalendarDays size={15} /> Visite</Button>
@@ -11631,6 +11686,7 @@ function ProspectProfilePanel({ prospect, proposals, activities, conversion, vis
               </article>
             );
           })}
+          {!proposedProperties.length && <p className="empty-state-inline">Aucun bien proposé pour ce prospect.</p>}
         </div>
       </div>
       <div className="profile-section">
@@ -11677,19 +11733,19 @@ function ProspectSummaryCards({ prospect, items, onAction }) {
   );
 }
 
-function VisitsView({ visitsList = visits, onOpenDetail, onAction }) {
+function VisitsView({ visitsList = visits, propertiesList = [], onOpenDetail, onAction }) {
   return (
     <section className="client-list-workspace" data-demo="visits-workspace">
       <Panel title="Visites programmées et réalisées" toolbar={<span className="muted">{visitsList.length} visites</span>}>
         <DataTable
           columns={["Date & heure", "Prospect / client", "Bien", "Quartier", "Agent", "Statut", "Retour client", "Prochaine action", "Action"]}
           rows={visitsList.map((visit) => {
-            const property = properties.find((item) => item.name === visit.property);
+            const property = propertiesList.find((item) => item.name === visit.property || item.code === visit.propertyCode);
             return [
               `${visit.date} · ${visit.time}`,
               visit.client,
               visit.property,
-              property?.district ?? "-",
+              property?.district ?? visit.district ?? "-",
               visit.agent,
               <Badge label={visit.status} />,
               visit.feedback,
@@ -11703,8 +11759,14 @@ function VisitsView({ visitsList = visits, onOpenDetail, onAction }) {
   );
 }
 
-function VisitProfilePanel({ visit, histories = [], onAction }) {
-  const property = properties.find((item) => item.name === visit.property) ?? properties[0];
+function VisitProfilePanel({ visit, histories = [], propertiesList = [], onAction }) {
+  const property = propertiesList.find((item) => item.name === visit.property || item.code === visit.propertyCode) ?? {
+    name: visit.property,
+    owner: visit.owner ?? "Non renseigné",
+    district: visit.district ?? "Non renseigné",
+    address: visit.address ?? "Non renseignée",
+    status: "Non renseigné",
+  };
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
 
   return (
@@ -11971,6 +12033,9 @@ function ContractsPage({
   demoDataLoaded = true,
   contractsList = contracts,
   paymentsList = paymentRecords,
+  propertiesList = [],
+  ownersList = [],
+  tenantsList = [],
   documentDraft = null,
   propertyPdfArchives = [],
   onArchiveDocument,
@@ -12001,6 +12066,9 @@ function ContractsPage({
         <ContractsList
           onAction={onAction}
           contractsList={activeContracts}
+          propertiesList={propertiesList}
+          ownersList={ownersList}
+          tenantsList={tenantsList}
           contractTimelines={contractTimelines}
           contractDeadlines={contractDeadlines}
           detailRequest={detailRequest}
@@ -12019,6 +12087,9 @@ function ContractsPage({
 function ContractsList({
   onAction,
   contractsList = contracts,
+  propertiesList = [],
+  ownersList = [],
+  tenantsList = [],
   contractTimelines = {},
   contractDeadlines = {},
   detailRequest = null,
@@ -12027,7 +12098,7 @@ function ContractsList({
   filterRequest = null,
   onFilterRequestConsumed,
 }) {
-  const [selected, setSelected] = useState(contractsList[0] ?? contracts[0]);
+  const [selected, setSelected] = useState(contractsList[0] ?? null);
   const [query, setQuery] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [returnRequest, setReturnRequest] = useState(null);
@@ -12041,7 +12112,7 @@ function ContractsList({
     signature: "Tous documents",
   });
   const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
-  const currentSelectedContract = contractsList.find((contract) => getContractKey(contract) === getContractKey(selected)) ?? selected;
+  const currentSelectedContract = selected ? contractsList.find((contract) => getContractKey(contract) === getContractKey(selected)) ?? selected : null;
 
   const openContract = (contract) => {
     setSelected(contract);
@@ -12053,9 +12124,9 @@ function ContractsList({
     if (!detailRequest?.contractKey) return;
     const requestedContract =
       contractsList.find((contract) => getContractKey(contract) === detailRequest.contractKey) ??
-      contracts.find((contract) => getContractKey(contract) === detailRequest.contractKey) ??
       contractsList[0] ??
-      contracts[0];
+      null;
+    if (!requestedContract) return;
 
     setSelected(requestedContract);
     setReturnRequest(detailRequest);
@@ -12132,9 +12203,9 @@ function ContractsList({
           </label>
           <select value={filters.type} onChange={(event) => updateFilter("type", event.target.value)}><option>Tous types</option><option>Contrat de location</option><option>Mandat de gestion</option></select>
           <select value={filters.status} onChange={(event) => updateFilter("status", event.target.value)}><option>Tous statuts</option><option>Actif</option><option>Suivi</option><option>Échéance proche</option><option>Expiré</option><option>Document signé manquant</option><option>Archivé</option></select>
-          <select value={filters.property} onChange={(event) => updateFilter("property", event.target.value)}><option>Tous biens</option>{properties.map((property) => <option key={property.code}>{property.name}</option>)}</select>
-          <select value={filters.owner} onChange={(event) => updateFilter("owner", event.target.value)}><option>Tous propriétaires</option>{owners.map((owner) => <option key={owner.id}>{owner.name}</option>)}</select>
-          <select value={filters.tenant} onChange={(event) => updateFilter("tenant", event.target.value)}><option>Tous locataires</option>{tenants.map((tenant) => <option key={tenant.id}>{tenant.name}</option>)}</select>
+          <select value={filters.property} onChange={(event) => updateFilter("property", event.target.value)}><option>Tous biens</option>{propertiesList.map((property) => <option key={property.code}>{property.name}</option>)}</select>
+          <select value={filters.owner} onChange={(event) => updateFilter("owner", event.target.value)}><option>Tous propriétaires</option>{ownersList.map((owner) => <option key={owner.id}>{owner.name}</option>)}</select>
+          <select value={filters.tenant} onChange={(event) => updateFilter("tenant", event.target.value)}><option>Tous locataires</option>{tenantsList.map((tenant) => <option key={tenant.id}>{tenant.name}</option>)}</select>
           <select value={filters.due} onChange={(event) => updateFilter("due", event.target.value)}><option>Toutes échéances</option><option>Cette semaine</option><option>Ce mois</option><option>Cette année</option></select>
           <Button onClick={() => setFiltersOpen((value) => !value)}><Filter size={17} /> Filtres</Button>
         </div>
@@ -12151,10 +12222,12 @@ function ContractsList({
           </div>
         )}
       </Panel>
-      {detailOpen ? (
+      {detailOpen && currentSelectedContract ? (
         <DetailPageShell title="Fiche contrat" subtitle={currentSelectedContract.number} onBack={closeContractDetail}>
           <ContractProfilePanel
             contract={currentSelectedContract}
+            propertiesList={propertiesList}
+            tenantsList={tenantsList}
             onAction={onAction}
             timelineEntries={contractTimelines[getContractKey(currentSelectedContract)] ?? []}
             customDeadlines={contractDeadlines[getContractKey(currentSelectedContract)] ?? []}
@@ -12203,10 +12276,10 @@ function ContractStatusStack({ contract }) {
   );
 }
 
-function ContractProfilePanel({ contract, onAction, timelineEntries = [], customDeadlines = [] }) {
-  const financials = getContractFinancials(contract);
-  const property = properties.find((item) => item.name === contract.property);
-  const directOwnerCollection = property && !isAgencyCollectedProperty(property.name);
+function ContractProfilePanel({ contract, propertiesList = [], tenantsList = [], onAction, timelineEntries = [], customDeadlines = [] }) {
+  const property = propertiesList.find((item) => item.name === contract.property);
+  const financials = getContractFinancials(contract, propertiesList, tenantsList);
+  const directOwnerCollection = property && !isAgencyCollectedProperty(property.name, propertiesList);
   const deadlines = getContractDeadlines(contract, financials, customDeadlines);
   const timeline = getContractTimeline(contract, property, timelineEntries);
   const nextRent = contract.nextDueDate ?? deadlines.find((item) => item.type === "Prochain loyer")?.date ?? "05/07/2026";
@@ -12336,9 +12409,9 @@ function getContractTimeline(contract, property, timelineEntries = []) {
     { date: "20/06/2026", user: "Aïssata Diarra", action: "Dernière vérification", comment: `${property?.status ?? "Actif"} · fiche bien liée` },
   ];
 }
-function getContractFinancials(contract) {
-  const property = properties.find((item) => item.name === contract.property);
-  const tenant = tenants.find((item) => item.name === contract.client);
+function getContractFinancials(contract, propertiesList = [], tenantsList = []) {
+  const property = propertiesList.find((item) => item.name === contract.property);
+  const tenant = tenantsList.find((item) => item.name === contract.client);
 
   return {
     amount: tenant?.rent ?? (property ? `${property.price} ${property.period}` : "À définir"),
@@ -15470,10 +15543,10 @@ function InvoiceActions({ invoice, onAction }) {
   );
 }
 
-function FinancePage({ activeTab, onTab, availableTabs = ["Loyers", "Paiements", "Impayés", "Commissions", "Charges", "Entretiens", "Reversements"], onAction, paymentsList = paymentRecords, paymentRequest = null, detailRequest = null, onDetailRequestConsumed, rentRowsList = rentRows, commissionsList = commissions, chargesList = charges, maintenancesList = maintenances, reversalsList = reversals, relancesList = [], arrearsStatuses = {}, arrearsPromises = {}, arrearsHistories = {} }) {
+function FinancePage({ activeTab, onTab, availableTabs = ["Loyers", "Paiements", "Impayés", "Commissions", "Charges", "Entretiens", "Reversements"], onAction, paymentsList = paymentRecords, paymentRequest = null, detailRequest = null, onDetailRequestConsumed, rentRowsList = rentRows, commissionsList = commissions, chargesList = charges, maintenancesList = maintenances, reversalsList = reversals, relancesList = [], arrearsStatuses = {}, arrearsPromises = {}, arrearsHistories = {}, propertiesList = [], ownersList = [] }) {
   const tabs = availableTabs.length ? availableTabs : ["Loyers", "Paiements", "Impayés", "Commissions", "Charges", "Entretiens", "Reversements"];
   const effectiveTab = tabs.includes(activeTab) ? activeTab : "Loyers";
-  const agencyRentRows = rentRowsList.filter((row) => isAgencyCollectedProperty(row.property));
+  const agencyRentRows = rentRowsList.filter((row) => isAgencyCollectedProperty(row.property, propertiesList));
   const financeActions = {
     Paiements: <Button variant="primary" data-demo="finance-action-payment" onClick={() => onAction("Enregistrer paiement", { row: agencyRentRows[0] })}><Banknote size={17} /> Enregistrer un paiement</Button>,
     Charges: <Button variant="primary" data-demo="finance-action-charge" onClick={() => onAction("Ajouter une charge")}><Plus size={17} /> Ajouter une charge</Button>,
@@ -15523,11 +15596,11 @@ function FinancePage({ activeTab, onTab, availableTabs = ["Loyers", "Paiements",
       />
       <Tabs tabs={tabs} active={effectiveTab} onChange={onTab} demo="finance-tabs" />
       {effectiveTab === "Loyers" && <FinanceTable demo="finance-rents-workspace" title="Loyers attendus par E.K immo" onAction={onAction} rows={agencyRentRows.map((row) => [row.period, row.tenant, row.property, row.owner, row.expected, row.paid, row.balance, <Badge label={row.status} />, <RentActions row={row} onAction={onAction} />])} columns={["Période", "Locataire", "Bien", "Propriétaire", "Attendu", "Payé", "Solde", "Statut", "Actions"]} />}
-      {effectiveTab === "Paiements" && <PaymentForm onAction={onAction} paymentsList={paymentsList} rentRowsList={rentRowsList} paymentRequest={paymentRequest} />}
-      {effectiveTab === "Impayés" && <ArrearsView onAction={onAction} rentRowsList={rentRowsList} relancesList={relancesList} arrearsStatuses={arrearsStatuses} arrearsPromises={arrearsPromises} arrearsHistories={arrearsHistories} />}
+      {effectiveTab === "Paiements" && <PaymentForm onAction={onAction} paymentsList={paymentsList} rentRowsList={rentRowsList} paymentRequest={paymentRequest} propertiesList={propertiesList} ownersList={ownersList} />}
+      {effectiveTab === "Impayés" && <ArrearsView onAction={onAction} rentRowsList={rentRowsList} propertiesList={propertiesList} relancesList={relancesList} arrearsStatuses={arrearsStatuses} arrearsPromises={arrearsPromises} arrearsHistories={arrearsHistories} />}
       {effectiveTab === "Commissions" && <CommissionsView onAction={onAction} commissionsList={commissionsList} />}
-      {effectiveTab === "Charges" && <ChargesView onAction={onAction} chargesList={chargesList} detailRequest={detailRequest?.type === "charge" ? detailRequest : null} onDetailRequestConsumed={onDetailRequestConsumed} />}
-      {effectiveTab === "Entretiens" && <MaintenancesView onAction={onAction} maintenancesList={maintenancesList} detailRequest={detailRequest?.type === "maintenance" ? detailRequest : null} onDetailRequestConsumed={onDetailRequestConsumed} />}
+      {effectiveTab === "Charges" && <ChargesView onAction={onAction} chargesList={chargesList} propertiesList={propertiesList} detailRequest={detailRequest?.type === "charge" ? detailRequest : null} onDetailRequestConsumed={onDetailRequestConsumed} />}
+      {effectiveTab === "Entretiens" && <MaintenancesView onAction={onAction} maintenancesList={maintenancesList} propertiesList={propertiesList} detailRequest={detailRequest?.type === "maintenance" ? detailRequest : null} onDetailRequestConsumed={onDetailRequestConsumed} />}
       {effectiveTab === "Reversements" && <ReversalsView onAction={onAction} reversalsList={reversalsList} detailRequest={detailRequest?.type === "reversal" ? detailRequest : null} onDetailRequestConsumed={onDetailRequestConsumed} />}
     </>
   );
@@ -15634,16 +15707,21 @@ function FinanceTable({ title, columns, rows, onAction, demo }) {
 }
 
 function CommissionsView({ onAction, commissionsList = commissions }) {
-  const [selected, setSelected] = useState(commissionsList[0] ?? commissions[0]);
+  const [selected, setSelected] = useState(commissionsList[0] ?? null);
   const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
-  const currentSelected = commissionsList.find((commission) => getCommissionKey(commission) === getCommissionKey(selected)) ?? selected;
+  const currentSelected = selected ? commissionsList.find((commission) => getCommissionKey(commission) === getCommissionKey(selected)) ?? selected : null;
 
   const openCommission = (row) => {
     setSelected(row);
     openDetail();
   };
+  const commissionTotals = useMemo(() => ({
+    collected: commissionsList.reduce((sum, commission) => sum + parseFCFA(commission.collected), 0),
+    agency: commissionsList.reduce((sum, commission) => sum + parseFCFA(commission.commission), 0),
+    ownerNet: commissionsList.reduce((sum, commission) => sum + parseFCFA(commission.ownerNet), 0),
+  }), [commissionsList]);
 
-  if (detailOpen) {
+  if (detailOpen && currentSelected) {
     return (
       <DetailPageShell title="Fiche commission" subtitle={currentSelected.operation} onBack={closeDetail}>
         <CommissionProfilePanel commission={currentSelected} onAction={onAction} />
@@ -15655,25 +15733,33 @@ function CommissionsView({ onAction, commissionsList = commissions }) {
     <section className="client-list-workspace" data-demo="finance-commissions-workspace">
       <div>
         <div className="summary-strip finance-summary">
-          <Info label="Total encaissé" value="41 600 000 FCFA" />
-          <Info label="Commission agence" value="1 702 500 FCFA" />
-          <Info label="Net propriétaires" value="39 897 500 FCFA" />
+          <Info label="Total encaissé" value={formatFCFA(commissionTotals.collected)} />
+          <Info label="Commission agence" value={formatFCFA(commissionTotals.agency)} />
+          <Info label="Net propriétaires" value={formatFCFA(commissionTotals.ownerNet)} />
         </div>
         <Panel title="Commissions agence">
-          <DataTable
-            rows={commissionsList.map((row) => [
-              row.operation,
-              row.property,
-              row.owner,
-              row.collected,
-              row.mode,
-              row.commission,
-              row.ownerNet,
-              <Badge label={row.status ?? "Généré"} />,
-              <Button compact onClick={() => openCommission(row)}><Eye size={16} /> Fiche</Button>,
-            ])}
-            columns={["Opération", "Bien", "Propriétaire", "Montant encaissé", "Mode", "Commission", "Net propriétaire", "Statut", "Action"]}
-          />
+          {commissionsList.length ? (
+            <DataTable
+              rows={commissionsList.map((row) => [
+                row.operation,
+                row.property,
+                row.owner,
+                row.collected,
+                row.mode,
+                row.commission,
+                row.ownerNet,
+                <Badge label={row.status ?? "Généré"} />,
+                <Button compact onClick={() => openCommission(row)}><Eye size={16} /> Fiche</Button>,
+              ])}
+              columns={["Opération", "Bien", "Propriétaire", "Montant encaissé", "Mode", "Commission", "Net propriétaire", "Statut", "Action"]}
+            />
+          ) : (
+            <div className="empty-state compact-empty">
+              <CircleDollarSign size={24} />
+              <h3>Aucune commission enregistrée</h3>
+              <p>Les commissions apparaîtront après enregistrement de paiements, ventes ou états de commission.</p>
+            </div>
+          )}
         </Panel>
       </div>
     </section>
@@ -16192,8 +16278,8 @@ function buildChargeReportHtml(payload, mode) {
 </html>`;
 }
 
-function ChargesView({ onAction, chargesList = charges, detailRequest = null, onDetailRequestConsumed }) {
-  const [selected, setSelected] = useState(chargesList[0] ?? charges[0]);
+function ChargesView({ onAction, chargesList = charges, propertiesList = [], detailRequest = null, onDetailRequestConsumed }) {
+  const [selected, setSelected] = useState(chargesList[0] ?? null);
   const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
 
   useEffect(() => {
@@ -16245,10 +16331,10 @@ function ChargesView({ onAction, chargesList = charges, detailRequest = null, on
 
   useEffect(() => {
     if (filteredCharges.length === 0) return;
-    if (!filteredCharges.some((charge) => charge.id === selected.id)) {
+    if (!selected || !filteredCharges.some((charge) => charge.id === selected.id)) {
       setSelected(filteredCharges[0]);
     }
-  }, [filteredCharges, selected.id]);
+  }, [filteredCharges, selected]);
 
   const chargeStats = useMemo(() => {
     const currentMonthCharges = chargesList.filter((charge) => charge.period === "Juin 2026");
@@ -16340,9 +16426,9 @@ function ChargesView({ onAction, chargesList = charges, detailRequest = null, on
         </div>
       </Panel>
 
-      {detailOpen ? (
+      {detailOpen && selected ? (
         <DetailPageShell title="Fiche charge" subtitle={selected.id} onBack={closeDetail}>
-          <ChargeProfilePanel charge={selected} onAction={onAction} />
+          <ChargeProfilePanel charge={selected} propertiesList={propertiesList} onAction={onAction} />
         </DetailPageShell>
       ) : (
       <section className="client-list-workspace charges-detail-layout">
@@ -16387,13 +16473,17 @@ function ChargeActions({ charge, selected, onSelect, onAction }) {
     <div className="table-actions">
       <Button compact onClick={() => onSelect(charge)}><Eye size={15} /> Fiche</Button>
       <Button compact onClick={() => onAction("Modifier charge", { charge })}><Pencil size={15} /> Modifier</Button>
-      {selected.id === charge.id && <Badge label="Ouverte" />}
+      {selected?.id === charge.id && <Badge label="Ouverte" />}
     </div>
   );
 }
 
-function ChargeProfilePanel({ charge, onAction }) {
-  const property = getPropertyByName(charge.property) ?? properties[0];
+function ChargeProfilePanel({ charge, propertiesList = [], onAction }) {
+  const property = getPropertyByName(charge.property, propertiesList) ?? {
+    owner: charge.owner ?? "Non renseigné",
+    tenant: charge.tenant ?? "Non renseigné",
+    address: "Non renseignée",
+  };
   const grossRents = "300 000 FCFA";
   const commission = "30 000 FCFA";
   const ownerCharge = charge.payer === "Propriétaire" ? charge.amount : "0 FCFA";
@@ -16495,8 +16585,8 @@ function ChargeProfilePanel({ charge, onAction }) {
   );
 }
 
-function MaintenancesView({ onAction, maintenancesList = maintenances, detailRequest = null, onDetailRequestConsumed }) {
-  const [selected, setSelected] = useState(maintenancesList[0] ?? maintenances[0]);
+function MaintenancesView({ onAction, maintenancesList = maintenances, propertiesList = [], detailRequest = null, onDetailRequestConsumed }) {
+  const [selected, setSelected] = useState(maintenancesList[0] ?? null);
   const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
 
   useEffect(() => {
@@ -16510,7 +16600,7 @@ function MaintenancesView({ onAction, maintenancesList = maintenances, detailReq
   }, [detailRequest?.nonce, maintenancesList]);
 
   useEffect(() => {
-    setSelected((current) => maintenancesList.find((maintenance) => getMaintenanceKey(maintenance) === getMaintenanceKey(current)) ?? current ?? maintenancesList[0] ?? maintenances[0]);
+    setSelected((current) => maintenancesList.find((maintenance) => getMaintenanceKey(maintenance) === getMaintenanceKey(current)) ?? current ?? maintenancesList[0] ?? null);
   }, [maintenancesList]);
 
   const openMaintenance = (row) => {
@@ -16518,10 +16608,10 @@ function MaintenancesView({ onAction, maintenancesList = maintenances, detailReq
     openDetail();
   };
 
-  if (detailOpen) {
+  if (detailOpen && selected) {
     return (
       <DetailPageShell title="Fiche entretien" subtitle={`${selected.type} · ${selected.property}`} onBack={closeDetail}>
-        <MaintenanceProfilePanel maintenance={selected} onAction={onAction} />
+        <MaintenanceProfilePanel maintenance={selected} propertiesList={propertiesList} onAction={onAction} />
       </DetailPageShell>
     );
   }
@@ -16529,28 +16619,39 @@ function MaintenancesView({ onAction, maintenancesList = maintenances, detailReq
   return (
     <section className="client-list-workspace">
       <Panel title="Entretiens prévus ou réalisés">
-        <DataTable
-          columns={["Bien", "Type", "Date prévue", "Responsable", "Coût estimé", "Coût réel", "Prise en charge", "Justificatif", "Statut", "Action"]}
-          rows={maintenancesList.map((row) => [
-            row.property,
-            row.type,
-            row.date,
-            row.manager,
-            row.cost,
-            row.realCost ?? (row.status === "En cours" ? "À confirmer" : row.cost),
-            row.payer,
-            row.proof ?? "Justificatif à joindre",
-            <Badge label={row.status} />,
-            <Button compact onClick={() => openMaintenance(row)}><Eye size={16} /> Fiche</Button>,
-          ])}
-        />
+        {maintenancesList.length ? (
+          <DataTable
+            columns={["Bien", "Type", "Date prévue", "Responsable", "Coût estimé", "Coût réel", "Prise en charge", "Justificatif", "Statut", "Action"]}
+            rows={maintenancesList.map((row) => [
+              row.property,
+              row.type,
+              row.date,
+              row.manager,
+              row.cost,
+              row.realCost ?? (row.status === "En cours" ? "À confirmer" : row.cost),
+              row.payer,
+              row.proof ?? "Justificatif à joindre",
+              <Badge label={row.status} />,
+              <Button compact onClick={() => openMaintenance(row)}><Eye size={16} /> Fiche</Button>,
+            ])}
+          />
+        ) : (
+          <div className="empty-state compact-empty">
+            <Wrench size={24} />
+            <h3>Aucun entretien enregistré</h3>
+            <p>Les entretiens planifiés depuis les biens ou les charges apparaîtront ici.</p>
+          </div>
+        )}
       </Panel>
     </section>
   );
 }
 
-function MaintenanceProfilePanel({ maintenance, onAction }) {
-  const property = getPropertyByName(maintenance.property) ?? properties[0];
+function MaintenanceProfilePanel({ maintenance, propertiesList = [], onAction }) {
+  const property = getPropertyByName(maintenance.property, propertiesList) ?? {
+    owner: maintenance.owner ?? "Non renseigné",
+    tenant: maintenance.tenant ?? "Non renseigné",
+  };
 
   return (
     <Panel title="Fiche entretien" className="profile-panel">
@@ -16995,7 +17096,7 @@ function ReversalCancelModal({ reversal, onSave, onClose }) {
 }
 
 function ReversalsView({ onAction, reversalsList = reversals, detailRequest = null, onDetailRequestConsumed }) {
-  const [selected, setSelected] = useState(reversalsList[0] ?? reversals[0]);
+  const [selected, setSelected] = useState(reversalsList[0] ?? null);
   const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
 
   useEffect(() => {
@@ -17009,7 +17110,7 @@ function ReversalsView({ onAction, reversalsList = reversals, detailRequest = nu
   }, [detailRequest?.nonce, reversalsList]);
 
   useEffect(() => {
-    setSelected((current) => reversalsList.find((reversal) => getReversalKey(reversal) === getReversalKey(current)) ?? current ?? reversalsList[0] ?? reversals[0]);
+    setSelected((current) => reversalsList.find((reversal) => getReversalKey(reversal) === getReversalKey(current)) ?? current ?? reversalsList[0] ?? null);
   }, [reversalsList]);
 
   const openReversal = (row) => {
@@ -17017,7 +17118,7 @@ function ReversalsView({ onAction, reversalsList = reversals, detailRequest = nu
     openDetail();
   };
 
-  if (detailOpen) {
+  if (detailOpen && selected) {
     return (
       <DetailPageShell title="Fiche reversement" subtitle={selected.owner} onBack={closeDetail}>
         <ReversalProfilePanel reversal={selected} onAction={onAction} />
@@ -17028,19 +17129,27 @@ function ReversalsView({ onAction, reversalsList = reversals, detailRequest = nu
   return (
     <section className="client-list-workspace" data-demo="reversals-workspace">
       <Panel title="Reversements propriétaires">
-        <DataTable
-          columns={["Propriétaire", "Loyers encaissés", "Commissions", "Charges", "Déjà reversé", "Solde", "Statut", "Action"]}
-          rows={reversalsList.map((row) => [
-            row.owner,
-            row.collected,
-            row.commission,
-            row.charges,
-            row.paid,
-            row.balance,
-            <Badge label={row.status} />,
-            <Button compact onClick={() => openReversal(row)}><Eye size={16} /> Fiche</Button>,
-          ])}
-        />
+        {reversalsList.length ? (
+          <DataTable
+            columns={["Propriétaire", "Loyers encaissés", "Commissions", "Charges", "Déjà reversé", "Solde", "Statut", "Action"]}
+            rows={reversalsList.map((row) => [
+              row.owner,
+              row.collected,
+              row.commission,
+              row.charges,
+              row.paid,
+              row.balance,
+              <Badge label={row.status} />,
+              <Button compact onClick={() => openReversal(row)}><Eye size={16} /> Fiche</Button>,
+            ])}
+          />
+        ) : (
+          <div className="empty-state compact-empty">
+            <RefreshCw size={24} />
+            <h3>Aucun reversement préparé</h3>
+            <p>Les reversements apparaîtront après encaissements, charges et préparation d'un état propriétaire.</p>
+          </div>
+        )}
       </Panel>
     </section>
   );
@@ -17100,17 +17209,20 @@ function ReversalProfilePanel({ reversal, onAction }) {
   );
 }
 
-function PaymentForm({ onAction, paymentsList = paymentRecords, rentRowsList = rentRows, paymentRequest = null }) {
-  const agencyProperties = useMemo(() => properties.filter((property) => isAgencyCollectedProperty(property.name)), []);
-  const paymentRows = useMemo(() => paymentsList.filter((payment) => isAgencyCollectedProperty(payment.property)), [paymentsList]);
-  const [selected, setSelected] = useState(paymentRows[0] ?? paymentsList[0] ?? paymentRecords[0]);
-  const activePayment = paymentRows.find((payment) => payment.reference === selected.reference) ?? selected;
-  const activeRow = rentRowsList.find((row) => row.tenant === activePayment.tenant && row.property === activePayment.property && row.period === activePayment.period)
-    ?? rentRowsList.find((row) => row.tenant === activePayment.tenant && row.property === activePayment.property);
-  const [receiptNumber, setReceiptNumber] = useState(activePayment.receipt);
-  const modes = paymentModes.includes(activePayment.mode) ? paymentModes : [activePayment.mode, ...paymentModes];
+function PaymentForm({ onAction, paymentsList = paymentRecords, rentRowsList = rentRows, paymentRequest = null, propertiesList = [], ownersList = [] }) {
+  const agencyProperties = useMemo(() => propertiesList.filter((property) => isAgencyCollectedProperty(property.name, propertiesList)), [propertiesList]);
+  const paymentRows = useMemo(() => paymentsList.filter((payment) => isAgencyCollectedProperty(payment.property, propertiesList)), [paymentsList, propertiesList]);
+  const [selected, setSelected] = useState(paymentRows[0] ?? paymentsList[0] ?? null);
+  const activePayment = selected ? paymentRows.find((payment) => payment.reference === selected.reference) ?? selected : null;
+  const activeRow = activePayment
+    ? rentRowsList.find((row) => row.tenant === activePayment.tenant && row.property === activePayment.property && row.period === activePayment.period)
+      ?? rentRowsList.find((row) => row.tenant === activePayment.tenant && row.property === activePayment.property)
+    : null;
+  const [receiptNumber, setReceiptNumber] = useState(activePayment?.receipt ?? "");
+  const modes = activePayment && paymentModes.includes(activePayment.mode) ? paymentModes : [activePayment?.mode, ...paymentModes].filter(Boolean);
 
   useEffect(() => {
+    if (!activePayment) return;
     setReceiptNumber(activePayment.receipt === "Non généré" ? makeDocumentNumber("REC", 92) : activePayment.receipt);
   }, [activePayment]);
 
@@ -17132,13 +17244,27 @@ function PaymentForm({ onAction, paymentsList = paymentRecords, rentRowsList = r
     setSelected(paymentRows.find((payment) => payment.owner === ownerName) ?? selected);
   };
 
+  if (!activePayment) {
+    return (
+      <section className="payment-layout" data-demo="payment-workspace">
+        <Panel title="Enregistrer un paiement">
+          <div className="empty-state compact-empty">
+            <ReceiptText size={24} />
+            <h3>Aucun paiement enregistré</h3>
+            <p>Les paiements apparaîtront ici après rattachement d'un locataire et enregistrement d'un paiement agence.</p>
+          </div>
+        </Panel>
+      </section>
+    );
+  }
+
   return (
     <section className="payment-layout" data-demo="payment-workspace">
       <Panel title="Enregistrer un paiement">
         <div className="form-grid" key={activePayment.reference}>
           <label>Locataire<select value={activePayment.reference} onChange={(event) => selectPayment(event.target.value)}>{paymentRows.map((payment) => <option key={payment.reference} value={payment.reference}>{payment.tenant}</option>)}</select></label>
           <label>Bien<select value={activePayment.property} onChange={(event) => selectByProperty(event.target.value)}>{agencyProperties.map((property) => <option key={property.code}>{property.name}</option>)}</select></label>
-          <label>Propriétaire<select value={activePayment.owner} onChange={(event) => selectByOwner(event.target.value)}>{owners.map((owner) => <option key={owner.id}>{owner.name}</option>)}</select></label>
+          <label>Propriétaire<select value={activePayment.owner} onChange={(event) => selectByOwner(event.target.value)}>{ownersList.map((owner) => <option key={owner.id}>{owner.name}</option>)}</select></label>
           <label>Période<input defaultValue={activePayment.period} /></label>
           <label>Montant dû<input defaultValue={activePayment.due} /></label>
           <label>Montant payé<input defaultValue={activePayment.paid} /></label>
@@ -17193,9 +17319,9 @@ function PaymentForm({ onAction, paymentsList = paymentRecords, rentRowsList = r
   );
 }
 
-function ArrearsView({ onAction, rentRowsList = rentRows, relancesList = [], arrearsStatuses = {}, arrearsPromises = {}, arrearsHistories = {} }) {
+function ArrearsView({ onAction, rentRowsList = rentRows, propertiesList = [], relancesList = [], arrearsStatuses = {}, arrearsPromises = {}, arrearsHistories = {} }) {
   const rows = rentRowsList
-    .filter((row) => isAgencyCollectedProperty(row.property))
+    .filter((row) => isAgencyCollectedProperty(row.property, propertiesList))
     .filter((row) => parseFCFA(row.balance) > 0 && row.status !== "Payé");
   const [selected, setSelected] = useState(rows[0]);
   const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
@@ -19203,7 +19329,7 @@ function ProspectFormModal({ sequence = prospects.length + 1, onSave, onClose })
   );
 }
 
-function ProspectProposalModal({ prospect, onSave, onClose }) {
+function ProspectProposalModal({ prospect, propertiesList = [], onSave, onClose }) {
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState({
     district: "",
@@ -19215,11 +19341,11 @@ function ProspectProposalModal({ prospect, onSave, onClose }) {
   const [comment, setComment] = useState("Proposition adaptée au besoin exprimé.");
   const compatibleProperties = useMemo(() => {
     const normalizedQuery = normalizeSearch(query);
-    return getCompatibleProperties(prospect, filters).filter((property) => {
+    return getCompatibleProperties(prospect, filters, propertiesList).filter((property) => {
       if (!normalizedQuery) return true;
       return normalizeSearch(`${property.code} ${property.name} ${property.type} ${property.district}`).includes(normalizedQuery);
     });
-  }, [prospect, filters, query]);
+  }, [prospect, filters, propertiesList, query]);
 
   useEffect(() => {
     setSelectedCodes((current) => current.filter((code) => compatibleProperties.some((property) => property.code === code)));
@@ -19267,21 +19393,13 @@ function ProspectProposalModal({ prospect, onSave, onClose }) {
           <label>Quartier
             <select value={filters.district} onChange={(event) => setFilters((current) => ({ ...current, district: event.target.value }))}>
               <option value="">Tous</option>
-              <option>ACI 2000</option>
-              <option>Badalabougou</option>
-              <option>Hamdallaye</option>
-              <option>Korofina</option>
-              <option>Sotuba</option>
+              {uniqueValues(propertiesList.map((property) => property.district)).map((district) => <option key={district}>{district}</option>)}
             </select>
           </label>
           <label>Type
             <select value={filters.type} onChange={(event) => setFilters((current) => ({ ...current, type: event.target.value }))}>
               <option value="">Tous</option>
-              <option>Appartement</option>
-              <option>Villa</option>
-              <option>Bureau</option>
-              <option>Maison</option>
-              <option>Terrain</option>
+              {uniqueValues(propertiesList.map((property) => property.type)).map((type) => <option key={type}>{type}</option>)}
             </select>
           </label>
           <label>Budget maximum
@@ -19418,21 +19536,23 @@ function ProspectNextActionModal({ prospect, onSave, onClose }) {
   );
 }
 
-function ProspectVisitModal({ prospect, proposal, property, prospectsList = prospects, onSave, onClose }) {
-  const prospectOptions = prospectsList.length ? prospectsList : prospects;
+function ProspectVisitModal({ prospect, proposal, property, prospectsList = prospects, propertiesList = [], onSave, onClose }) {
+  const prospectOptions = prospectsList.length ? prospectsList : [];
   const initialProspect = prospect ?? prospectOptions[0] ?? null;
+  const propertyOptions = propertiesList.filter((item) => !item.archived);
   const proposedProperty =
     property ??
-    properties.find((item) => item.code === proposal?.code) ??
-    getCompatibleProperties(initialProspect)[0] ??
-    properties[0];
+    propertyOptions.find((item) => item.code === proposal?.code) ??
+    getCompatibleProperties(initialProspect, {}, propertyOptions)[0] ??
+    propertyOptions[0] ??
+    null;
   const [visit, setVisit] = useState({
     clientMode: "existing",
     prospectName: initialProspect?.name ?? "",
     newProspectName: "",
     phone: initialProspect?.phone ?? "",
     need: initialProspect?.need ?? "Appartement ou villa à visiter",
-    property: proposedProperty.name,
+    property: proposedProperty?.name ?? "",
     date: "2026-06-20",
     time: "10:00",
     agent: initialProspect?.agent ?? "Mariam Traoré",
@@ -19442,7 +19562,7 @@ function ProspectVisitModal({ prospect, proposal, property, prospectsList = pros
     nextAction: "Confirmer la présence",
     notifyReminder: "Oui",
   });
-  const selectedProperty = properties.find((item) => item.name === visit.property) ?? proposedProperty;
+  const selectedProperty = propertyOptions.find((item) => item.name === visit.property) ?? proposedProperty;
   const update = (field) => (event) => setVisit((current) => ({ ...current, [field]: event.target.value }));
   const setClientMode = (clientMode) => {
     setVisit((current) => ({
@@ -19498,12 +19618,13 @@ function ProspectVisitModal({ prospect, proposal, property, prospectsList = pros
         <div className="form-section">
           <h3>Bien</h3>
           <div className="form-grid">
-            <label>Bien à visiter<select value={visit.property} onChange={update("property")}>{properties.map((item) => <option key={item.code}>{item.name}</option>)}</select></label>
-            <label>Disponibilité du bien<input value={selectedProperty.status} readOnly /></label>
-            <label className="full">Adresse<input value={selectedProperty.address} readOnly /></label>
-            <label>Propriétaire<input value={selectedProperty.owner} readOnly /></label>
-            <label>Quartier<input value={selectedProperty.district} readOnly /></label>
+            <label>Bien à visiter<select value={visit.property} onChange={update("property")}>{propertyOptions.map((item) => <option key={item.code}>{item.name}</option>)}</select></label>
+            <label>Disponibilité du bien<input value={selectedProperty?.status ?? "Aucun bien disponible"} readOnly /></label>
+            <label className="full">Adresse<input value={selectedProperty?.address ?? "Aucun bien à rattacher"} readOnly /></label>
+            <label>Propriétaire<input value={selectedProperty?.owner ?? "Non renseigné"} readOnly /></label>
+            <label>Quartier<input value={selectedProperty?.district ?? "Non renseigné"} readOnly /></label>
           </div>
+          {!propertyOptions.length && <p className="empty-state-inline">Aucun bien disponible. Ajoutez d'abord un bien avant de planifier une visite.</p>}
         </div>
 
         <div className="form-section" data-demo="modal-visit-planning">
@@ -19528,7 +19649,7 @@ function ProspectVisitModal({ prospect, proposal, property, prospectsList = pros
 
         <div className="action-row compact-row">
           <Button onClick={onClose}>Annuler</Button>
-          <Button data-demo="modal-visit-save" variant="primary" onClick={() => onSave({ prospect, visit })}>Planifier visite</Button>
+          <Button data-demo="modal-visit-save" variant="primary" disabled={!selectedProperty} onClick={() => onSave({ prospect, visit })}>Planifier visite</Button>
         </div>
       </section>
     </div>
@@ -19591,10 +19712,14 @@ function ProspectStatusModal({ prospect, onSave, onClose }) {
   );
 }
 
-function ProspectConversionModal({ prospect, onSave, onClose }) {
+function ProspectConversionModal({ prospect, propertiesList = [], onSave, onClose }) {
+  const propertyOptions = useMemo(() => {
+    const compatible = getCompatibleProperties(prospect, {}, propertiesList);
+    return compatible.length ? compatible : propertiesList.filter((property) => !property.archived);
+  }, [propertiesList, prospect]);
   const [values, setValues] = useState({
     conversionType: "Convertir en locataire",
-    property: getCompatibleProperties(prospect)[0]?.name ?? properties[0].name,
+    property: propertyOptions[0]?.name ?? "",
     entryDate: "01/07/2026",
     rent: prospect.budget ?? "750 000 FCFA",
     deposit: "1 500 000 FCFA",
@@ -19619,7 +19744,8 @@ function ProspectConversionModal({ prospect, onSave, onClose }) {
           <h3>Options de conversion</h3>
           <div className="form-grid">
             <label>Option<select value={values.conversionType} onChange={update("conversionType")}><option>Convertir en locataire</option><option>Convertir en client acheteur</option><option>Créer contrat</option><option>Rattacher à un bien</option></select></label>
-            <label>Bien<select value={values.property} onChange={update("property")}>{properties.map((property) => <option key={property.code}>{property.name}</option>)}</select></label>
+            <label>Bien<select value={values.property} onChange={update("property")}>{propertyOptions.map((property) => <option key={property.code}>{property.name}</option>)}</select></label>
+            {!propertyOptions.length && <p className="empty-state-inline full">Aucun bien disponible pour cette conversion.</p>}
             {isTenantConversion && (
               <>
                 <label>Date d'entrée<input type="date" value={values.entryDate} onChange={update("entryDate")} /></label>
@@ -20227,8 +20353,11 @@ function ChargeFormModal({ title, context = null, propertiesList = properties, m
   );
 }
 
-function TenantFormModal({ tenant, property, onSave, onClose }) {
-  const linkedProperty = property ?? properties.find((item) => item.name === tenant.property) ?? properties[0];
+function TenantFormModal({ tenant, property, propertiesList = [], onSave, onClose }) {
+  const propertyOptions = getActiveProperties(propertiesList);
+  const linkedProperty = property
+    ?? propertyOptions.find((item) => item.name === tenant.property)
+    ?? makeEmptyProperty({ name: tenant.property ?? "Aucun bien selectionne" });
   const [values, setValues] = useState({
     name: tenant.name,
     id: tenant.id,
@@ -20297,7 +20426,7 @@ function TenantFormModal({ tenant, property, onSave, onClose }) {
         <div className="form-section">
           <h3>Occupation & conditions</h3>
           <div className="form-grid compact-form">
-            <label>Bien occupé<select value={values.property} onChange={(event) => update("property", event.target.value)}>{properties.map((item) => <option key={item.code}>{item.name}</option>)}</select></label>
+            <label>Bien occupé<select value={values.property} onChange={(event) => update("property", event.target.value)}>{propertyOptions.map((item) => <option key={item.code}>{item.name}</option>)}{!propertyOptions.length && <option>{linkedProperty.name}</option>}</select></label>
             <label>Loyer mensuel<input value={values.rent} onChange={(event) => update("rent", event.target.value)} /></label>
             <label>Caution<input value={values.deposit} onChange={(event) => update("deposit", event.target.value)} /></label>
             <label>Contrat actif<input value={values.contract} onChange={(event) => update("contract", event.target.value)} /></label>
@@ -20325,9 +20454,9 @@ function TenantFormModal({ tenant, property, onSave, onClose }) {
   );
 }
 
-function NewTenantFormModal({ sequence = 1, propertiesList = properties, onSave, onClose }) {
-  const propertyOptions = propertiesList.filter((property) => !property.archived);
-  const firstProperty = propertyOptions[0] ?? propertiesList[0] ?? properties[0];
+function NewTenantFormModal({ sequence = 1, propertiesList = [], onSave, onClose }) {
+  const propertyOptions = getActiveProperties(propertiesList);
+  const firstProperty = propertyOptions[0] ?? makeEmptyProperty();
   const suggestedId = makeDocumentNumber("LOC", sequence);
   const [validationMessage, setValidationMessage] = useState("");
   const [values, setValues] = useState({
@@ -20338,7 +20467,7 @@ function NewTenantFormModal({ sequence = 1, propertiesList = properties, onSave,
     address: "",
     profession: "",
     identity: "",
-    propertyCode: firstProperty.code,
+    propertyCode: firstProperty.code ?? "",
     entryDate: "2026-06-22",
     agent: "Aïssata Diarra",
     rent: firstProperty.price ?? "",
@@ -20360,6 +20489,7 @@ function NewTenantFormModal({ sequence = 1, propertiesList = properties, onSave,
 
   const updateProperty = (event) => {
     const nextProperty = propertyOptions.find((property) => property.code === event.target.value) ?? selectedProperty;
+    if (!nextProperty?.code) return;
     setValidationMessage("");
     setValues((current) => ({
       ...current,
@@ -20444,12 +20574,13 @@ function NewTenantFormModal({ sequence = 1, propertiesList = properties, onSave,
         <div className="form-section" data-demo="modal-new-tenant-property">
           <h3>Rattachement immobilier</h3>
           <div className="form-grid tenant-creation-grid">
-            <label>Bien occupé<select value={values.propertyCode} onChange={updateProperty}>{propertyOptions.map((property) => <option key={property.code} value={property.code}>{property.name}</option>)}</select></label>
+            <label>Bien occupé<select value={values.propertyCode} onChange={updateProperty}>{propertyOptions.map((property) => <option key={property.code} value={property.code}>{property.name}</option>)}{!propertyOptions.length && <option value="">Aucun bien disponible</option>}</select></label>
             <label>Propriétaire<input value={selectedProperty.owner} readOnly /></label>
             <label>Date d'entrée<input type="date" value={values.entryDate} onChange={update("entryDate")} /></label>
             <label>Agent responsable<select value={values.agent} onChange={update("agent")}><option>Aïssata Diarra</option><option>Mariam Traoré</option><option>Issa Maïga</option><option>Cheick Camara</option></select></label>
           </div>
         </div>
+        {!propertyOptions.length && <p className="empty-state-inline">Ajoutez d'abord un bien avant de créer un locataire rattaché.</p>}
 
         <div className="form-section">
           <h3>Conditions locatives</h3>
@@ -21218,8 +21349,11 @@ function RentStatementDocument({ row, values, paymentsList = paymentRecords, rel
   );
 }
 
-function TenantPaymentModal({ tenant, property, row, payment, paymentsList = paymentRecords, rentRowsList = rentRows, onSave, onClose }) {
-  const linkedProperty = property ?? properties.find((item) => item.name === tenant.property) ?? properties[0];
+function TenantPaymentModal({ tenant, property, row, payment, paymentsList = paymentRecords, rentRowsList = rentRows, propertiesList = [], onSave, onClose }) {
+  const propertyOptions = getActiveProperties(propertiesList);
+  const linkedProperty = property
+    ?? propertyOptions.find((item) => item.name === tenant.property)
+    ?? makeEmptyProperty({ name: tenant.property ?? "Aucun bien selectionne", owner: tenant.owner ?? "" });
   const initialRow = row
     ?? rentRowsList.find((item) => item.tenant === tenant.name && item.property === linkedProperty.name)
     ?? rentRowsList.find((item) => item.tenant === tenant.name)
@@ -21251,7 +21385,7 @@ function TenantPaymentModal({ tenant, property, row, payment, paymentsList = pay
   const paidAmount = parseFCFA(values.paid);
   const balance = formatFCFA(Math.max(dueAmount - paidAmount, 0));
   const status = getPaymentStatus(values.due, values.paid);
-  const selectedProperty = properties.find((item) => item.name === values.property) ?? linkedProperty;
+  const selectedProperty = propertyOptions.find((item) => item.name === values.property) ?? linkedProperty;
   const receiptNumber = initialPayment?.receipt && initialPayment.receipt !== "Non généré"
     ? initialPayment.receipt
     : makeDocumentNumber("REC", paymentsList.length + 111);
@@ -21323,8 +21457,11 @@ function TenantPaymentModal({ tenant, property, row, payment, paymentsList = pay
   );
 }
 
-function TenantReceiptModal({ tenant, property, payment, paymentsList = paymentRecords, rentRowsList = rentRows, archivedReceipts = [], onArchive, onClose }) {
-  const linkedProperty = property ?? properties.find((item) => item.name === tenant.property) ?? properties[0];
+function TenantReceiptModal({ tenant, property, payment, paymentsList = paymentRecords, rentRowsList = rentRows, propertiesList = [], archivedReceipts = [], onArchive, onClose }) {
+  const propertyOptions = getActiveProperties(propertiesList);
+  const linkedProperty = property
+    ?? propertyOptions.find((item) => item.name === tenant.property)
+    ?? makeEmptyProperty({ name: tenant.property ?? "Aucun bien selectionne", owner: tenant.owner ?? "" });
   const fallbackRow = rentRowsList.find((row) => row.tenant === tenant.name && row.property === linkedProperty.name) ?? rentRowsList.find((row) => row.tenant === tenant.name);
   const fallbackPayment = useMemo(() => ({
     reference: makeDocumentNumber("PAY", 211),
@@ -21809,8 +21946,11 @@ function DashboardRentReminderModal({ rows = [], relancesList = [], onSave, onCl
   );
 }
 
-function TenantReminderModal({ tenant, property, row, onSave, onClose }) {
-  const linkedProperty = property ?? properties.find((item) => item.name === row?.property || item.name === tenant.property) ?? properties[0];
+function TenantReminderModal({ tenant, property, row, propertiesList = [], onSave, onClose }) {
+  const propertyOptions = getActiveProperties(propertiesList);
+  const linkedProperty = property
+    ?? propertyOptions.find((item) => item.name === row?.property || item.name === tenant.property)
+    ?? makeEmptyProperty({ name: row?.property ?? tenant.property ?? "Aucun bien selectionne", owner: tenant.owner ?? "" });
   const [values, setValues] = useState({
     reason: "Retard de paiement",
     amount: row?.balance && row.balance !== "0 FCFA" ? row.balance : tenant.rent,
@@ -21881,19 +22021,28 @@ function TenantReminderModal({ tenant, property, row, onSave, onClose }) {
 }
 
 function TenantContractModal({ tenant, contract, onAction, onClose }) {
-  const activeContract = contract ?? contracts.find((item) => item.client === tenant.name || item.number === tenant.contract) ?? contracts[0];
+  const activeContract = contract ?? null;
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section className="modal-card wide-modal tenant-contract-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
         <button className="modal-close" onClick={onClose}>×</button>
-        <ContractProfilePanel contract={activeContract} onAction={onAction} />
+        {activeContract ? (
+          <ContractProfilePanel contract={activeContract} onAction={onAction} />
+        ) : (
+          <div className="empty-state compact-empty">
+            <FileText size={24} />
+            <h3>Aucun contrat actif</h3>
+            <p>Ce locataire n'a pas encore de contrat rattaché dans la base active.</p>
+            <Button variant="primary" onClick={() => onAction("Créer contrat", { tenant })}><Plus size={17} /> Créer contrat</Button>
+          </div>
+        )}
       </section>
     </div>
   );
 }
 
-function TenantSituationModal({ tenant, property, paymentsList = paymentRecords, rentRowsList = rentRows, relancesList = [], archivedReceipts = [], onClose }) {
+function TenantSituationModal({ tenant, property, paymentsList = paymentRecords, rentRowsList = rentRows, propertiesList = [], relancesList = [], archivedReceipts = [], onClose }) {
   const [values, setValues] = useState({
     period: "Mai 2026",
     includePayments: "Oui",
@@ -21944,6 +22093,7 @@ function TenantSituationModal({ tenant, property, paymentsList = paymentRecords,
               period={values}
               paymentsList={paymentsList}
               rentRowsList={rentRowsList}
+              propertiesList={propertiesList}
               relancesList={relancesList}
               archivedReceipts={archivedReceipts}
             />
@@ -21960,8 +22110,11 @@ function TenantSituationModal({ tenant, property, paymentsList = paymentRecords,
   );
 }
 
-function TenantSituationDocument({ tenant, property, period, paymentsList = paymentRecords, rentRowsList = rentRows, relancesList = [], archivedReceipts = [] }) {
-  const linkedProperty = property ?? properties.find((item) => item.name === tenant.property) ?? properties[0];
+function TenantSituationDocument({ tenant, property, period, paymentsList = paymentRecords, rentRowsList = rentRows, propertiesList = [], relancesList = [], archivedReceipts = [] }) {
+  const propertyOptions = getActiveProperties(propertiesList);
+  const linkedProperty = property
+    ?? propertyOptions.find((item) => item.name === tenant.property)
+    ?? makeEmptyProperty({ name: tenant.property ?? "Aucun bien selectionne", owner: tenant.owner ?? "" });
   const tenantPayments = paymentsList.filter((payment) => payment.tenant === tenant.name);
   const tenantRows = rentRowsList.filter((row) => row.tenant === tenant.name);
   const tenantRelances = relancesList.filter((relance) => relance.tenantId === tenant.id || relance.tenant === tenant.name);
@@ -22168,12 +22321,20 @@ function AttachTenantModal({ property, tenantsList = tenants, onClose, onAttach 
   );
 }
 
-function PaymentRegistrationModal({ context, paymentsList = paymentRecords, rentRowsList = rentRows, onSave, onClose }) {
+function PaymentRegistrationModal({ context, paymentsList = paymentRecords, rentRowsList = rentRows, propertiesList = [], tenantsList = [], onSave, onClose }) {
   const contextRow = context?.row;
   const contextPayment = context?.payment;
-  const initialProperty = context?.property ?? properties.find((property) => property.name === contextRow?.property || property.name === contextPayment?.property) ?? properties[0];
-  const isDirectCollection = !isAgencyCollectedProperty(initialProperty.name);
-  const initialTenant = contextRow?.tenant ?? contextPayment?.tenant ?? initialProperty.tenant ?? tenants[0].name;
+  const matchedProperty = context?.property ?? propertiesList.find((property) => property.name === contextRow?.property || property.name === contextPayment?.property);
+  const initialProperty = matchedProperty ?? {
+    name: contextRow?.property ?? contextPayment?.property ?? "Bien non sélectionné",
+    owner: contextRow?.owner ?? contextPayment?.owner ?? "Propriétaire non renseigné",
+    tenant: contextRow?.tenant ?? contextPayment?.tenant ?? tenantsList[0]?.name ?? "Locataire à renseigner",
+    price: contextRow?.expected ?? contextPayment?.due ?? "0 FCFA",
+    financialMode: "Encaissement par l'agence",
+  };
+  const hasMatchedProperty = Boolean(matchedProperty);
+  const isDirectCollection = hasMatchedProperty ? !isAgencyCollectedProperty(initialProperty.name, propertiesList) : false;
+  const initialTenant = contextRow?.tenant ?? contextPayment?.tenant ?? initialProperty.tenant ?? tenantsList[0]?.name ?? "Locataire à renseigner";
   const initialRow = contextRow
     ?? rentRowsList.find((row) => row.property === initialProperty.name && row.tenant === initialTenant)
     ?? rentRowsList.find((row) => row.property === initialProperty.name)
@@ -22206,7 +22367,7 @@ function PaymentRegistrationModal({ context, paymentsList = paymentRecords, rent
   const totalPaid = formatFCFA(totalPaidAmount);
   const remaining = formatFCFA(remainingAmount);
   const status = getPaymentStatus(expected, totalPaid);
-  const tenant = tenants.find((item) => item.name === initialTenant);
+  const tenant = tenantsList.find((item) => item.name === initialTenant);
   const receiptNumber = initialPayment?.receipt && initialPayment.receipt !== "Non généré"
     ? initialPayment.receipt
     : makeDocumentNumber("REC", paymentsList.length + 101);
@@ -22299,8 +22460,12 @@ function PaymentRegistrationModal({ context, paymentsList = paymentRecords, rent
   );
 }
 
-function UrgentMaintenanceModal({ context, onSave, onClose }) {
-  const baseProperty = context?.property ?? getPropertyByName(context?.maintenance?.property) ?? properties[0];
+function UrgentMaintenanceModal({ context, propertiesList = [], onSave, onClose }) {
+  const propertyOptions = getActiveProperties(propertiesList);
+  const baseProperty = context?.property
+    ?? getPropertyByName(context?.maintenance?.property, propertyOptions)
+    ?? propertyOptions[0]
+    ?? makeEmptyProperty();
   const baseMaintenance = context?.maintenance ?? {};
   const [values, setValues] = useState({
     property: baseMaintenance.property ?? baseProperty.name,
@@ -22314,11 +22479,12 @@ function UrgentMaintenanceModal({ context, onSave, onClose }) {
     payer: baseMaintenance.payer ?? "Propriétaire",
     proof: "",
   });
-  const selectedProperty = getPropertyByName(values.property) ?? baseProperty;
+  const selectedProperty = getPropertyByName(values.property, propertyOptions) ?? baseProperty;
   const interventionTypes = ["Plomberie", "Électricité", "Nettoyage", "Réparation", "Autre"];
   const priorities = ["Normale", "Urgente", "Critique"];
   const managers = ["Mariam Traoré", "Aïssata Diarra", "Issa Maïga", "Cheick Camara"];
   const payers = ["Agence", "Propriétaire", "Locataire", "À déterminer"];
+  const canSave = Boolean(selectedProperty.code || baseMaintenance.property);
   const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
 
   useEffect(() => {
@@ -22374,7 +22540,7 @@ function UrgentMaintenanceModal({ context, onSave, onClose }) {
         <div className="form-section">
           <h3>Intervention</h3>
           <div className="form-grid compact-form">
-            <label>Bien concerné<select value={values.property} onChange={update("property")}>{properties.map((property) => <option key={property.code}>{property.name}</option>)}</select></label>
+            <label>Bien concerné<select value={values.property} onChange={update("property")}>{propertyOptions.map((property) => <option key={property.code}>{property.name}</option>)}{!propertyOptions.length && <option>{baseProperty.name}</option>}</select></label>
             <label>Type d'intervention<select value={values.type} onChange={update("type")}>{interventionTypes.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label>Priorité<select value={values.priority} onChange={update("priority")}>{priorities.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label>Date prévue<input value={values.date} onChange={update("date")} placeholder="JJ/MM/AAAA" /></label>
@@ -22403,8 +22569,8 @@ function UrgentMaintenanceModal({ context, onSave, onClose }) {
 
         <div className="action-row compact-row">
           <Button onClick={onClose}>Annuler</Button>
-          <Button variant="primary" onClick={() => submit(false)}><Wrench size={17} /> Créer intervention</Button>
-          <Button onClick={() => submit(true)}><ReceiptText size={17} /> Créer intervention et charge</Button>
+          <Button variant="primary" disabled={!canSave} onClick={() => submit(false)}><Wrench size={17} /> Créer intervention</Button>
+          <Button disabled={!canSave} onClick={() => submit(true)}><ReceiptText size={17} /> Créer intervention et charge</Button>
         </div>
       </section>
     </div>
@@ -22666,8 +22832,9 @@ function MaintenanceCompletionModal({ maintenance, onSave, onClose }) {
   );
 }
 
-function MaintenanceReportModal({ maintenance, onArchive, onClose }) {
-  const property = getPropertyByName(maintenance.property) ?? properties[0];
+function MaintenanceReportModal({ maintenance, propertiesList = [], onArchive, onClose }) {
+  const property = getPropertyByName(maintenance.property, propertiesList)
+    ?? makeEmptyProperty({ name: maintenance.property ?? "Aucun bien selectionne" });
   const [preview, setPreview] = useState(false);
   const [archived, setArchived] = useState(Boolean(maintenance.reportArchived));
   const values = {
@@ -22797,12 +22964,16 @@ function MaintenanceCancelModal({ maintenance, onSave, onClose }) {
   );
 }
 
-function MaintenanceFormModal({ context, onSave, onClose }) {
-  const baseProperty = context?.property ?? getPropertyByName(context?.maintenance?.property) ?? properties[0];
+function MaintenanceFormModal({ context, propertiesList = [], onSave, onClose }) {
+  const propertyOptions = getActiveProperties(propertiesList);
+  const baseProperty = context?.property
+    ?? getPropertyByName(context?.maintenance?.property, propertyOptions)
+    ?? propertyOptions[0]
+    ?? makeEmptyProperty();
   const baseMaintenance = context?.maintenance;
   const isEditMode = context?.mode === "edit";
   const [propertyName, setPropertyName] = useState(baseMaintenance?.property ?? baseProperty.name);
-  const selectedProperty = getPropertyByName(propertyName) ?? baseProperty;
+  const selectedProperty = getPropertyByName(propertyName, propertyOptions) ?? baseProperty;
   const suggestedProvider = selectedProperty.serviceProvider?.company ?? baseMaintenance?.provider ?? "";
   const [type, setType] = useState(baseMaintenance?.type ?? "Plomberie");
   const [description, setDescription] = useState(baseMaintenance?.note ?? "Décrire le besoin, la zone concernée et le résultat attendu.");
@@ -22823,9 +22994,10 @@ function MaintenanceFormModal({ context, onSave, onClose }) {
   const managers = ["Mariam Traoré", "Aïssata Diarra", "Issa Maïga", "Cheick Camara"];
   const payers = ["Agence", "Propriétaire", "Locataire", "À déterminer"];
   const statuses = ["À prévoir", "Planifié", "En cours", "Validé", "Terminé", "Annulé"];
+  const canSave = Boolean(selectedProperty.code || baseMaintenance?.property);
 
   useEffect(() => {
-    const nextProperty = getPropertyByName(propertyName);
+    const nextProperty = getPropertyByName(propertyName, propertyOptions);
     if (nextProperty?.serviceProvider?.company && !baseMaintenance?.provider) {
       setProvider(nextProperty.serviceProvider.company);
     }
@@ -22870,7 +23042,7 @@ function MaintenanceFormModal({ context, onSave, onClose }) {
         <div className="form-section" data-demo="modal-maintenance-info">
           <h3>Informations de l'entretien</h3>
           <div className="form-grid compact-form">
-            <label>Bien concerné<select value={propertyName} onChange={(event) => setPropertyName(event.target.value)}>{properties.map((property) => <option key={property.code}>{property.name}</option>)}</select></label>
+            <label>Bien concerné<select value={propertyName} onChange={(event) => setPropertyName(event.target.value)}>{propertyOptions.map((property) => <option key={property.code}>{property.name}</option>)}{!propertyOptions.length && <option>{baseProperty.name}</option>}</select></label>
             <label>Type d'entretien<select value={type} onChange={(event) => setType(event.target.value)}>{maintenanceTypes.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label>Priorité<select value={priority} onChange={(event) => setPriority(event.target.value)}>{priorities.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label>Date prévue<input value={date} onChange={(event) => setDate(event.target.value)} /></label>
@@ -22902,8 +23074,8 @@ function MaintenanceFormModal({ context, onSave, onClose }) {
 
         <div className="action-row compact-row">
           <Button onClick={onClose}>Annuler</Button>
-          <Button data-demo="modal-maintenance-save" variant="primary" onClick={() => submit(false)}><CalendarDays size={17} /> Planifier entretien</Button>
-          <Button onClick={() => submit(true)}><ReceiptText size={17} /> Planifier et créer charge</Button>
+          <Button data-demo="modal-maintenance-save" variant="primary" disabled={!canSave} onClick={() => submit(false)}><CalendarDays size={17} /> Planifier entretien</Button>
+          <Button disabled={!canSave} onClick={() => submit(true)}><ReceiptText size={17} /> Planifier et créer charge</Button>
         </div>
       </section>
     </div>
@@ -23019,11 +23191,12 @@ function getContractPdfReference(contract = {}) {
   return `PDF-${contract.number}-V${contract.pdfVersion ?? 1}`;
 }
 
-function getContractPdfValues(contract) {
-  const property = properties.find((item) => item.name === contract.property) ?? properties[0];
-  const owner = owners.find((item) => item.name === contract.owner) ?? owners[0];
-  const tenant = tenants.find((item) => item.name === contract.client) ?? { name: contract.client, phone: "" };
-  const financials = getContractFinancials(contract);
+function getContractPdfValues(contract, propertiesList = [], ownersList = [], tenantsList = []) {
+  const property = propertiesList.find((item) => item.name === contract.property)
+    ?? makeEmptyProperty({ name: contract.property ?? "Aucun bien selectionne", owner: contract.owner ?? "" });
+  const owner = ownersList.find((item) => item.name === contract.owner) ?? { name: contract.owner ?? "", phone: "", email: "", address: "" };
+  const tenant = tenantsList.find((item) => item.name === contract.client) ?? { name: contract.client, phone: "" };
+  const financials = getContractFinancials(contract, propertiesList, tenantsList);
   const defaults = getDocumentDefaults("bail", { property, owner, tenant });
 
   return {
@@ -23051,13 +23224,13 @@ function getContractPdfValues(contract) {
   };
 }
 
-function ContractPdfModal({ contract, onPdfAction, onClose }) {
+function ContractPdfModal({ contract, propertiesList = [], ownersList = [], tenantsList = [], onPdfAction, onClose }) {
   const [workingContract, setWorkingContract] = useState(contract);
   const [preview, setPreview] = useState(false);
   const [notice, setNotice] = useState("");
   const hasPdf = hasContractPdf(workingContract);
   const pdfReference = getContractPdfReference(workingContract);
-  const pdfValues = getContractPdfValues(workingContract);
+  const pdfValues = getContractPdfValues(workingContract, propertiesList, ownersList, tenantsList);
 
   useEffect(() => {
     setWorkingContract(contract);
@@ -23323,9 +23496,11 @@ function ContractDocumentModal({ contract, action, onImport, onSignedAction, onC
   );
 }
 
-function ContractEditModal({ contract, onSave, onClose }) {
-  const financials = getContractFinancials(contract);
-  const property = properties.find((item) => item.name === contract.property) ?? properties[0];
+function ContractEditModal({ contract, propertiesList = [], ownersList = [], tenantsList = [], prospectsList = [], onSave, onClose }) {
+  const propertyOptions = getActiveProperties(propertiesList);
+  const financials = getContractFinancials(contract, propertyOptions, tenantsList);
+  const property = propertyOptions.find((item) => item.name === contract.property)
+    ?? makeEmptyProperty({ name: contract.property ?? "Aucun bien selectionne", owner: contract.owner ?? "" });
   const [values, setValues] = useState({
     number: contract.number,
     type: contract.type,
@@ -23380,9 +23555,9 @@ function ContractEditModal({ contract, onSave, onClose }) {
             <label>Numero contrat<input value={values.number} onChange={update("number")} /></label>
             <label>Type<select value={values.type} onChange={update("type")}><option>Contrat de bail</option><option>Contrat de location</option><option>Mandat de gestion</option><option>Contrat de vente</option></select></label>
             <label>Statut<select value={values.status} onChange={update("status")}><option>Actif</option><option>Renouvelé</option><option>Résilié</option><option>Archivé</option><option>Expiré</option></select></label>
-            <label>Bien<select value={values.property} onChange={update("property")}>{properties.map((item) => <option key={item.code}>{item.name}</option>)}</select></label>
-            <label>Proprietaire<select value={values.owner} onChange={update("owner")}>{owners.map((item) => <option key={item.id}>{item.name}</option>)}</select></label>
-            <label>Locataire / client<select value={values.client} onChange={update("client")}>{[...tenants.map((item) => item.name), ...prospects.map((item) => item.name)].map((name) => <option key={name}>{name}</option>)}</select></label>
+            <label>Bien<select value={values.property} onChange={update("property")}>{propertyOptions.map((item) => <option key={item.code}>{item.name}</option>)}{!propertyOptions.length && <option>{property.name}</option>}</select></label>
+            <label>Proprietaire<select value={values.owner} onChange={update("owner")}>{ownersList.map((item) => <option key={item.id ?? item.name}>{item.name}</option>)}{!ownersList.length && <option>{values.owner}</option>}</select></label>
+            <label>Locataire / client<select value={values.client} onChange={update("client")}>{[...tenantsList.map((item) => item.name), ...prospectsList.map((item) => item.name)].map((name) => <option key={name}>{name}</option>)}{![...tenantsList, ...prospectsList].length && <option>{values.client}</option>}</select></label>
           </div>
         </div>
         <div className="form-section">
@@ -23595,30 +23770,35 @@ function ContractTerminationModal({ contract, onSave, onClose }) {
 }
 
 function ContractFormModal({
-  property: initialProperty = properties[0],
-  tenant: initialTenant = tenants[0],
-  propertiesList = properties,
-  ownersList = owners,
-  tenantsList = tenants,
+  property: initialPropertyValue,
+  tenant: initialTenantValue,
+  propertiesList = [],
+  ownersList = [],
+  tenantsList = [],
+  prospectsList = [],
   onGenerate,
   onDraft,
   onClose,
 }) {
   const [preview, setPreview] = useState(false);
-  const initialOwner = ownersList.find((item) => item.name === initialProperty.owner) ?? ownersList[0] ?? owners[0];
-  const tenantOptions = Array.from(new Set([initialTenant?.name, ...tenantsList.map((tenant) => tenant.name), ...prospects.map((prospect) => prospect.name)].filter(Boolean)));
+  const propertyOptions = getActiveProperties(propertiesList);
+  const initialProperty = initialPropertyValue ?? propertyOptions[0] ?? makeEmptyProperty();
+  const initialTenant = initialTenantValue ?? tenantsList[0] ?? { name: "", phone: "" };
+  const initialOwner = ownersList.find((item) => item.name === initialProperty.owner) ?? { name: initialProperty.owner ?? "", phone: "", email: "", address: "" };
+  const tenantOptions = Array.from(new Set([initialTenant?.name, ...tenantsList.map((tenant) => tenant.name), ...prospectsList.map((prospect) => prospect.name)].filter(Boolean)));
   const [propertyCode, setPropertyCode] = useState(initialProperty.code);
-  const [tenantName, setTenantName] = useState(initialTenant?.name ?? tenantsList[0]?.name ?? tenants[0].name);
-  const [values, setValues] = useState(() => getDocumentDefaults("bail", { property: initialProperty, owner: initialOwner, tenant: initialTenant ?? tenantsList[0] ?? tenants[0] }));
+  const [tenantName, setTenantName] = useState(initialTenant?.name ?? tenantOptions[0] ?? "");
+  const [values, setValues] = useState(() => getDocumentDefaults("bail", { property: initialProperty, owner: initialOwner, tenant: initialTenant }));
+  const canGenerate = Boolean(propertyCode && tenantName);
 
   const updateLease = (name, value) => {
     setValues((current) => ({ ...current, [name]: value }));
   };
 
   const handlePropertyChange = (code) => {
-    const property = propertiesList.find((item) => item.code === code) ?? propertiesList[0] ?? properties[0];
-    const owner = ownersList.find((item) => item.name === property.owner) ?? ownersList[0] ?? owners[0];
-    const tenant = initialTenant?.name === tenantName ? initialTenant : tenantsList.find((item) => item.name === tenantName) ?? tenantsList[0] ?? tenants[0];
+    const property = propertyOptions.find((item) => item.code === code) ?? initialProperty;
+    const owner = ownersList.find((item) => item.name === property.owner) ?? { name: property.owner ?? "" };
+    const tenant = initialTenant?.name === tenantName ? initialTenant : tenantsList.find((item) => item.name === tenantName) ?? prospectsList.find((item) => item.name === tenantName) ?? { name: tenantName };
     const nextDefaults = getDocumentDefaults("bail", { property, owner, tenant });
 
     setPropertyCode(code);
@@ -23637,9 +23817,9 @@ function ContractFormModal({
   };
 
   const handleTenantChange = (name) => {
-    const property = propertiesList.find((item) => item.code === propertyCode) ?? propertiesList[0] ?? properties[0];
-    const owner = ownersList.find((item) => item.name === property.owner) ?? ownersList[0] ?? owners[0];
-    const tenant = initialTenant?.name === name ? initialTenant : tenantsList.find((item) => item.name === name) ?? tenantsList[0] ?? tenants[0];
+    const property = propertyOptions.find((item) => item.code === propertyCode) ?? initialProperty;
+    const owner = ownersList.find((item) => item.name === property.owner) ?? { name: property.owner ?? "" };
+    const tenant = initialTenant?.name === name ? initialTenant : tenantsList.find((item) => item.name === name) ?? prospectsList.find((item) => item.name === name) ?? { name };
     const nextDefaults = getDocumentDefaults("bail", { property, owner, tenant });
 
     setTenantName(name);
@@ -23652,8 +23832,8 @@ function ContractFormModal({
   };
 
   const buildGeneratedContract = (status = "Généré") => {
-    const property = propertiesList.find((item) => item.code === propertyCode) ?? initialProperty;
-    const tenant = initialTenant?.name === tenantName ? initialTenant : tenantsList.find((item) => item.name === tenantName) ?? { name: tenantName };
+    const property = propertyOptions.find((item) => item.code === propertyCode) ?? initialProperty;
+    const tenant = initialTenant?.name === tenantName ? initialTenant : tenantsList.find((item) => item.name === tenantName) ?? prospectsList.find((item) => item.name === tenantName) ?? { name: tenantName };
 
     return {
       number: values.contratNo || `CON-2026-${String(Date.now()).slice(-3)}`,
@@ -23679,9 +23859,9 @@ function ContractFormModal({
   };
 
   const saveDraft = () => {
-    const property = propertiesList.find((item) => item.code === propertyCode) ?? initialProperty;
-    const owner = ownersList.find((item) => item.name === property.owner) ?? ownersList[0] ?? owners[0];
-    const tenant = initialTenant?.name === tenantName ? initialTenant : tenantsList.find((item) => item.name === tenantName) ?? { name: tenantName };
+    const property = propertyOptions.find((item) => item.code === propertyCode) ?? initialProperty;
+    const owner = ownersList.find((item) => item.name === property.owner) ?? { name: property.owner ?? "" };
+    const tenant = initialTenant?.name === tenantName ? initialTenant : tenantsList.find((item) => item.name === tenantName) ?? prospectsList.find((item) => item.name === tenantName) ?? { name: tenantName };
     onDraft?.({ values, property, owner, tenant });
   };
 
@@ -23697,9 +23877,9 @@ function ContractFormModal({
             <label>Type de contrat<select value={values.objet} onChange={(event) => updateLease("objet", event.target.value)}><option>CONTRAT DE BAIL À USAGE PROFESSIONNEL</option><option>Contrat de bail à usage d'habitation</option><option>Mandat de gestion</option></select></label>
             <label>Numéro contrat<input value={values.contratNo} onChange={(event) => updateLease("contratNo", event.target.value)} /><small>Numéro proposé, modifiable avant PDF.</small></label>
             <label>Date de souscription<input value={values.souscritLe} onChange={(event) => updateLease("souscritLe", event.target.value)} /></label>
-            <label>Bien concerné<select value={propertyCode} onChange={(event) => handlePropertyChange(event.target.value)}>{propertiesList.map((property) => <option value={property.code} key={property.code}>{property.name}</option>)}</select></label>
-            <label>Propriétaire / bailleur<select value={values.bailleurRep} onChange={(event) => updateLease("bailleurRep", event.target.value)}><option>M. Tidiane Niaro</option><option>Mamadou Keita</option><option>Sira Coulibaly</option><option>Foncière Mandé</option></select></label>
-            <label>Locataire ou client<select value={tenantName} onChange={(event) => handleTenantChange(event.target.value)}>{tenantOptions.map((name) => <option key={name}>{name}</option>)}</select></label>
+            <label>Bien concerné<select value={propertyCode} onChange={(event) => handlePropertyChange(event.target.value)}>{propertyOptions.map((property) => <option value={property.code} key={property.code}>{property.name}</option>)}{!propertyOptions.length && <option value="">Aucun bien disponible</option>}</select></label>
+            <label>Propriétaire / bailleur<select value={values.bailleurRep} onChange={(event) => updateLease("bailleurRep", event.target.value)}>{ownersList.map((owner) => <option key={owner.id ?? owner.name}>{owner.name}</option>)}{!ownersList.length && <option>{values.bailleurRep}</option>}</select></label>
+            <label>Locataire ou client<select value={tenantName} onChange={(event) => handleTenantChange(event.target.value)}>{tenantOptions.map((name) => <option key={name}>{name}</option>)}{!tenantOptions.length && <option value="">Aucun client disponible</option>}</select></label>
           </div>
         </div>
 
@@ -23707,9 +23887,9 @@ function ContractFormModal({
           <LeaseVariableForm values={values} onChange={updateLease} includeReference={false} />
         </div>
         <div className="action-row compact-row">
-          <Button onClick={saveDraft}><Archive size={17} /> Enregistrer brouillon</Button>
-          <Button data-demo="modal-contract-save" variant="primary" onClick={generateContract}><Download size={17} /> Générer PDF</Button>
-          <Button onClick={archiveContract}><Archive size={17} /> Archiver</Button>
+          <Button disabled={!canGenerate} onClick={saveDraft}><Archive size={17} /> Enregistrer brouillon</Button>
+          <Button data-demo="modal-contract-save" variant="primary" disabled={!canGenerate} onClick={generateContract}><Download size={17} /> Générer PDF</Button>
+          <Button disabled={!canGenerate} onClick={archiveContract}><Archive size={17} /> Archiver</Button>
         </div>
         {preview && (
           <DocumentPreviewModal
