@@ -3377,11 +3377,11 @@ function uniqueValues(values) {
   return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
 }
 
-function getPropertyByName(name, propertiesList = properties) {
+function getPropertyByName(name, propertiesList = []) {
   return propertiesList.find((property) => property.name === name);
 }
 
-function getPropertyByCode(code, propertiesList = properties) {
+function getPropertyByCode(code, propertiesList = []) {
   return propertiesList.find((property) => property.code === code);
 }
 
@@ -3411,16 +3411,16 @@ function isBuildingProperty(property) {
   return property?.structure?.kind === "building";
 }
 
-function getPropertyChildren(property, propertiesList = properties) {
+function getPropertyChildren(property, propertiesList = []) {
   if (!property) return [];
   return propertiesList.filter((item) => item.parentCode === property.code);
 }
 
-function getPropertyParent(property, propertiesList = properties) {
+function getPropertyParent(property, propertiesList = []) {
   return property?.parentCode ? getPropertyByCode(property.parentCode, propertiesList) : null;
 }
 
-function getPropertyRelationLabel(property, propertiesList = properties) {
+function getPropertyRelationLabel(property, propertiesList = []) {
   const parent = getPropertyParent(property, propertiesList);
   if (parent) return `Rattaché à ${parent.name}`;
   const children = getPropertyChildren(property, propertiesList);
@@ -3446,14 +3446,14 @@ function isMaintenanceOnlyProperty(property) {
   return property?.status === "Entretien seul" || property?.financialMode?.includes("entretien seul");
 }
 
-function isAgencyCollectedProperty(name, propertiesList = properties) {
+function isAgencyCollectedProperty(name, propertiesList = []) {
   const property = getPropertyByName(name, propertiesList);
   const financialMode = String(property?.financialMode ?? "");
   return Boolean(property) && (!financialMode.includes("direct par le propriétaire") && !financialMode.includes("entretien seul"));
 }
 
-function getAgencyRentRows() {
-  return rentRows.filter((row) => isAgencyCollectedProperty(row.property));
+function getAgencyRentRows(propertiesList = []) {
+  return rentRows.filter((row) => isAgencyCollectedProperty(row.property, propertiesList));
 }
 
 function getPaymentKey(item) {
@@ -3701,7 +3701,7 @@ function isSensitiveAction(title) {
 }
 
 function getSearchEntries({
-  propertiesList = properties,
+  propertiesList = [],
   ownersList = owners,
   tenantsList = tenants,
   prospectsList = prospects,
@@ -4927,7 +4927,13 @@ function App() {
       }
 
       if (archiveRecord.status === "Brouillon" || normalizedAction === "reprendre brouillon") {
-        setDocumentDraft(makeArchiveDocumentDraft(archiveRecord));
+        setDocumentDraft(makeArchiveDocumentDraft(archiveRecord, context.archiveContextLists ?? {
+          propertiesList: propertiesWithArchiveState,
+          ownersList: allOwners,
+          tenantsList: allTenants,
+          paymentsList: allPayments,
+          commissionsList: allCommissions,
+        }));
         setContractTab("Génération de document");
         setActivePage("Contrats");
         return;
@@ -5154,7 +5160,7 @@ function App() {
 
     if (normalizedAction === "modifier entretien" && context.maintenance) {
       setMaintenanceContext({
-        property: context.property ?? getPropertyByName(context.maintenance.property) ?? selectedProperty,
+        property: context.property ?? getPropertyByName(context.maintenance.property, propertiesWithArchiveState) ?? selectedProperty,
         maintenance: context.maintenance,
         maintenanceKey: getMaintenanceKey(context.maintenance),
         mode: "edit",
@@ -7536,7 +7542,7 @@ function App() {
 
   const archiveMaintenanceReport = (maintenance, values = {}) => {
     const reference = makeDocumentNumber("RAP", 800 + propertyDocumentArchives.length + 1);
-    const property = getPropertyByName(maintenance.property) ?? selectedProperty;
+    const property = getPropertyByName(maintenance.property, propertiesWithArchiveState) ?? selectedProperty;
     const archive = {
       id: `maintenance-report-${reference}`,
       category: "Charges et entretiens",
@@ -8103,7 +8109,7 @@ function App() {
         navItemsList={accessibleNavItems}
         notifications={topbarNotifications}
         searchDataset={{
-          propertiesList: propertiesWithArchiveState,
+          propertiesList: activeProperties,
           ownersList: allOwners,
           tenantsList: allTenants,
           prospectsList: allProspects,
@@ -8171,7 +8177,7 @@ function App() {
             rentRowsList={allRentRows}
             chargesList={allCharges}
             reversalsList={allReversals}
-            propertiesList={propertiesWithArchiveState}
+            propertiesList={activeProperties}
           />
         )}
         {activePage === "Contrats" && (
@@ -8184,8 +8190,10 @@ function App() {
             contractsList={allContracts}
             paymentsList={allPayments}
             propertiesList={propertiesWithArchiveState}
+            activePropertiesList={activeProperties}
             ownersList={allOwners}
             tenantsList={allTenants}
+            commissionsList={allCommissions}
             documentDraft={documentDraft}
             propertyPdfArchives={allPropertyDocumentArchives}
             onArchiveDocument={handleGeneratedDocumentArchive}
@@ -8199,14 +8207,14 @@ function App() {
             onFilterRequestConsumed={() => setContractFilterRequest(null)}
           />
         )}
-        {activePage === "Finance" && <FinancePage activeTab={financeTab} onTab={setFinanceTab} availableTabs={currentAccess.financeTabs} onAction={openAction} paymentsList={allPayments} paymentRequest={paymentDetailRequest} detailRequest={financeDetailRequest} onDetailRequestConsumed={() => setFinanceDetailRequest(null)} rentRowsList={allRentRows} commissionsList={allCommissions} chargesList={allCharges} maintenancesList={allMaintenances} reversalsList={allReversals} relancesList={tenantRelances} arrearsStatuses={arrearsStatusOverrides} arrearsPromises={arrearsPromises} arrearsHistories={arrearsHistories} propertiesList={propertiesWithArchiveState} ownersList={allOwners} />}
+        {activePage === "Finance" && <FinancePage activeTab={financeTab} onTab={setFinanceTab} availableTabs={currentAccess.financeTabs} onAction={openAction} paymentsList={allPayments} paymentRequest={paymentDetailRequest} detailRequest={financeDetailRequest} onDetailRequestConsumed={() => setFinanceDetailRequest(null)} rentRowsList={allRentRows} commissionsList={allCommissions} chargesList={allCharges} maintenancesList={allMaintenances} reversalsList={allReversals} relancesList={tenantRelances} arrearsStatuses={arrearsStatusOverrides} arrearsPromises={arrearsPromises} arrearsHistories={arrearsHistories} propertiesList={activeProperties} ownersList={allOwners} />}
         {activePage === "Rapports" && (
           <ReportsPage
             selected={reportType}
             onSelect={setReportType}
             availableReports={availableReports}
             onAction={openAction}
-            propertiesList={propertiesWithArchiveState}
+            propertiesList={activeProperties}
             ownersList={allOwners}
             tenantsList={allTenants}
             contractsList={allContracts}
@@ -8249,7 +8257,7 @@ function App() {
         <ChargeFormModal
           title={modal}
           context={chargeContext}
-          propertiesList={propertiesWithArchiveState}
+          propertiesList={activeProperties}
           maintenancesList={allMaintenances}
           chargesList={allCharges}
           onSave={handleChargeSave}
@@ -8288,7 +8296,7 @@ function App() {
       ) : modal === "Lier charge bien" ? (
         <ChargeLinkPropertyModal
           charge={chargeActionContext?.charge ?? allCharges[0]}
-          propertiesList={propertiesWithArchiveState}
+          propertiesList={activeProperties}
           onLink={handleChargePropertyLink}
           onClose={() => {
             setChargeActionContext(null);
@@ -8355,7 +8363,7 @@ function App() {
       ) : modal === "Proposer un bien prospect" ? (
         <ProspectProposalModal
           prospect={prospectProposalContext ?? allProspects[0] ?? null}
-          propertiesList={propertiesWithArchiveState}
+          propertiesList={activeProperties}
           onSave={handleProspectProposalSave}
           onClose={() => {
             setProspectProposalContext(null);
@@ -8386,7 +8394,7 @@ function App() {
           proposal={prospectActionContext?.proposal}
           property={prospectActionContext?.property ?? selectedProperty}
           prospectsList={allProspects}
-          propertiesList={propertiesWithArchiveState}
+          propertiesList={activeProperties}
           onSave={handleProspectVisitSave}
           onClose={() => {
             setProspectActionContext(null);
@@ -8457,7 +8465,7 @@ function App() {
       ) : modal === "Convertir prospect" ? (
         <ProspectConversionModal
           prospect={prospectActionContext?.prospect ?? allProspects[0] ?? null}
-          propertiesList={propertiesWithArchiveState}
+          propertiesList={activeProperties}
           onSave={handleProspectConversionSave}
           onClose={() => {
             setProspectActionContext(null);
@@ -8480,6 +8488,7 @@ function App() {
           chargesList={allCharges}
           paymentsList={allPayments}
           reversalsList={allReversals}
+          propertiesList={activeProperties}
           onClose={() => {
             setOwnerActionContext(null);
             setModal(null);
@@ -8554,6 +8563,7 @@ function App() {
           chargesList={allCharges}
           paymentsList={allPayments}
           reversalsList={allReversals}
+          propertiesList={activeProperties}
           onClose={() => {
             setOwnerActionContext(null);
             setModal(null);
@@ -8563,7 +8573,7 @@ function App() {
         <TenantFormModal
           tenant={tenantActionContext?.tenant ?? selectedTenant}
           property={tenantActionContext?.property}
-          propertiesList={propertiesWithArchiveState}
+          propertiesList={activeProperties}
           onSave={handleTenantSave}
           onClose={() => {
             setTenantActionContext(null);
@@ -8573,7 +8583,7 @@ function App() {
       ) : modal === "Nouveau locataire" ? (
         <NewTenantFormModal
           sequence={tenants.length + createdTenants.length + 1}
-          propertiesList={propertiesWithArchiveState}
+          propertiesList={activeProperties}
           onSave={handleNewTenantSave}
           onClose={() => setModal(null)}
         />
@@ -8582,6 +8592,7 @@ function App() {
           row={rentActionContext?.row ?? allRentRows[0]}
           paymentsList={allPayments}
           relancesList={tenantRelances}
+          propertiesList={activeProperties}
           onAction={openAction}
           onClose={() => {
             setRentActionContext(null);
@@ -8743,7 +8754,7 @@ function App() {
           payment={tenantActionContext?.payment}
           paymentsList={allPayments}
           rentRowsList={allRentRows}
-          propertiesList={propertiesWithArchiveState}
+          propertiesList={activeProperties}
           onSave={handlePaymentRegistration}
           onClose={() => {
             setTenantActionContext(null);
@@ -8757,7 +8768,7 @@ function App() {
           payment={tenantActionContext?.payment}
           paymentsList={allPayments}
           rentRowsList={allRentRows}
-          propertiesList={propertiesWithArchiveState}
+          propertiesList={activeProperties}
           archivedReceipts={tenantReceiptArchives}
           onArchive={handleTenantReceiptArchive}
           onClose={() => {
@@ -8777,7 +8788,7 @@ function App() {
           tenant={tenantActionContext?.tenant ?? selectedTenant}
           property={tenantActionContext?.property}
           row={tenantActionContext?.row}
-          propertiesList={propertiesWithArchiveState}
+          propertiesList={activeProperties}
           onSave={handleTenantRelanceSave}
           onClose={() => {
             setTenantActionContext(null);
@@ -8800,7 +8811,7 @@ function App() {
           property={tenantActionContext?.property}
           paymentsList={allPayments}
           rentRowsList={allRentRows}
-          propertiesList={propertiesWithArchiveState}
+          propertiesList={activeProperties}
           relancesList={tenantRelances}
           archivedReceipts={tenantReceiptArchives}
           onClose={() => {
@@ -8814,7 +8825,7 @@ function App() {
         <ContractFormModal
           property={selectedProperty}
           tenant={selectedProperty.attachedTenant}
-          propertiesList={propertiesWithArchiveState}
+          propertiesList={activeProperties}
           ownersList={allOwners}
           tenantsList={allTenants}
           prospectsList={allProspects}
@@ -8841,7 +8852,7 @@ function App() {
       ) : modal === "Resilier contrat" ? (
         <ContractTerminationModal contract={contractActionContext?.contract ?? allContracts[0]} onSave={handleContractTerminationSave} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "Enregistrer paiement" ? (
-        <PaymentRegistrationModal context={paymentContext} paymentsList={allPayments} rentRowsList={allRentRows} propertiesList={propertiesWithArchiveState} tenantsList={allTenants} onSave={handlePaymentRegistration} onClose={() => setModal(null)} />
+        <PaymentRegistrationModal context={paymentContext} paymentsList={allPayments} rentRowsList={allRentRows} propertiesList={activeProperties} tenantsList={allTenants} onSave={handlePaymentRegistration} onClose={() => setModal(null)} />
       ) : modal === "Responsable entretien" ? (
         <MaintenanceResponsibleModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onSave={handleMaintenanceResponsibleSave} onClose={closeMaintenanceAction} />
       ) : modal === "Cout entretien" ? (
@@ -8859,9 +8870,9 @@ function App() {
       ) : modal === "Annuler entretien" ? (
         <MaintenanceCancelModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onSave={handleMaintenanceCancelSave} onClose={closeMaintenanceAction} />
       ) : modal === "Ajouter entretien" ? (
-        <MaintenanceFormModal context={maintenanceContext} propertiesList={propertiesWithArchiveState} onSave={handleMaintenanceSchedule} onClose={() => { setMaintenanceContext(null); setModal(null); }} />
+        <MaintenanceFormModal context={maintenanceContext} propertiesList={activeProperties} onSave={handleMaintenanceSchedule} onClose={() => { setMaintenanceContext(null); setModal(null); }} />
       ) : modal === "Intervention urgente" ? (
-        <UrgentMaintenanceModal context={maintenanceContext} propertiesList={propertiesWithArchiveState} onSave={handleMaintenanceSchedule} onClose={() => setModal(null)} />
+        <UrgentMaintenanceModal context={maintenanceContext} propertiesList={activeProperties} onSave={handleMaintenanceSchedule} onClose={() => setModal(null)} />
       ) : modal === "Document manquant" ? (
         <MissingDocumentModal
           request={missingDocumentContext}
@@ -8874,7 +8885,7 @@ function App() {
       ) : modal === "Importer document" ? (
         <PropertyDocumentImportModal
           context={propertyDocumentImportContext}
-          propertiesList={propertiesWithArchiveState}
+          propertiesList={activeProperties}
           contractsList={allContracts}
           chargesList={allCharges}
           maintenancesList={allMaintenances}
@@ -9355,7 +9366,7 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onLog
   );
 }
 
-function DashboardPage({ currentUser = users[0], onAction, onOpenProperty, propertiesList = properties }) {
+function DashboardPage({ currentUser = users[0], onAction, onOpenProperty, propertiesList = [] }) {
   const [kpiPeriod, setKpiPeriod] = useState("Mois");
   const [dashboardState, setDashboardState] = useState("Données");
   const hasDashboardData = propertiesList.length > 0;
@@ -9492,7 +9503,7 @@ function PropertiesPage({
   propertyHistoryOverrides = {},
   propertyPdfArchives = [],
   missingDocumentRequests = [],
-  propertiesList = properties,
+  propertiesList = [],
   ownerRecords = owners,
   tenantRecords = tenants,
   visitsList = visits,
@@ -9793,7 +9804,7 @@ function PropertiesPage({
   );
 }
 
-function PropertyCard({ property, propertiesList = properties, onSelect }) {
+function PropertyCard({ property, propertiesList = [], onSelect }) {
   const relationLabel = getPropertyRelationLabel(property, propertiesList);
 
   return (
@@ -9825,7 +9836,7 @@ function PropertyCard({ property, propertiesList = properties, onSelect }) {
   );
 }
 
-function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, chargesList = charges, maintenancesList = maintenances, historyItems = [], propertyPdfArchives = [], missingDocumentRequests = [], propertiesList = properties, ownerRecords = owners, tenantRecords = tenants, visitsList = visits }) {
+function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, chargesList = charges, maintenancesList = maintenances, historyItems = [], propertyPdfArchives = [], missingDocumentRequests = [], propertiesList = [], ownerRecords = owners, tenantRecords = tenants, visitsList = visits }) {
   const hasHierarchy = isBuildingProperty(property) || Boolean(property.parentCode);
   const tabs = ["Résumé", ...(hasHierarchy ? ["Lots & blocs"] : []), "Propriétaire", "Locataire", "Contrats", "Paiements", "Charges & entretiens", "Documents", "Historique"];
   const effectiveTab = tabs.includes(activeTab) ? activeTab : "Résumé";
@@ -9933,7 +9944,7 @@ function PropertyDetail({ property, activeTab, onTab, onBack, onOpenProperty, on
   );
 }
 
-function PropertySummary({ property, propertiesList = properties, onOpenProperty, visitsList = visits }) {
+function PropertySummary({ property, propertiesList = [], onOpenProperty, visitsList = visits }) {
   const children = getPropertyChildren(property, propertiesList);
   const parent = getPropertyParent(property, propertiesList);
   const propertyVisits = visitsList.filter((visit) => visit.property === property.name || visit.propertyCode === property.code);
@@ -10111,7 +10122,7 @@ function MaintenanceProviderCard({ provider, compact = false }) {
   );
 }
 
-function PropertyHierarchy({ property, propertiesList = properties, onOpenProperty }) {
+function PropertyHierarchy({ property, propertiesList = [], onOpenProperty }) {
   const children = getPropertyChildren(property, propertiesList);
   const parent = getPropertyParent(property, propertiesList);
   const siblings = parent ? getPropertyChildren(parent, propertiesList) : [];
@@ -10209,7 +10220,7 @@ function PropertyHierarchy({ property, propertiesList = properties, onOpenProper
   );
 }
 
-function PropertyOwner({ property, ownersList = owners, propertiesList = properties }) {
+function PropertyOwner({ property, ownersList = owners, propertiesList = [] }) {
   const owner = ownersList.find((item) => item.name === property.owner) ?? {
     name: property.owner || "Propriétaire à renseigner",
     id: "PRO-A-RENSEIGNER",
@@ -10313,9 +10324,8 @@ function PropertyTenant({ property, tenantsList = tenants }) {
   );
 }
 
-function PropertyContracts({ property, contractsList = contracts, onAction }) {
-  const baseContracts = contractsList.length ? contractsList : contracts;
-  const relatedContracts = baseContracts
+function PropertyContracts({ property, contractsList = [], onAction }) {
+  const relatedContracts = contractsList
     .filter((contract) => contract.status !== "Archivé")
     .filter((contract) => contract.property === property.name || contract.owner === property.owner);
 
@@ -10342,7 +10352,7 @@ function PropertyContracts({ property, contractsList = contracts, onAction }) {
   );
 }
 
-function PropertyPayments({ property, propertiesList = properties, rentRowsList = rentRows }) {
+function PropertyPayments({ property, propertiesList = [], rentRowsList = rentRows }) {
   if (!isAgencyCollectedProperty(property.name, propertiesList)) {
     return (
       <Panel title="Paiements liés au bien">
@@ -10358,7 +10368,7 @@ function PropertyPayments({ property, propertiesList = properties, rentRowsList 
       <DataTable
         columns={["Période", "Locataire", "Montant attendu", "Montant payé", "Solde", "Statut"]}
         rows={rentRowsList
-          .filter((row) => isAgencyCollectedProperty(row.property))
+          .filter((row) => isAgencyCollectedProperty(row.property, propertiesList))
           .filter((row) => row.property === property.name || row.owner === property.owner)
           .map((row) => [row.period, row.tenant, row.expected, row.paid, row.balance, <Badge label={row.status} />])}
       />
@@ -10661,7 +10671,7 @@ function ClientsPage({ activeTab, onTab, availableTabs = ["Propriétaires", "Loc
 
   const detailContent = detailView === "owner" ? (
     <DetailPageShell title="Fiche propriétaire" subtitle={selectedOwner.name} onBack={closeDetail}>
-      <OwnerProfilePanel owner={selectedOwner} initialTab={ownerInitialTab} situationPeriod={ownerSituationPeriod} onAction={onAction} contractsList={contractsList} paymentsList={paymentsList} chargesList={chargesList} reversalsList={reversalsList} />
+      <OwnerProfilePanel owner={selectedOwner} initialTab={ownerInitialTab} situationPeriod={ownerSituationPeriod} onAction={onAction} contractsList={contractsList} paymentsList={paymentsList} chargesList={chargesList} reversalsList={reversalsList} propertiesList={propertiesList} />
     </DetailPageShell>
   ) : detailView === "tenant" ? (
     <DetailPageShell title="Fiche locataire" subtitle={selectedTenant.name} onBack={closeDetail}>
@@ -11284,9 +11294,9 @@ function OwnersView({ ownersList = owners, selected, onOpenDetail }) {
   );
 }
 
-function OwnerProfilePanel({ owner, initialTab = "Résumé", situationPeriod = null, onAction, contractsList = contracts, paymentsList = paymentRecords, chargesList = charges, reversalsList = reversals }) {
+function OwnerProfilePanel({ owner, initialTab = "Résumé", situationPeriod = null, onAction, contractsList = contracts, paymentsList = paymentRecords, chargesList = charges, reversalsList = reversals, propertiesList = [] }) {
   const [tab, setTab] = useState(initialTab);
-  const ownedProperties = properties.filter((property) => property.owner === owner.name);
+  const ownedProperties = propertiesList.filter((property) => property.owner === owner.name);
   const ownerCharges = chargesList.filter((charge) => charge.owner === owner.name && (charge.payer === "Propriétaire" || charge.impact?.includes("propriétaire")));
   const ownerReversals = reversalsList.filter((reversal) => reversal.owner === owner.name);
   const ownerContracts = contractsList.filter((contract) => contract.owner === owner.name);
@@ -12034,8 +12044,10 @@ function ContractsPage({
   contractsList = contracts,
   paymentsList = paymentRecords,
   propertiesList = [],
+  activePropertiesList = [],
   ownersList = [],
   tenantsList = [],
+  commissionsList = [],
   documentDraft = null,
   propertyPdfArchives = [],
   onArchiveDocument,
@@ -12078,8 +12090,33 @@ function ContractsPage({
           onFilterRequestConsumed={onFilterRequestConsumed}
         />
       )}
-      {effectiveTab === "Génération de document" && <DocumentGeneration onAction={onAction} documentDraft={documentDraft} demoDataLoaded={demoDataLoaded} onArchiveDocument={onArchiveDocument} documentArchiveSequence={documentArchiveSequence} />}
-      {effectiveTab === "Archives" && <ArchivesView onAction={onAction} contractsList={contractsList} paymentsList={paymentsList} propertyPdfArchives={propertyPdfArchives} includeDemoRecords={demoDataLoaded} />}
+      {effectiveTab === "Génération de document" && (
+        <DocumentGeneration
+          onAction={onAction}
+          documentDraft={documentDraft}
+          demoDataLoaded={demoDataLoaded}
+          onArchiveDocument={onArchiveDocument}
+          documentArchiveSequence={documentArchiveSequence}
+          propertiesList={activePropertiesList}
+          ownersList={ownersList}
+          tenantsList={tenantsList}
+          paymentsList={paymentsList}
+          commissionsList={commissionsList}
+        />
+      )}
+      {effectiveTab === "Archives" && (
+        <ArchivesView
+          onAction={onAction}
+          contractsList={contractsList}
+          paymentsList={paymentsList}
+          propertyPdfArchives={propertyPdfArchives}
+          includeDemoRecords={demoDataLoaded}
+          propertiesList={propertiesList}
+          ownersList={ownersList}
+          tenantsList={tenantsList}
+          commissionsList={commissionsList}
+        />
+      )}
     </>
   );
 }
@@ -12481,7 +12518,18 @@ function getContractDueLabel(contract) {
   return "En cours";
 }
 
-function DocumentGeneration({ onAction, documentDraft = null, demoDataLoaded = true, onArchiveDocument, documentArchiveSequence = 1 }) {
+function DocumentGeneration({
+  onAction,
+  documentDraft = null,
+  demoDataLoaded = true,
+  onArchiveDocument,
+  documentArchiveSequence = 1,
+  propertiesList = [],
+  ownersList = [],
+  tenantsList = [],
+  paymentsList = [],
+  commissionsList = [],
+}) {
   const neutralProperty = {
     code: "",
     name: "Bien à renseigner",
@@ -12499,13 +12547,29 @@ function DocumentGeneration({ onAction, documentDraft = null, demoDataLoaded = t
   };
   const neutralOwner = { name: "Propriétaire à renseigner", phone: "", email: "", charges: "0 FCFA", commission: "0 FCFA", balance: "0 FCFA" };
   const neutralTenant = { name: "Locataire à renseigner", phone: "", email: "", rent: "0 FCFA", deposit: "0 FCFA", property: "" };
+  const firstProperty = propertiesList[0] ?? neutralProperty;
+  const firstOwner = ownersList.find((item) => item.name === firstProperty.owner) ?? ownersList[0] ?? neutralOwner;
+  const firstTenant = tenantsList.find((item) => item.name === firstProperty.tenant || item.property === firstProperty.name) ?? tenantsList[0] ?? neutralTenant;
+  const firstPayment = paymentsList.find((item) => item.property === firstProperty.name || item.tenant === firstTenant.name) ?? paymentsList[0];
+  const firstCommission = commissionsList.find((item) => item.property === firstProperty.name || item.owner === firstOwner.name) ?? commissionsList[0] ?? { operation: "", property: firstProperty.name, owner: firstOwner.name, commission: "0 FCFA", rate: "0%" };
+  const defaultInvoice = firstPayment
+    ? {
+      number: firstPayment.receipt && firstPayment.receipt !== "Non gÃ©nÃ©rÃ©" ? firstPayment.receipt : makeDocumentNumber("FAC", 55),
+      type: "Facture",
+      client: firstPayment.tenant ?? firstTenant.name,
+      property: firstPayment.property ?? firstProperty.name,
+      amount: firstPayment.paid ?? firstPayment.expected ?? firstProperty.price ?? "0 FCFA",
+      date: firstPayment.date ?? "",
+      status: firstPayment.receipt && firstPayment.receipt !== "Non gÃ©nÃ©rÃ©" ? "ArchivÃ©" : "Brouillon",
+    }
+    : { number: "", type: "Facture", client: firstTenant.name, property: firstProperty.name, amount: firstProperty.price || "0 FCFA", date: "" };
   const defaultData = documentDraft?.data ?? (demoDataLoaded ? {
-    invoice: invoices[0],
-    payment: paymentRecords[0],
-    commission: commissions[0],
-    property: properties[0],
-    owner: owners[0],
-    tenant: tenants[0],
+    invoice: defaultInvoice,
+    payment: firstPayment ?? { reference: "", receipt: "", tenant: firstTenant.name, property: firstProperty.name, paid: "0 FCFA", balance: "0 FCFA", date: "" },
+    commission: firstCommission,
+    property: firstProperty,
+    owner: firstOwner,
+    tenant: firstTenant,
   } : {
     invoice: { number: "", type: "Facture", client: "", property: "", amount: "0 FCFA", date: "" },
     payment: { reference: "", receipt: "", tenant: "", property: "", paid: "0 FCFA", balance: "0 FCFA", date: "" },
@@ -12539,9 +12603,9 @@ function InvoicesView({ onAction }) {
   const selectedNumber = documentNumbers[selected.number] ?? selected.number;
   const selectedInvoice = { ...selected, number: selectedNumber };
   const selectedPayment = paymentRecords.find((item) => item.property === selected.property || item.receipt === selected.number) ?? paymentRecords[0];
-  const selectedProperty = properties.find((item) => item.name === selected.property) ?? properties[0];
-  const selectedOwner = owners.find((item) => item.name === selectedProperty.owner) ?? owners[0];
-  const selectedTenant = tenants.find((item) => item.name === selected.client) ?? tenants[0];
+  const selectedProperty = makeEmptyProperty({ name: selected.property, owner: "", tenant: selected.client });
+  const selectedOwner = { name: "Propriétaire à renseigner" };
+  const selectedTenant = { name: selected.client, property: selected.property };
   const templateKey = selected.type === "Reçu" ? "recu" : "facture";
 
   return (
@@ -12603,23 +12667,37 @@ function getArchiveTemplateKey(record = {}) {
   return "facture";
 }
 
-function makeArchiveDocumentDraft(record = {}) {
+function makeArchiveDocumentDraft(record = {}, {
+  propertiesList = [],
+  ownersList = [],
+  tenantsList = [],
+  paymentsList = [],
+  commissionsList = [],
+} = {}) {
   const templateKey = getArchiveTemplateKey(record);
   const property =
-    (record.propertyCode ? properties.find((item) => item.code === record.propertyCode) : null) ??
-    (record.property ? getPropertyByName(record.property) : null) ??
-    properties.find((item) => record.linked?.includes(item.name)) ??
-    properties[0];
-  const owner = owners.find((item) => item.name === property.owner || item.name === record.owner) ?? owners[0];
-  const tenant = tenants.find((item) => item.property === property.name || record.linked?.includes(item.name)) ?? tenants[0];
+    (record.propertyCode ? propertiesList.find((item) => item.code === record.propertyCode) : null) ??
+    (record.property ? getPropertyByName(record.property, propertiesList) : null) ??
+    propertiesList.find((item) => record.linked?.includes(item.name)) ??
+    makeEmptyProperty({ name: record.property ?? "Bien Ã  renseigner" });
+  const owner = ownersList.find((item) => item.name === property.owner || item.name === record.owner) ?? { name: record.owner ?? property.owner ?? "PropriÃ©taire Ã  renseigner" };
+  const tenant = tenantsList.find((item) => item.property === property.name || record.linked?.includes(item.name)) ?? { name: record.client ?? property.tenant ?? "Locataire Ã  renseigner", property: property.name };
 
   return {
     templateKey,
     property,
     data: {
-      invoice: invoices.find((invoice) => invoice.number === record.reference || record.title?.includes(invoice.client)) ?? invoices[0],
-      payment: paymentRecords.find((payment) => payment.receipt === record.reference || payment.reference === record.reference) ?? paymentRecords[0],
-      commission: commissions.find((commission) => commission.property === property.name || commission.owner === owner.name) ?? commissions[0],
+      invoice: invoices.find((invoice) => invoice.number === record.reference || record.title?.includes(invoice.client)) ?? {
+        number: record.reference ?? "",
+        type: record.documentType ?? "Facture",
+        client: tenant.name,
+        property: property.name,
+        amount: record.amount ?? "0 FCFA",
+        date: record.date ?? "",
+        status: record.status ?? "Brouillon",
+      },
+      payment: paymentsList.find((payment) => payment.receipt === record.reference || payment.reference === record.reference) ?? { reference: record.reference, tenant: tenant.name, property: property.name, paid: record.amount ?? "0 FCFA", balance: "0 FCFA", date: record.date },
+      commission: commissionsList.find((commission) => commission.property === property.name || commission.owner === owner.name) ?? { operation: "", property: property.name, owner: owner.name, commission: "0 FCFA", rate: "0%" },
       property,
       owner,
       tenant,
@@ -12869,8 +12947,28 @@ function getArchiveCategoryIcon(category) {
   return Archive;
 }
 
-function ArchivesView({ onAction, contractsList = contracts, paymentsList = paymentRecords, propertyPdfArchives = [], includeDemoRecords = true }) {
-  const records = useMemo(() => getArchiveRecords(contractsList, paymentsList, propertyPdfArchives, includeDemoRecords), [contractsList, includeDemoRecords, paymentsList, propertyPdfArchives]);
+function ArchivesView({
+  onAction,
+  contractsList = contracts,
+  paymentsList = paymentRecords,
+  propertyPdfArchives = [],
+  includeDemoRecords = true,
+  propertiesList = [],
+  ownersList = [],
+  tenantsList = [],
+  commissionsList = [],
+}) {
+  const records = useMemo(
+    () => getArchiveRecords(contractsList, paymentsList, propertyPdfArchives, includeDemoRecords),
+    [contractsList, includeDemoRecords, paymentsList, propertyPdfArchives]
+  );
+  const archiveContextLists = useMemo(() => ({
+    propertiesList,
+    ownersList,
+    tenantsList,
+    paymentsList,
+    commissionsList,
+  }), [commissionsList, ownersList, paymentsList, propertiesList, tenantsList]);
   const [category, setCategory] = useState("Tous les éléments");
   const [status, setStatus] = useState("Tous statuts");
   const [query, setQuery] = useState("");
@@ -12979,9 +13077,9 @@ function ArchivesView({ onAction, contractsList = contracts, paymentsList = paym
               <Badge label={record.status} />,
               record.module,
               <div className="table-actions">
-                <Button compact onClick={() => onAction("Ouvrir archive", { archive: record })}><Eye size={15} /> Ouvrir</Button>
+                <Button compact onClick={() => onAction("Ouvrir archive", { archive: record, archiveContextLists })}><Eye size={15} /> Ouvrir</Button>
                 {record.status === "Brouillon" ? (
-                  <Button compact onClick={() => onAction("Reprendre brouillon", { archive: record })}><Pencil size={15} /> Reprendre</Button>
+                  <Button compact onClick={() => onAction("Reprendre brouillon", { archive: record, archiveContextLists })}><Pencil size={15} /> Reprendre</Button>
                 ) : (
                   <Button compact onClick={() => onAction(`Télécharger archive ${record.reference}`)}><Download size={15} /> Exporter</Button>
                 )}
@@ -13252,9 +13350,9 @@ function getGeneratedDocumentCategory(template) {
 }
 
 function getGeneratedDocumentMeta(template, values = {}, data = {}, sequence = 1, archiveValues = {}) {
-  const property = data.property ?? properties[0];
-  const owner = data.owner ?? owners.find((item) => item.name === property.owner) ?? owners[0];
-  const tenant = data.tenant ?? tenants.find((item) => item.property === property.name) ?? tenants[0];
+  const property = data.property ?? makeEmptyProperty({ name: archiveValues.property?.trim() || "Bien à renseigner" });
+  const owner = data.owner ?? { name: archiveValues.owner?.trim() || property.owner || "Propriétaire à renseigner" };
+  const tenant = data.tenant ?? { name: archiveValues.tenant?.trim() || property.tenant || "Locataire à renseigner", property: property.name };
   const reference = getDocumentReferenceFromValues(values, template) || makeDocumentNumber(getDocumentPrefix(template.label), 400 + sequence);
   const documentName = archiveValues.name?.trim() || `${template.label} - ${property.name}`;
   const category = archiveValues.category || getGeneratedDocumentCategory(template);
@@ -13362,9 +13460,9 @@ function downloadGeneratedPdf(template, values, fileName) {
 }
 
 function DocumentArchiveModal({ template, values, data = {}, sequence = 1, onConfirm, onClose }) {
-  const property = data.property ?? properties[0];
-  const owner = data.owner ?? owners.find((item) => item.name === property.owner) ?? owners[0];
-  const tenant = data.tenant ?? tenants.find((item) => item.property === property.name) ?? tenants[0];
+  const property = data.property ?? makeEmptyProperty({ name: "Bien à renseigner" });
+  const owner = data.owner ?? { name: property.owner || "Propriétaire à renseigner" };
+  const tenant = data.tenant ?? { name: property.tenant || "Locataire à renseigner", property: property.name };
   const defaultCategory = getGeneratedDocumentCategory(template);
   const [form, setForm] = useState({
     name: `${template.label} - ${property.name}`,
@@ -13768,7 +13866,7 @@ function OwnerReversementModal({ owner, onSave, onClose }) {
   );
 }
 
-function OwnerPrintableModal({ owner, activeTab = "Résumé", output = "Impression", chargesList = charges, paymentsList = paymentRecords, reversalsList = reversals, onClose }) {
+function OwnerPrintableModal({ owner, activeTab = "Résumé", output = "Impression", chargesList = charges, paymentsList = paymentRecords, reversalsList = reversals, propertiesList = [], onClose }) {
   const isStatement = ["Situation financière", "Reversements"].includes(activeTab);
   const period = {
     start: "2026-05-01",
@@ -13797,15 +13895,15 @@ function OwnerPrintableModal({ owner, activeTab = "Résumé", output = "Impressi
         {isStatement ? (
           <OwnerStatementDocument owner={owner} period={period} chargesList={chargesList} paymentsList={paymentsList} reversalsList={reversalsList} />
         ) : (
-          <OwnerProfileDocument owner={owner} chargesList={chargesList} paymentsList={paymentsList} reversalsList={reversalsList} />
+          <OwnerProfileDocument owner={owner} chargesList={chargesList} paymentsList={paymentsList} reversalsList={reversalsList} propertiesList={propertiesList} />
         )}
       </section>
     </div>
   );
 }
 
-function OwnerProfileDocument({ owner, chargesList = charges, paymentsList = paymentRecords, reversalsList = reversals }) {
-  const ownedProperties = properties.filter((property) => property.owner === owner.name);
+function OwnerProfileDocument({ owner, chargesList = charges, paymentsList = paymentRecords, reversalsList = reversals, propertiesList = [] }) {
+  const ownedProperties = propertiesList.filter((property) => property.owner === owner.name);
   const ownerPayments = paymentsList.filter((payment) => payment.owner === owner.name);
   const ownerCharges = chargesList.filter((charge) => charge.owner === owner.name);
   const ownerReversals = reversalsList.filter((reversal) => reversal.owner === owner.name);
@@ -15300,17 +15398,29 @@ function getRelatedDocumentFiles(key) {
 }
 
 function getDocumentDefaults(key, data = {}) {
-  const invoice = data.invoice ?? invoices[0];
-  const payment = data.payment ?? paymentRecords[0];
-  const property = data.property ?? properties[0];
-  const owner = data.owner ?? owners.find((item) => item.name === property.owner) ?? owners[0];
-  const tenant = data.tenant ?? tenants.find((item) => item.name === invoice.client) ?? tenants[0];
-  const commission = data.commission ?? commissions[0];
+  const fallbackProperty = makeEmptyProperty({
+    name: "Bien Ã  renseigner",
+    type: "Bien immobilier",
+    district: "Quartier Ã  renseigner",
+    address: "Adresse Ã  renseigner",
+    owner: "PropriÃ©taire Ã  renseigner",
+    tenant: "Locataire Ã  renseigner",
+    price: "0 FCFA",
+    period: "",
+    deposit: "0 FCFA",
+    commission: "0%",
+  });
+  const property = data.property ?? fallbackProperty;
+  const invoice = data.invoice ?? { number: "", type: "Facture", client: property.tenant || "Client Ã  renseigner", property: property.name, amount: property.price || "0 FCFA", date: "" };
+  const payment = data.payment ?? { reference: "", receipt: "", tenant: invoice.client, property: property.name, paid: invoice.amount ?? "0 FCFA", balance: "0 FCFA", mode: "", period: "" };
+  const owner = data.owner ?? { name: property.owner || "PropriÃ©taire Ã  renseigner", phone: "", email: "", charges: "0 FCFA", commission: "0 FCFA", balance: "0 FCFA" };
+  const tenant = data.tenant ?? { name: invoice.client || property.tenant || "Locataire Ã  renseigner", phone: "", email: "", rent: property.price || "0 FCFA", deposit: property.deposit || "0 FCFA", property: property.name };
+  const commission = data.commission ?? { operation: "", property: property.name, owner: owner.name, client: tenant.name, commission: "0 FCFA", rate: "0%" };
   const draftReference = data.draftReference;
   const draftText = data.draftText;
   const draftAmount = data.amount ? String(data.amount).replace(" FCFA", "").trim() : "";
   const specialConditions = data.specialConditions || draftText;
-  const amountNumber = draftAmount || invoice.amount.replace(" FCFA", "");
+  const amountNumber = draftAmount || String(invoice.amount ?? "0 FCFA").replace(" FCFA", "");
   const hasFilledDocumentData = property.name !== "Bien à renseigner" && invoice.client !== "Client à renseigner";
 
   if (key === "recu") {
@@ -15403,7 +15513,7 @@ function getDocumentDefaults(key, data = {}) {
 
   if (key === "etatLieuHabitation" || key === "etatLieuCommercial") {
     const isCommercial = key === "etatLieuCommercial";
-    const contract = contracts.find((item) => item.property === property.name || item.client === tenant.name) ?? contracts[0];
+    const contract = data.contract ?? null;
 
     return {
       reference: draftReference ?? makeDocumentNumber(isCommercial ? "EDL-COM" : "EDL-HAB", isCommercial ? 22 : 18),
@@ -17634,7 +17744,7 @@ function ReportsPage({
   onSelect,
   availableReports = reports.map(([title]) => title),
   onAction,
-  propertiesList = properties,
+  propertiesList = [],
   ownersList = owners,
   tenantsList = tenants,
   contractsList = contracts,
@@ -18245,9 +18355,9 @@ function TemplatesAdmin({ onAction }) {
           invoice: invoices[0],
           payment: paymentRecords[0],
           commission: commissions[0],
-          property: properties[0],
-          owner: owners[0],
-          tenant: tenants[0],
+          property: makeEmptyProperty({ name: "Bien exemple", owner: "Propriétaire exemple", tenant: "Locataire exemple" }),
+          owner: { name: "Propriétaire exemple" },
+          tenant: { name: "Locataire exemple", property: "Bien exemple" },
         }}
         availableTemplates={availableTemplates}
         onArchiveTemplate={archiveTemplate}
@@ -20044,7 +20154,7 @@ function ChargeProofModal({ charge, onSave, onClose }) {
   );
 }
 
-function ChargeLinkPropertyModal({ charge, propertiesList = properties, onLink, onClose }) {
+function ChargeLinkPropertyModal({ charge, propertiesList = [], onLink, onClose }) {
   const currentProperty = propertiesList.find((property) => property.name === charge.property) ?? propertiesList[0];
   const [propertyCode, setPropertyCode] = useState(currentProperty?.code ?? "");
 
@@ -20193,7 +20303,7 @@ function ChargeHistoryModal({ charge, onClose }) {
   );
 }
 
-function ChargeFormModal({ title, context = null, propertiesList = properties, maintenancesList = maintenances, chargesList = charges, onSave, onClose }) {
+function ChargeFormModal({ title, context = null, propertiesList = [], maintenancesList = maintenances, chargesList = charges, onSave, onClose }) {
   const chargeCreationTypes = ["Nettoyage", "Réparation", "Plomberie", "Électricité", "Peinture", "Publicité", "Entretien", "Autre"];
   const modalChargeId = title.match(/CHG-\d{4}-\d{3}/)?.[0];
   const editedCharge = context?.charge ?? chargesList.find((charge) => charge.id === modalChargeId) ?? null;
@@ -20202,7 +20312,7 @@ function ChargeFormModal({ title, context = null, propertiesList = properties, m
     (editedCharge ? propertyOptions.find((property) => property.name === editedCharge.property) : null) ??
     (context?.property ? propertyOptions.find((property) => property.code === context.property.code || property.name === context.property.name) : null) ??
     propertyOptions[0] ??
-    properties[0];
+    makeEmptyProperty({ name: "" });
   const suggestedId = editedCharge?.id ?? makeDocumentNumber("CHG", chargesList.length + 301);
   const [message, setMessage] = useState("");
   const [values, setValues] = useState({
@@ -21123,12 +21233,12 @@ function getLinkedRentRelances(row, relancesList = []) {
   ));
 }
 
-function RentDetailModal({ row, paymentsList = paymentRecords, relancesList = [], onAction, onClose }) {
+function RentDetailModal({ row, paymentsList = paymentRecords, relancesList = [], propertiesList = [], onAction, onClose }) {
   const linkedPayments = getLinkedRentPayments(row, paymentsList);
   const linkedRelances = getLinkedRentRelances(row, relancesList);
   const receipt = linkedPayments.find((payment) => payment.receipt && payment.receipt !== "Non généré")?.receipt ?? "Aucun reçu lié";
   const tenant = tenants.find((item) => item.name === row.tenant);
-  const property = getPropertyByName(row.property);
+  const property = getPropertyByName(row.property, propertiesList);
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
@@ -21643,14 +21753,14 @@ function MissingDocumentModal({ request, onSave, onClose }) {
   );
 }
 
-function PropertyDocumentImportModal({ context = null, propertiesList = properties, contractsList = contracts, chargesList = charges, maintenancesList = maintenances, sequence = 1, onImport, onClose }) {
+function PropertyDocumentImportModal({ context = null, propertiesList = [], contractsList = contracts, chargesList = charges, maintenancesList = maintenances, sequence = 1, onImport, onClose }) {
   const documentTypes = ["Titre foncier", "Mandat", "Contrat signé", "Facture", "Reçu", "Photo", "Justificatif", "Rapport d’entretien", "Autre"];
   const importStatuses = ["Actif", "Archivé", "Brouillon"];
   const propertyOptions = propertiesList.filter((property) => !property.archived);
   const initialProperty =
     (context?.property ? propertyOptions.find((property) => property.code === context.property.code || property.name === context.property.name) : null) ??
     propertyOptions[0] ??
-    properties[0];
+    makeEmptyProperty({ name: "" });
   const [message, setMessage] = useState("");
   const [fileName, setFileName] = useState("");
   const [values, setValues] = useState({
@@ -22196,9 +22306,10 @@ function TenantSituationDocument({ tenant, property, period, paymentsList = paym
 }
 
 function AttachTenantModal({ property, tenantsList = tenants, onClose, onAttach }) {
-  const tenantOptions = tenantsList.length ? tenantsList : tenants;
-  const [mode, setMode] = useState("Locataire existant");
-  const [existingTenantName, setExistingTenantName] = useState(tenantOptions[0].name);
+  const tenantOptions = tenantsList;
+  const hasExistingTenants = tenantOptions.length > 0;
+  const [mode, setMode] = useState(hasExistingTenants ? "Locataire existant" : "Nouveau locataire");
+  const [existingTenantName, setExistingTenantName] = useState(tenantOptions[0]?.name ?? "");
   const [contractNow, setContractNow] = useState("Oui");
   const [existingValues, setExistingValues] = useState({
     entryDate: "2026-06-18",
@@ -22216,7 +22327,7 @@ function AttachTenantModal({ property, tenantsList = tenants, onClose, onAttach 
     deposit: property.deposit,
     observations: `Création et rattachement au bien ${property.name}.`,
   });
-  const selectedTenant = tenantOptions.find((tenant) => tenant.name === existingTenantName) ?? tenantOptions[0];
+  const selectedTenant = tenantOptions.find((tenant) => tenant.name === existingTenantName) ?? tenantOptions[0] ?? null;
 
   const updateExisting = (key, value) => setExistingValues((current) => ({ ...current, [key]: value }));
   const updateNew = (key, value) => setNewValues((current) => ({ ...current, [key]: value }));
@@ -22225,6 +22336,7 @@ function AttachTenantModal({ property, tenantsList = tenants, onClose, onAttach 
     const createContract = forceContract || (mode === "Locataire existant" && contractNow === "Oui");
 
     if (mode === "Locataire existant") {
+      if (!selectedTenant) return;
       onAttach({
         tenantName: selectedTenant.name,
         tenantProfile: selectedTenant,
@@ -22268,10 +22380,10 @@ function AttachTenantModal({ property, tenantsList = tenants, onClose, onAttach 
         <p>Bien concerné : <strong>{property.name}</strong> · {property.address}</p>
 
         <div data-demo="modal-tenant-attach-mode">
-          <Segmented value={mode} onChange={setMode} options={["Locataire existant", "Nouveau locataire"]} />
+          <Segmented value={mode} onChange={setMode} options={hasExistingTenants ? ["Locataire existant", "Nouveau locataire"] : ["Nouveau locataire"]} />
         </div>
 
-        {mode === "Locataire existant" ? (
+        {mode === "Locataire existant" && selectedTenant ? (
           <div className="form-section" data-demo="modal-tenant-attach-details">
             <h3>Cas 1 — Locataire existant</h3>
             <div className="form-grid compact-form">
@@ -23907,7 +24019,7 @@ function ContractFormModal({
 function PropertyFormModal({
   title,
   property = null,
-  propertiesList = properties,
+  propertiesList = [],
   ownersList = owners,
   tenantsList = tenants,
   ownerPrefill = "",
@@ -23915,10 +24027,10 @@ function PropertyFormModal({
   onClose,
 }) {
   const isEditMode = title === "Modifier le bien";
-  const nextCode = `EKM-NEW-${String((propertiesList?.length ?? properties.length) + 1).padStart(3, "0")}`;
+  const nextCode = `EKM-NEW-${String((propertiesList?.length ?? 0) + 1).padStart(3, "0")}`;
   const ownerName = ownerPrefill || property?.owner || ownersList[0]?.name || "Propriétaire à renseigner";
   const tenantName = property?.tenant ?? "Libre";
-  const parentOptions = propertiesList.filter(isBuildingProperty);
+  const parentOptions = getActiveProperties(propertiesList).filter(isBuildingProperty);
   const defaultParent = property?.parentCode || parentOptions[0]?.code || "";
 
   const sensitiveInitialValues = useMemo(() => ({
@@ -24233,9 +24345,9 @@ function getDocumentPreviewContext(title) {
   const invoice = invoices.find((item) => normalizedTitle.includes(normalizeSearch(item.number)));
   if (invoice) {
     const templateKey = invoice.type === "Reçu" || invoice.type === "Quittance" ? "recu" : "facture";
-    const property = getPropertyByName(invoice.property) ?? properties[0];
-    const owner = owners.find((item) => item.name === property.owner) ?? owners[0];
-    const tenant = tenants.find((item) => item.name === invoice.client) ?? tenants[0];
+    const property = makeEmptyProperty({ name: invoice.property, tenant: invoice.client });
+    const owner = { name: property.owner || "Propriétaire à renseigner" };
+    const tenant = { name: invoice.client, property: property.name };
 
     return {
       template: documentTemplates.find((item) => item.key === templateKey) ?? documentTemplates[0],
@@ -24245,9 +24357,9 @@ function getDocumentPreviewContext(title) {
 
   const contract = contracts.find((item) => normalizedTitle.includes(normalizeSearch(item.number)));
   if (contract) {
-    const property = getPropertyByName(contract.property) ?? properties[0];
-    const owner = owners.find((item) => item.name === contract.owner) ?? owners[0];
-    const tenant = tenants.find((item) => item.name === contract.client) ?? tenants[0];
+    const property = makeEmptyProperty({ name: contract.property, owner: contract.owner, tenant: contract.client });
+    const owner = { name: contract.owner };
+    const tenant = { name: contract.client, property: contract.property };
 
     return {
       template: documentTemplates.find((item) => item.key === "bail") ?? documentTemplates[0],
