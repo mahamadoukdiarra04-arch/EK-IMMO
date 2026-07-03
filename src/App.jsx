@@ -2859,9 +2859,9 @@ function getReportTitlesForUser(user) {
 const users = [
   {
     id: "USR-2026-001",
-    identifier: "NIARE",
+    identifier: "NIARO",
     password: "123456",
-    name: "Niaré Admin",
+    name: "Niaro Admin",
     initials: "NA",
     email: "admin@ekimmo-mali.com",
     phone: "+223 72 77 71 77",
