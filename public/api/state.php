@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/auth_lib.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
@@ -152,16 +152,17 @@ function merge_values($current, $incoming)
     return $incoming;
 }
 
-function persist_state(PDO $pdo, array $data, int $clientRevision): array
+function persist_state(PDO $pdo, array $data, int $clientRevision, array $user): array
 {
     $pdo->beginTransaction();
     try {
         $statement = $pdo->prepare('SELECT payload, revision FROM ekimmo_app_state WHERE id = :id FOR UPDATE');
         $statement->execute(['id' => APP_STATE_ID]);
         $row = $statement->fetch();
+        $allowedData = filter_write_state_for_user($pdo, $data, $user);
 
         if (!$row) {
-            $payload = json_encode(merge_values(empty_state(), $data), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $payload = json_encode(merge_values(empty_state(), $allowedData), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             $insert = $pdo->prepare('INSERT INTO ekimmo_app_state (id, payload, revision) VALUES (:id, :payload, 1)');
             $insert->execute(['id' => APP_STATE_ID, 'payload' => $payload]);
             $pdo->commit();
@@ -174,9 +175,11 @@ function persist_state(PDO $pdo, array $data, int $clientRevision): array
             $currentData = empty_state();
         }
 
-        $merged = $clientRevision > 0 && $clientRevision < $currentRevision
-            ? merge_values($currentData, $data)
-            : merge_values(empty_state(), $data);
+        if (($user['role'] ?? '') === 'Administrateur' && !($clientRevision > 0 && $clientRevision < $currentRevision)) {
+            $merged = merge_values(empty_state(), $allowedData);
+        } else {
+            $merged = merge_values($currentData, $allowedData);
+        }
 
         $nextRevision = $currentRevision + 1;
         $payload = json_encode($merged, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -200,19 +203,25 @@ function persist_state(PDO $pdo, array $data, int $clientRevision): array
 }
 
 $pdo = db();
+$user = require_user($pdo);
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
 if ($method === 'GET') {
     $state = read_state($pdo);
+    $data = merge_values(empty_state(), $state['data']);
     json_response([
         'ok' => true,
-        'data' => merge_values(empty_state(), $state['data']),
+        'data' => filter_state_for_user($pdo, $data, $user),
         'revision' => $state['revision'],
         'updated_at' => $state['updated_at'],
+        'user' => user_public_payload($user),
+        'permissions' => role_permissions($pdo, (string) $user['role']),
+        'csrfToken' => csrf_token(),
     ]);
 }
 
 if ($method === 'POST' || $method === 'PUT') {
+    require_csrf();
     $raw = file_get_contents('php://input') ?: '{}';
     $body = json_decode($raw, true);
     if (!is_array($body) || !isset($body['data']) || !is_array($body['data'])) {
@@ -223,12 +232,15 @@ if ($method === 'POST' || $method === 'PUT') {
         ], 400);
     }
 
-    $result = persist_state($pdo, $body['data'], (int) ($body['revision'] ?? 0));
+    $result = persist_state($pdo, $body['data'], (int) ($body['revision'] ?? 0), $user);
     json_response([
         'ok' => true,
-        'data' => $result['data'],
+        'data' => filter_state_for_user($pdo, $result['data'], $user),
         'revision' => $result['revision'],
         'merged' => $result['merged'],
+        'user' => user_public_payload($user),
+        'permissions' => role_permissions($pdo, (string) $user['role']),
+        'csrfToken' => csrf_token(),
     ]);
 }
 

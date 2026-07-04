@@ -2860,7 +2860,6 @@ const users = [
   {
     id: "USR-2026-001",
     identifier: "NIARO",
-    password: "123456",
     name: "Niaro Admin",
     initials: "NA",
     email: "admin@ekimmo-mali.com",
@@ -2874,7 +2873,6 @@ const users = [
   {
     id: "USR-2026-002",
     identifier: "Makan",
-    password: "123456",
     name: "Makan Sissoko",
     initials: "MS",
     email: "makan.sissoko@ekimmo-mali.com",
@@ -2888,7 +2886,6 @@ const users = [
   {
     id: "USR-2026-003",
     identifier: "Aboubacar",
-    password: "123456",
     name: "Aboubacar Sidiki Diallo",
     initials: "AD",
     email: "aboubacar.diallo@ekimmo-mali.com",
@@ -4221,6 +4218,7 @@ function visitMatchesQuickFilter(visit, quickFilter) {
   return true;
 }
 
+const AUTH_ENDPOINT = "/api/auth.php";
 const PERSISTENCE_ENDPOINT = "/api/state.php";
 const PERSISTENCE_SAVE_DELAY = 900;
 const PERSISTED_STATE_KEYS = [
@@ -4301,10 +4299,66 @@ function stringifyState(data) {
   }
 }
 
+async function readAuthSession() {
+  const response = await fetch(AUTH_ENDPOINT, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    credentials: "include",
+    cache: "no-store",
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.ok === false) {
+    const error = new Error(payload.message || "Session absente.");
+    error.code = payload.code || `http_${response.status}`;
+    throw error;
+  }
+  return payload;
+}
+
+async function loginRemote(identifier, password) {
+  const response = await fetch(AUTH_ENDPOINT, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+    body: JSON.stringify({ action: "login", identifier, password }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.ok === false) {
+    const error = new Error(payload.message || "Identifiant ou mot de passe incorrect.");
+    error.code = payload.code || `http_${response.status}`;
+    throw error;
+  }
+  return payload;
+}
+
+async function postAuthAction(action, body = {}, csrfToken = "") {
+  const response = await fetch(AUTH_ENDPOINT, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+    },
+    credentials: "include",
+    body: JSON.stringify({ action, ...body }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.ok === false) {
+    const error = new Error(payload.message || "Action serveur indisponible.");
+    error.code = payload.code || `http_${response.status}`;
+    throw error;
+  }
+  return payload;
+}
+
 async function readRemoteState() {
   const response = await fetch(PERSISTENCE_ENDPOINT, {
     method: "GET",
     headers: { Accept: "application/json" },
+    credentials: "include",
     cache: "no-store",
   });
   const payload = await response.json().catch(() => ({}));
@@ -4316,13 +4370,15 @@ async function readRemoteState() {
   return payload;
 }
 
-async function writeRemoteState(data, revision) {
+async function writeRemoteState(data, revision, csrfToken = "") {
   const response = await fetch(PERSISTENCE_ENDPOINT, {
     method: "POST",
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
+      ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
     },
+    credentials: "include",
     body: JSON.stringify({ data, revision }),
   });
   const payload = await response.json().catch(() => ({}));
@@ -4335,10 +4391,13 @@ async function writeRemoteState(data, revision) {
 }
 
 function App() {
-  const [activePage, setActivePage] = useState(() => getDefaultPageForUser(users.find((user) => user.id === window.sessionStorage.getItem("ekimmo-user-id")) ?? users[0]));
+  const [activePage, setActivePage] = useState(() => getDefaultPageForUser(users[0]));
   const [showLogin, setShowLogin] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState(() => window.sessionStorage.getItem("ekimmo-user-id") ?? users[0].id);
-  const [isAuthenticated, setIsAuthenticated] = useState(() => window.sessionStorage.getItem("ekimmo-session") === "active" && Boolean(window.sessionStorage.getItem("ekimmo-user-id")));
+  const [currentUserId, setCurrentUserId] = useState(users[0].id);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [csrfToken, setCsrfToken] = useState("");
+  const [serverUser, setServerUser] = useState(null);
   const [modal, setModal] = useState(null);
   const [demoDataLoaded, setDemoDataLoaded] = useState(false);
   const [demoTrack, setDemoTrack] = useState("complete");
@@ -4545,11 +4604,15 @@ function App() {
   );
   const allUsers = useMemo(() => {
     const applyOverride = (user) => ({ ...user, ...(userOverrides[getUserKey(user)] ?? {}) });
-    return [...createdUsers.map(applyOverride), ...demoBaseUsers.map(applyOverride)];
-  }, [createdUsers, demoBaseUsers, userOverrides]);
+    const baseUsers = [...createdUsers.map(applyOverride), ...demoBaseUsers.map(applyOverride)];
+    if (!serverUser) return baseUsers;
+    const serverKey = getUserKey(serverUser);
+    const merged = baseUsers.map((user) => (getUserKey(user) === serverKey ? { ...user, ...serverUser } : user));
+    return merged.some((user) => getUserKey(user) === serverKey) ? merged : [serverUser, ...merged];
+  }, [createdUsers, demoBaseUsers, serverUser, userOverrides]);
   const currentUser = useMemo(
-    () => allUsers.find((user) => user.id === currentUserId) ?? users.find((user) => user.id === currentUserId) ?? users[0],
-    [allUsers, currentUserId]
+    () => allUsers.find((user) => user.id === currentUserId) ?? serverUser ?? users.find((user) => user.id === currentUserId) ?? users[0],
+    [allUsers, currentUserId, serverUser]
   );
   const canUseDemoMode = currentUser?.role === "Administrateur";
   const currentAccess = getRoleAccess(currentUser);
@@ -4696,14 +4759,72 @@ function App() {
     visitOverrides,
   ]);
 
+  const applyAuthenticatedSession = (payload) => {
+    const authenticatedUser = payload.user ?? users[0];
+    const access = getRoleAccess(authenticatedUser);
+    setServerUser(authenticatedUser);
+    setCsrfToken(payload.csrfToken ?? "");
+    setCurrentUserId(authenticatedUser.id);
+    setIsAuthenticated(true);
+    setShowLogin(false);
+    setActivePage(access.defaultPage);
+    setPropertyView("list");
+    setPropertyReturnContext(null);
+    setPropertyTab("Résumé");
+    setModal(null);
+    setClientTab(access.clientTabs[0] ?? "Propriétaires");
+    setContractTab(access.contractTabs[0] ?? "Contrats");
+    if (access.financeTabs.length) setFinanceTab(access.financeTabs[0]);
+    setPersistenceStatus("loading");
+  };
+
   useEffect(() => {
     let cancelled = false;
+
+    const verifySession = async () => {
+      try {
+        const payload = await readAuthSession();
+        if (cancelled) return;
+        applyAuthenticatedSession(payload);
+      } catch {
+        if (cancelled) return;
+        setIsAuthenticated(false);
+        setShowLogin(true);
+        setServerUser(null);
+        setCsrfToken("");
+        setPersistenceStatus("offline");
+      } finally {
+        if (!cancelled) setAuthChecked(true);
+      }
+    };
+
+    verifySession();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!authChecked) return;
+    if (!isAuthenticated) {
+      persistenceHydratedRef.current = false;
+      persistenceAvailableRef.current = false;
+      lastPersistedSignatureRef.current = "";
+      return;
+    }
+
+    let cancelled = false;
+    persistenceHydratedRef.current = false;
+    persistenceAvailableRef.current = false;
+    setPersistenceStatus("loading");
 
     const hydrate = async () => {
       try {
         const payload = await readRemoteState();
         if (cancelled) return;
         const data = payload.data ?? {};
+        if (payload.csrfToken) setCsrfToken(payload.csrfToken);
+        if (payload.user) setServerUser(payload.user);
         lastPersistedSignatureRef.current = stringifyState(data);
         applyPersistedState(data);
         setPersistenceRevision(Number(payload.revision) || 0);
@@ -4728,10 +4849,10 @@ function App() {
         clearTimeout(persistenceSaveTimerRef.current);
       }
     };
-  }, []);
+  }, [authChecked, isAuthenticated]);
 
   useEffect(() => {
-    if (!persistenceHydratedRef.current || !persistenceAvailableRef.current) return;
+    if (!isAuthenticated || !persistenceHydratedRef.current || !persistenceAvailableRef.current) return;
 
     const signature = stringifyState(persistedState);
     if (!signature || signature === lastPersistedSignatureRef.current) return;
@@ -4743,8 +4864,10 @@ function App() {
 
     persistenceSaveTimerRef.current = setTimeout(async () => {
       try {
-        const payload = await writeRemoteState(persistedState, persistenceRevision);
+        const payload = await writeRemoteState(persistedState, persistenceRevision, csrfToken);
         const nextData = payload.data ?? persistedState;
+        if (payload.csrfToken) setCsrfToken(payload.csrfToken);
+        if (payload.user) setServerUser(payload.user);
         lastPersistedSignatureRef.current = stringifyState(nextData);
         setPersistenceRevision(Number(payload.revision) || persistenceRevision);
         if (payload.merged) {
@@ -4755,14 +4878,16 @@ function App() {
         setPersistenceStatus("offline");
       }
     }, PERSISTENCE_SAVE_DELAY);
-  }, [persistedState, persistenceRevision]);
+  }, [csrfToken, isAuthenticated, persistedState, persistenceRevision]);
 
   useEffect(() => {
-    if (!persistenceHydratedRef.current || !persistenceAvailableRef.current) return;
+    if (!isAuthenticated || !persistenceHydratedRef.current || !persistenceAvailableRef.current) return;
 
     const refreshState = async () => {
       try {
         const payload = await readRemoteState();
+        if (payload.csrfToken) setCsrfToken(payload.csrfToken);
+        if (payload.user) setServerUser(payload.user);
         const remoteRevision = Number(payload.revision) || 0;
         if (remoteRevision > persistenceRevision) {
           const data = payload.data ?? {};
@@ -4782,7 +4907,7 @@ function App() {
       window.removeEventListener("focus", refreshState);
       window.clearInterval(interval);
     };
-  }, [persistenceRevision]);
+  }, [isAuthenticated, persistenceRevision]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -5844,33 +5969,38 @@ function App() {
     }
   };
 
-  const handleLogin = (user) => {
-    const authenticatedUser = user ?? users[0];
-    const access = getRoleAccess(authenticatedUser);
-    window.sessionStorage.setItem("ekimmo-session", "active");
-    window.sessionStorage.setItem("ekimmo-user-id", authenticatedUser.id);
-    setCurrentUserId(authenticatedUser.id);
-    setIsAuthenticated(true);
-    setShowLogin(false);
-    setActivePage(access.defaultPage);
-    setPropertyView("list");
-    setPropertyReturnContext(null);
+  const handleLogin = async ({ identifier, password }) => {
+    const payload = await loginRemote(identifier, password);
+    const access = getRoleAccess(payload.user ?? users[0]);
+    applyAuthenticatedSession(payload);
     setPropertyTab("Résumé");
     setModal(null);
     setClientTab(access.clientTabs[0] ?? "Propriétaires");
     setContractTab(access.contractTabs[0] ?? "Contrats");
     if (access.financeTabs.length) setFinanceTab(access.financeTabs[0]);
     window.history.replaceState({ ekimmoSession: "active" }, "", window.location.href);
+    return payload.user;
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await postAuthAction("logout", {}, csrfToken);
+    } catch {
+      // La session locale est tout de même fermée si le serveur ne répond pas.
+    }
     window.sessionStorage.setItem("ekimmo-session", "logged-out");
     window.sessionStorage.removeItem("ekimmo-user-id");
     setIsAuthenticated(false);
     setShowLogin(true);
+    setServerUser(null);
+    setCsrfToken("");
     setModal(null);
     setDemoActive(false);
     setDemoRect(null);
+    persistenceHydratedRef.current = false;
+    persistenceAvailableRef.current = false;
+    lastPersistedSignatureRef.current = "";
+    setPersistenceStatus("offline");
     window.history.replaceState({ ekimmoSession: "logged-out" }, "", window.location.href);
   };
 
@@ -5889,11 +6019,23 @@ function App() {
     }));
   };
 
-  const handleUserCreate = ({ user, sendInvitation = false }) => {
-    setCreatedUsers((current) => [user, ...current.filter((item) => getUserKey(item) !== getUserKey(user))]);
+  const handleUserCreate = async ({ user, sendInvitation = false }) => {
+    let savedUser = user;
+    try {
+      const payload = await postAuthAction("create_user", {
+        user,
+        temporaryPassword: user.temporaryPassword || "123456",
+      }, csrfToken);
+      savedUser = payload.user ?? user;
+    } catch (error) {
+      window.alert(error.message || "Impossible de créer l'utilisateur.");
+      return;
+    }
+    const { password, temporaryPassword, ...safeUser } = savedUser;
+    setCreatedUsers((current) => [safeUser, ...current.filter((item) => getUserKey(item) !== getUserKey(safeUser))]);
     setUserHistories((current) => ({
       ...current,
-      [getUserKey(user)]: [
+      [getUserKey(safeUser)]: [
         {
           date: "25/06/2026 10:30",
           type: "Création",
@@ -5919,8 +6061,15 @@ function App() {
     setModal(null);
   };
 
-  const handleUserUpdate = ({ user, values }) => {
-    const nextUser = { ...user, ...values };
+  const handleUserUpdate = async ({ user, values }) => {
+    let nextUser = { ...user, ...values };
+    try {
+      const payload = await postAuthAction("update_user", { user, values }, csrfToken);
+      nextUser = payload.user ?? nextUser;
+    } catch (error) {
+      window.alert(error.message || "Impossible de modifier l'utilisateur.");
+      return;
+    }
     const key = getUserKey(user);
     const isCreatedUser = createdUsers.some((item) => getUserKey(item) === key);
 
@@ -5938,9 +6087,16 @@ function App() {
     setModal(null);
   };
 
-  const handleUserStatusChange = ({ user, nextStatus }) => {
+  const handleUserStatusChange = async ({ user, nextStatus }) => {
     const key = getUserKey(user);
-    const nextUser = { ...user, status: nextStatus };
+    let nextUser = { ...user, status: nextStatus };
+    try {
+      const payload = await postAuthAction("set_user_status", { user, status: nextStatus }, csrfToken);
+      nextUser = payload.user ?? nextUser;
+    } catch (error) {
+      window.alert(error.message || "Impossible de modifier le statut.");
+      return;
+    }
     const isCreatedUser = createdUsers.some((item) => getUserKey(item) === key);
 
     if (isCreatedUser) {
@@ -5957,9 +6113,16 @@ function App() {
     setModal(null);
   };
 
-  const handleUserRoleChange = ({ user, values }) => {
+  const handleUserRoleChange = async ({ user, values }) => {
     const key = getUserKey(user);
-    const nextUser = { ...user, role: values.role };
+    let nextUser = { ...user, role: values.role };
+    try {
+      const payload = await postAuthAction("set_user_role", { user, role: values.role }, csrfToken);
+      nextUser = payload.user ?? nextUser;
+    } catch (error) {
+      window.alert(error.message || "Impossible de modifier le rôle.");
+      return;
+    }
     const isCreatedUser = createdUsers.some((item) => getUserKey(item) === key);
 
     if (isCreatedUser) {
@@ -5976,7 +6139,18 @@ function App() {
     setModal(null);
   };
 
-  const handleUserPasswordAction = ({ user, action, values }) => {
+  const handleUserPasswordAction = async ({ user, action, values }) => {
+    if (action === "temporary") {
+      try {
+        await postAuthAction("set_user_password", {
+          user,
+          temporaryPassword: values.temporaryPassword,
+        }, csrfToken);
+      } catch (error) {
+        window.alert(error.message || "Impossible de générer le mot de passe.");
+        return;
+      }
+    }
     appendUserHistory(user, {
       type: "Mot de passe",
       detail: action === "temporary"
@@ -5985,6 +6159,21 @@ function App() {
     });
     setUserActionContext(null);
     setModal(null);
+  };
+
+  const handleCurrentUserPasswordChange = async (values) => {
+    await postAuthAction("change_password", {
+      currentPassword: values.currentPassword,
+      newPassword: values.newPassword,
+    }, csrfToken);
+  };
+
+  const handleRolePermissionsSave = async ({ role, permissions, status = "Actif" }) => {
+    await postAuthAction("save_role_permissions", {
+      role,
+      permissions,
+      status,
+    }, csrfToken);
   };
 
   const showPropertyDetail = (property) => {
@@ -8594,8 +8783,26 @@ function App() {
     if (modal === "Mode DEMO") setModal(null);
   }, [canUseDemoMode, modal]);
 
+  if (!authChecked) {
+    return (
+      <main className="login-screen">
+        <div className="login-card">
+          <div className="login-brand">
+            <img src={ekimmoAssets.logo} alt="E.K immo" />
+            <div>
+              <strong>E.K immo</strong>
+              <span>Gestion immobilière</span>
+            </div>
+          </div>
+          <h1>Connexion</h1>
+          <p>Vérification de la session...</p>
+        </div>
+      </main>
+    );
+  }
+
   if (!isAuthenticated || showLogin) {
-    return <LoginScreen onLogin={handleLogin} usersList={allUsers} />;
+    return <LoginScreen onLogin={handleLogin} />;
   }
 
   return (
@@ -8744,7 +8951,7 @@ function App() {
             reversalsList={allReversals}
           />
         )}
-        {activePage === "Plus" && <AdminPage activeTab={adminTab} onTab={setAdminTab} onAction={openAction} usersList={allUsers} userHistories={userHistories} />}
+        {activePage === "Plus" && <AdminPage activeTab={adminTab} onTab={setAdminTab} onAction={openAction} usersList={allUsers} userHistories={userHistories} onSaveRolePermissions={handleRolePermissionsSave} />}
       </main>
 
       <Footer />
@@ -9474,7 +9681,7 @@ function App() {
       ) : modal === "Mon profil" ? (
           <UserProfileModal user={currentUser} onClose={() => setModal(null)} />
       ) : modal === "Changer mot de passe" ? (
-        <ChangePasswordModal onClose={() => setModal(null)} />
+        <ChangePasswordModal onSave={handleCurrentUserPasswordChange} onClose={() => setModal(null)} />
       ) : modal === "Choisir document" ? (
         <DocumentContextMenu property={documentContext?.property ?? selectedProperty} onSelect={handleDocumentTemplateSelection} onClose={() => setModal(null)} />
       ) : modal === "Fiche PDF" ? (
@@ -13084,13 +13291,13 @@ function DocumentGeneration({
   const firstCommission = commissionsList.find((item) => item.property === firstProperty.name || item.owner === firstOwner.name) ?? commissionsList[0] ?? { operation: "", property: firstProperty.name, owner: firstOwner.name, commission: "0 FCFA", rate: "0%" };
   const defaultInvoice = firstPayment
     ? {
-      number: firstPayment.receipt && firstPayment.receipt !== "Non gÃ©nÃ©rÃ©" ? firstPayment.receipt : makeDocumentNumber("FAC", 55),
+      number: firstPayment.receipt && firstPayment.receipt !== "Non généré" ? firstPayment.receipt : makeDocumentNumber("FAC", 55),
       type: "Facture",
       client: firstPayment.tenant ?? firstTenant.name,
       property: firstPayment.property ?? firstProperty.name,
       amount: firstPayment.paid ?? firstPayment.expected ?? firstProperty.price ?? "0 FCFA",
       date: firstPayment.date ?? "",
-      status: firstPayment.receipt && firstPayment.receipt !== "Non gÃ©nÃ©rÃ©" ? "ArchivÃ©" : "Brouillon",
+      status: firstPayment.receipt && firstPayment.receipt !== "Non généré" ? "Archivé" : "Brouillon",
     }
     : { number: "", type: "Facture", client: firstTenant.name, property: firstProperty.name, amount: firstProperty.price || "0 FCFA", date: "" };
   const defaultData = documentDraft?.data ?? (demoDataLoaded ? {
@@ -13209,9 +13416,9 @@ function makeArchiveDocumentDraft(record = {}, {
     (record.propertyCode ? propertiesList.find((item) => item.code === record.propertyCode) : null) ??
     (record.property ? getPropertyByName(record.property, propertiesList) : null) ??
     propertiesList.find((item) => record.linked?.includes(item.name)) ??
-    makeEmptyProperty({ name: record.property ?? "Bien Ã  renseigner" });
-  const owner = ownersList.find((item) => item.name === property.owner || item.name === record.owner) ?? { name: record.owner ?? property.owner ?? "PropriÃ©taire Ã  renseigner" };
-  const tenant = tenantsList.find((item) => item.property === property.name || record.linked?.includes(item.name)) ?? { name: record.client ?? property.tenant ?? "Locataire Ã  renseigner", property: property.name };
+    makeEmptyProperty({ name: record.property ?? "Bien à renseigner" });
+  const owner = ownersList.find((item) => item.name === property.owner || item.name === record.owner) ?? { name: record.owner ?? property.owner ?? "Propriétaire à renseigner" };
+  const tenant = tenantsList.find((item) => item.property === property.name || record.linked?.includes(item.name)) ?? { name: record.client ?? property.tenant ?? "Locataire à renseigner", property: property.name };
 
   return {
     templateKey,
@@ -15929,22 +16136,22 @@ function getRelatedDocumentFiles(key) {
 
 function getDocumentDefaults(key, data = {}) {
   const fallbackProperty = makeEmptyProperty({
-    name: "Bien Ã  renseigner",
+    name: "Bien à renseigner",
     type: "Bien immobilier",
-    district: "Quartier Ã  renseigner",
-    address: "Adresse Ã  renseigner",
-    owner: "PropriÃ©taire Ã  renseigner",
-    tenant: "Locataire Ã  renseigner",
+    district: "Quartier à renseigner",
+    address: "Adresse à renseigner",
+    owner: "Propriétaire à renseigner",
+    tenant: "Locataire à renseigner",
     price: "0 FCFA",
     period: "",
     deposit: "0 FCFA",
     commission: "0%",
   });
   const property = data.property ?? fallbackProperty;
-  const invoice = data.invoice ?? { number: "", type: "Facture", client: property.tenant || "Client Ã  renseigner", property: property.name, amount: property.price || "0 FCFA", date: "" };
+  const invoice = data.invoice ?? { number: "", type: "Facture", client: property.tenant || "Client à renseigner", property: property.name, amount: property.price || "0 FCFA", date: "" };
   const payment = data.payment ?? { reference: "", receipt: "", tenant: invoice.client, property: property.name, paid: invoice.amount ?? "0 FCFA", balance: "0 FCFA", mode: "", period: "" };
-  const owner = data.owner ?? { name: property.owner || "PropriÃ©taire Ã  renseigner", phone: "", email: "", charges: "0 FCFA", commission: "0 FCFA", balance: "0 FCFA" };
-  const tenant = data.tenant ?? { name: invoice.client || property.tenant || "Locataire Ã  renseigner", phone: "", email: "", rent: property.price || "0 FCFA", deposit: property.deposit || "0 FCFA", property: property.name };
+  const owner = data.owner ?? { name: property.owner || "Propriétaire à renseigner", phone: "", email: "", charges: "0 FCFA", commission: "0 FCFA", balance: "0 FCFA" };
+  const tenant = data.tenant ?? { name: invoice.client || property.tenant || "Locataire à renseigner", phone: "", email: "", rent: property.price || "0 FCFA", deposit: property.deposit || "0 FCFA", property: property.name };
   const commission = data.commission ?? { operation: "", property: property.name, owner: owner.name, client: tenant.name, commission: "0 FCFA", rate: "0%" };
   const draftReference = data.draftReference;
   const draftText = data.draftText;
@@ -18436,7 +18643,7 @@ function ReportsPage({
   );
 }
 
-function AdminPage({ activeTab, onTab, onAction, usersList = users, userHistories = {} }) {
+function AdminPage({ activeTab, onTab, onAction, usersList = users, userHistories = {}, onSaveRolePermissions }) {
   const tabs = ["Utilisateurs", "Rôles & permissions", "Paramètres", "Modèles documents", "Historique"];
   return (
     <>
@@ -18452,7 +18659,7 @@ function AdminPage({ activeTab, onTab, onAction, usersList = users, userHistorie
       />
       <Tabs tabs={tabs} active={activeTab} onChange={onTab} demo="admin-tabs" />
       {activeTab === "Utilisateurs" && <UsersAdmin onAction={onAction} usersList={usersList} userHistories={userHistories} />}
-      {activeTab === "Rôles & permissions" && <RolesAdmin onAction={onAction} />}
+      {activeTab === "Rôles & permissions" && <RolesAdmin onAction={onAction} onSaveRolePermissions={onSaveRolePermissions} />}
       {activeTab === "Paramètres" && <SettingsAdmin />}
       {activeTab === "Modèles documents" && <TemplatesAdmin onAction={onAction} />}
       {activeTab === "Historique" && <HistoryAdmin />}
@@ -18558,7 +18765,7 @@ function UserProfilePanel({ user, history = [], onAction }) {
   );
 }
 
-function RolesAdmin() {
+function RolesAdmin({ onSaveRolePermissions }) {
   const [roles, setRoles] = useState(() => roleProfiles.map((role) => ({
     name: role,
     description: role === "Administrateur"
@@ -18595,7 +18802,13 @@ function RolesAdmin() {
     });
   };
 
-  const savePermissions = () => {
+  const savePermissions = async () => {
+    try {
+      await onSaveRolePermissions?.({ role: profile, permissions: activePermissions, status: activeRole?.status ?? "Actif" });
+    } catch (error) {
+      setFeedback(error.message || "Impossible d'enregistrer les permissions.");
+      return;
+    }
     setSavedPermissions((current) => ({ ...current, [profile]: clonePermissionMatrix(activePermissions) }));
     setFeedback("Permissions enregistrées avec succès.");
   };
@@ -19112,27 +19325,29 @@ function UserHistoryModal({ user, history = [], onClose }) {
   );
 }
 
-function LoginScreen({ onLogin, usersList = users }) {
+function LoginScreen({ onLogin }) {
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const submitLogin = (event) => {
+  const submitLogin = async (event) => {
     event.preventDefault();
-    const normalizedIdentifier = normalizeSearch(identifier);
-    const matchedUser = usersList.find((user) => {
-      const identifiers = [user.identifier, user.email, user.name].filter(Boolean).map(normalizeSearch);
-      return identifiers.includes(normalizedIdentifier);
-    });
-
-    if (!matchedUser || matchedUser.password !== password || matchedUser.status !== "Actif") {
-      setLoginError("Identifiant ou mot de passe incorrect.");
+    if (!identifier.trim() || !password.trim()) {
+      setLoginError("Renseignez votre identifiant et votre mot de passe.");
       return;
     }
 
-    setLoginError("");
-    onLogin(matchedUser);
+    setSubmitting(true);
+    try {
+      setLoginError("");
+      await onLogin({ identifier, password });
+    } catch (error) {
+      setLoginError(error.message || "Identifiant ou mot de passe incorrect.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -19171,7 +19386,7 @@ function LoginScreen({ onLogin, usersList = users }) {
               autoComplete="current-password"
             />
           </label>
-          <button className="primary-wide" type="submit">Se connecter</button>
+          <button className="primary-wide" type="submit" disabled={submitting}>{submitting ? "Connexion..." : "Se connecter"}</button>
           <button className="link-button" type="button" onClick={() => setForgotPasswordOpen(true)}>Mot de passe oublié ?</button>
           {loginError && <div className="error-demo">{loginError}</div>}
         </form>
@@ -19296,7 +19511,7 @@ function UserProfileModal({ user = users[0], onClose }) {
   );
 }
 
-function ChangePasswordModal({ onClose }) {
+function ChangePasswordModal({ onSave, onClose }) {
   const [values, setValues] = useState({
     currentPassword: "",
     newPassword: "",
@@ -19310,7 +19525,7 @@ function ChangePasswordModal({ onClose }) {
     setMessage("");
   };
 
-  const savePassword = () => {
+  const savePassword = async () => {
     if (!values.currentPassword.trim()) {
       setStatus("error");
       setMessage("Le mot de passe actuel est obligatoire.");
@@ -19327,9 +19542,15 @@ function ChangePasswordModal({ onClose }) {
       return;
     }
 
-    setStatus("success");
-    setMessage("Mot de passe modifié avec succès.");
-    setValues({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    try {
+      setStatus("success");
+      await onSave?.(values);
+      setMessage("Mot de passe modifié avec succès.");
+      setValues({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    } catch (error) {
+      setStatus("error");
+      setMessage(error.message || "Impossible de modifier le mot de passe pour le moment.");
+    }
   };
 
   return (
