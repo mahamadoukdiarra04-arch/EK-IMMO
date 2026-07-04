@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Archive,
@@ -4221,6 +4221,119 @@ function visitMatchesQuickFilter(visit, quickFilter) {
   return true;
 }
 
+const PERSISTENCE_ENDPOINT = "/api/state.php";
+const PERSISTENCE_SAVE_DELAY = 900;
+const PERSISTED_STATE_KEYS = [
+  "createdProperties",
+  "propertyOverrides",
+  "createdOwners",
+  "ownerOverrides",
+  "ownerReversements",
+  "createdTenants",
+  "tenantOverrides",
+  "tenantRelances",
+  "tenantReceiptArchives",
+  "createdProspects",
+  "prospectOverrides",
+  "prospectProposals",
+  "prospectActivities",
+  "scheduledProspectVisits",
+  "prospectConversions",
+  "visitOverrides",
+  "visitHistories",
+  "generatedContracts",
+  "contractOverrides",
+  "contractTimelines",
+  "contractDeadlines",
+  "recordedPayments",
+  "paymentHistories",
+  "paymentProofs",
+  "arrearsStatusOverrides",
+  "arrearsPromises",
+  "arrearsHistories",
+  "commissionOverrides",
+  "scheduledMaintenances",
+  "maintenanceCharges",
+  "maintenanceOverrides",
+  "reversalOverrides",
+  "chargeOverrides",
+  "propertyHistoryOverrides",
+  "missingDocumentRequests",
+  "propertyPdfArchives",
+  "propertyDocumentArchives",
+  "archivedProperties",
+  "createdUsers",
+  "userOverrides",
+  "userHistories",
+];
+
+const persistedArrayFallbacks = new Set([
+  "createdProperties",
+  "createdOwners",
+  "ownerReversements",
+  "createdTenants",
+  "tenantRelances",
+  "tenantReceiptArchives",
+  "createdProspects",
+  "scheduledProspectVisits",
+  "generatedContracts",
+  "recordedPayments",
+  "scheduledMaintenances",
+  "maintenanceCharges",
+  "missingDocumentRequests",
+  "propertyPdfArchives",
+  "propertyDocumentArchives",
+  "createdUsers",
+]);
+
+function normalizePersistedCollection(key, value) {
+  if (persistedArrayFallbacks.has(key)) {
+    return Array.isArray(value) ? value : [];
+  }
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function stringifyState(data) {
+  try {
+    return JSON.stringify(data);
+  } catch {
+    return "";
+  }
+}
+
+async function readRemoteState() {
+  const response = await fetch(PERSISTENCE_ENDPOINT, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.ok === false) {
+    const error = new Error(payload.message || "Persistance indisponible.");
+    error.code = payload.code || `http_${response.status}`;
+    throw error;
+  }
+  return payload;
+}
+
+async function writeRemoteState(data, revision) {
+  const response = await fetch(PERSISTENCE_ENDPOINT, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ data, revision }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.ok === false) {
+    const error = new Error(payload.message || "Sauvegarde indisponible.");
+    error.code = payload.code || `http_${response.status}`;
+    throw error;
+  }
+  return payload;
+}
+
 function App() {
   const [activePage, setActivePage] = useState(() => getDefaultPageForUser(users.find((user) => user.id === window.sessionStorage.getItem("ekimmo-user-id")) ?? users[0]));
   const [showLogin, setShowLogin] = useState(false);
@@ -4320,6 +4433,12 @@ function App() {
   const [userHistories, setUserHistories] = useState({});
   const [userActionContext, setUserActionContext] = useState(null);
   const [reportType, setReportType] = useState(reports[0][0]);
+  const [persistenceRevision, setPersistenceRevision] = useState(0);
+  const [persistenceStatus, setPersistenceStatus] = useState("loading");
+  const persistenceHydratedRef = useRef(false);
+  const persistenceAvailableRef = useRef(false);
+  const persistenceSaveTimerRef = useRef(null);
+  const lastPersistedSignatureRef = useRef("");
   const demoBaseProperties = demoDataLoaded ? properties : [];
   const demoBaseOwners = demoDataLoaded ? owners : [];
   const demoBaseTenants = demoDataLoaded ? tenants : [];
@@ -4439,6 +4558,232 @@ function App() {
     [currentAccess.pages]
   );
   const availableReports = useMemo(() => getReportTitlesForUser(currentUser), [currentUser]);
+  const persistedStateSetters = {
+    createdProperties: setCreatedProperties,
+    propertyOverrides: setPropertyOverrides,
+    createdOwners: setCreatedOwners,
+    ownerOverrides: setOwnerOverrides,
+    ownerReversements: setOwnerReversements,
+    createdTenants: setCreatedTenants,
+    tenantOverrides: setTenantOverrides,
+    tenantRelances: setTenantRelances,
+    tenantReceiptArchives: setTenantReceiptArchives,
+    createdProspects: setCreatedProspects,
+    prospectOverrides: setProspectOverrides,
+    prospectProposals: setProspectProposals,
+    prospectActivities: setProspectActivities,
+    scheduledProspectVisits: setScheduledProspectVisits,
+    prospectConversions: setProspectConversions,
+    visitOverrides: setVisitOverrides,
+    visitHistories: setVisitHistories,
+    generatedContracts: setGeneratedContracts,
+    contractOverrides: setContractOverrides,
+    contractTimelines: setContractTimelines,
+    contractDeadlines: setContractDeadlines,
+    recordedPayments: setRecordedPayments,
+    paymentHistories: setPaymentHistories,
+    paymentProofs: setPaymentProofs,
+    arrearsStatusOverrides: setArrearsStatusOverrides,
+    arrearsPromises: setArrearsPromises,
+    arrearsHistories: setArrearsHistories,
+    commissionOverrides: setCommissionOverrides,
+    scheduledMaintenances: setScheduledMaintenances,
+    maintenanceCharges: setMaintenanceCharges,
+    maintenanceOverrides: setMaintenanceOverrides,
+    reversalOverrides: setReversalOverrides,
+    chargeOverrides: setChargeOverrides,
+    propertyHistoryOverrides: setPropertyHistoryOverrides,
+    missingDocumentRequests: setMissingDocumentRequests,
+    propertyPdfArchives: setPropertyPdfArchives,
+    propertyDocumentArchives: setPropertyDocumentArchives,
+    archivedProperties: setArchivedProperties,
+    createdUsers: setCreatedUsers,
+    userOverrides: setUserOverrides,
+    userHistories: setUserHistories,
+  };
+
+  const applyPersistedState = (data) => {
+    if (!data || typeof data !== "object") return;
+    PERSISTED_STATE_KEYS.forEach((key) => {
+      persistedStateSetters[key]?.(normalizePersistedCollection(key, data[key]));
+    });
+  };
+
+  const persistedState = useMemo(() => ({
+    schemaVersion: 1,
+    createdProperties,
+    propertyOverrides,
+    createdOwners,
+    ownerOverrides,
+    ownerReversements,
+    createdTenants,
+    tenantOverrides,
+    tenantRelances,
+    tenantReceiptArchives,
+    createdProspects,
+    prospectOverrides,
+    prospectProposals,
+    prospectActivities,
+    scheduledProspectVisits,
+    prospectConversions,
+    visitOverrides,
+    visitHistories,
+    generatedContracts,
+    contractOverrides,
+    contractTimelines,
+    contractDeadlines,
+    recordedPayments,
+    paymentHistories,
+    paymentProofs,
+    arrearsStatusOverrides,
+    arrearsPromises,
+    arrearsHistories,
+    commissionOverrides,
+    scheduledMaintenances,
+    maintenanceCharges,
+    maintenanceOverrides,
+    reversalOverrides,
+    chargeOverrides,
+    propertyHistoryOverrides,
+    missingDocumentRequests,
+    propertyPdfArchives,
+    propertyDocumentArchives,
+    archivedProperties,
+    createdUsers,
+    userOverrides,
+    userHistories,
+  }), [
+    archivedProperties,
+    arrearsHistories,
+    arrearsPromises,
+    arrearsStatusOverrides,
+    chargeOverrides,
+    commissionOverrides,
+    contractDeadlines,
+    contractOverrides,
+    contractTimelines,
+    createdOwners,
+    createdProperties,
+    createdProspects,
+    createdTenants,
+    createdUsers,
+    generatedContracts,
+    maintenanceCharges,
+    maintenanceOverrides,
+    missingDocumentRequests,
+    ownerOverrides,
+    ownerReversements,
+    paymentHistories,
+    paymentProofs,
+    propertyDocumentArchives,
+    propertyHistoryOverrides,
+    propertyOverrides,
+    propertyPdfArchives,
+    prospectActivities,
+    prospectConversions,
+    prospectOverrides,
+    prospectProposals,
+    recordedPayments,
+    reversalOverrides,
+    scheduledMaintenances,
+    scheduledProspectVisits,
+    tenantOverrides,
+    tenantReceiptArchives,
+    tenantRelances,
+    userHistories,
+    userOverrides,
+    visitHistories,
+    visitOverrides,
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const hydrate = async () => {
+      try {
+        const payload = await readRemoteState();
+        if (cancelled) return;
+        const data = payload.data ?? {};
+        lastPersistedSignatureRef.current = stringifyState(data);
+        applyPersistedState(data);
+        setPersistenceRevision(Number(payload.revision) || 0);
+        persistenceAvailableRef.current = true;
+        setPersistenceStatus("ready");
+      } catch (error) {
+        if (cancelled) return;
+        persistenceAvailableRef.current = false;
+        setPersistenceStatus(error.code === "missing_config" ? "setup" : "offline");
+      } finally {
+        if (!cancelled) {
+          persistenceHydratedRef.current = true;
+        }
+      }
+    };
+
+    hydrate();
+
+    return () => {
+      cancelled = true;
+      if (persistenceSaveTimerRef.current) {
+        clearTimeout(persistenceSaveTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!persistenceHydratedRef.current || !persistenceAvailableRef.current) return;
+
+    const signature = stringifyState(persistedState);
+    if (!signature || signature === lastPersistedSignatureRef.current) return;
+
+    setPersistenceStatus("saving");
+    if (persistenceSaveTimerRef.current) {
+      clearTimeout(persistenceSaveTimerRef.current);
+    }
+
+    persistenceSaveTimerRef.current = setTimeout(async () => {
+      try {
+        const payload = await writeRemoteState(persistedState, persistenceRevision);
+        const nextData = payload.data ?? persistedState;
+        lastPersistedSignatureRef.current = stringifyState(nextData);
+        setPersistenceRevision(Number(payload.revision) || persistenceRevision);
+        if (payload.merged) {
+          applyPersistedState(nextData);
+        }
+        setPersistenceStatus("ready");
+      } catch {
+        setPersistenceStatus("offline");
+      }
+    }, PERSISTENCE_SAVE_DELAY);
+  }, [persistedState, persistenceRevision]);
+
+  useEffect(() => {
+    if (!persistenceHydratedRef.current || !persistenceAvailableRef.current) return;
+
+    const refreshState = async () => {
+      try {
+        const payload = await readRemoteState();
+        const remoteRevision = Number(payload.revision) || 0;
+        if (remoteRevision > persistenceRevision) {
+          const data = payload.data ?? {};
+          lastPersistedSignatureRef.current = stringifyState(data);
+          applyPersistedState(data);
+          setPersistenceRevision(remoteRevision);
+          setPersistenceStatus("ready");
+        }
+      } catch {
+        setPersistenceStatus("offline");
+      }
+    };
+
+    window.addEventListener("focus", refreshState);
+    const interval = window.setInterval(refreshState, 60000);
+    return () => {
+      window.removeEventListener("focus", refreshState);
+      window.clearInterval(interval);
+    };
+  }, [persistenceRevision]);
+
   useEffect(() => {
     if (!isAuthenticated) return;
 
@@ -8268,6 +8613,7 @@ function App() {
         currentUser={currentUser}
         navItemsList={accessibleNavItems}
         notifications={topbarNotifications}
+        persistenceStatus={persistenceStatus}
         searchDataset={{
           propertiesList: activeProperties,
           ownersList: allOwners,
@@ -9352,7 +9698,7 @@ function DemoTour({ step, index, total, subIndex = null, subTotal = null, rect, 
   );
 }
 
-function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onLogout, onStartDemo, demoActive, canUseDemoMode = false, currentUser = users[0], navItemsList = navItems, notifications = notificationAlerts, searchDataset }) {
+function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onLogout, onStartDemo, demoActive, canUseDemoMode = false, currentUser = users[0], navItemsList = navItems, notifications = notificationAlerts, persistenceStatus = "ready", searchDataset }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -9360,6 +9706,13 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onLog
   const results = useMemo(() => getSearchResults(globalQuery, searchDataset), [globalQuery, searchDataset]);
   const hasQuery = globalQuery.trim().length > 0;
   const unreadCount = notifications.filter((item) => !readNotificationIds.includes(item.id)).length;
+  const persistenceLabel = {
+    loading: "Connexion base",
+    ready: "Synchronisé",
+    saving: "Sauvegarde",
+    setup: "Base à configurer",
+    offline: "Hors ligne",
+  }[persistenceStatus] ?? "Synchronisé";
 
   const handleResultClick = (page) => {
     onNav(page);
@@ -9406,6 +9759,10 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onLog
             <span>Mode DEMO</span>
           </button>
         )}
+        <span className={`sync-status ${persistenceStatus}`} title="État de synchronisation des données">
+          <span />
+          {persistenceLabel}
+        </span>
         <div className="search-menu">
           <button
             className={searchOpen ? "icon-only active" : "icon-only"}

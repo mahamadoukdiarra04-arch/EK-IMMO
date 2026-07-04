@@ -36,6 +36,39 @@ jobs:
       - name: Build application
         run: npm run build
 
+      - name: Create API database config
+        shell: bash
+        env:
+          HOSTINGER_DB_HOST: ${{ secrets.HOSTINGER_DB_HOST }}
+          HOSTINGER_DB_NAME: ${{ secrets.HOSTINGER_DB_NAME }}
+          HOSTINGER_DB_USER: ${{ secrets.HOSTINGER_DB_USER }}
+          HOSTINGER_DB_PASSWORD: ${{ secrets.HOSTINGER_DB_PASSWORD }}
+          HOSTINGER_APP_STATE_ID: ${{ secrets.HOSTINGER_APP_STATE_ID }}
+        run: |
+          if [ -z "$HOSTINGER_DB_HOST" ] || [ -z "$HOSTINGER_DB_NAME" ] || [ -z "$HOSTINGER_DB_USER" ] || [ -z "$HOSTINGER_DB_PASSWORD" ]; then
+            echo "Database secrets are not set. API config.php will not be generated."
+            exit 0
+          fi
+
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+          const phpString = (value) => `'${String(value ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+          const stateId = process.env.HOSTINGER_APP_STATE_ID || 'production';
+          const config = `<?php
+          declare(strict_types=1);
+
+          const DB_HOST = ${phpString(process.env.HOSTINGER_DB_HOST)};
+          const DB_NAME = ${phpString(process.env.HOSTINGER_DB_NAME)};
+          const DB_USER = ${phpString(process.env.HOSTINGER_DB_USER)};
+          const DB_PASSWORD = ${phpString(process.env.HOSTINGER_DB_PASSWORD)};
+          const APP_STATE_ID = ${phpString(stateId)};
+          `;
+          const targetDir = path.join(process.cwd(), 'dist', 'api');
+          fs.mkdirSync(targetDir, { recursive: true });
+          fs.writeFileSync(path.join(targetDir, 'config.php'), config);
+          NODE
+
       - name: Check Hostinger secrets
         shell: bash
         env:

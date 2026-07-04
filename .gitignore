@@ -3,5 +3,6 @@ dist/
 .vite/
 *.local
 /ek-immo-desktop.png
+public/api/config.php
 
 .vercel
