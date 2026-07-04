@@ -39,12 +39,10 @@ jobs:
       - name: Check Hostinger secrets
         shell: bash
         env:
-          HOSTINGER_FTP_HOST: ${{ secrets.HOSTINGER_FTP_HOST }}
           HOSTINGER_FTP_USERNAME: ${{ secrets.HOSTINGER_FTP_USERNAME }}
           HOSTINGER_FTP_PASSWORD: ${{ secrets.HOSTINGER_FTP_PASSWORD }}
           HOSTINGER_FTP_DIR: ${{ secrets.HOSTINGER_FTP_DIR }}
         run: |
-          test -n "$HOSTINGER_FTP_HOST" || (echo "Missing secret HOSTINGER_FTP_HOST" && exit 1)
           test -n "$HOSTINGER_FTP_USERNAME" || (echo "Missing secret HOSTINGER_FTP_USERNAME" && exit 1)
           test -n "$HOSTINGER_FTP_PASSWORD" || (echo "Missing secret HOSTINGER_FTP_PASSWORD" && exit 1)
           test -n "$HOSTINGER_FTP_DIR" || (echo "Missing secret HOSTINGER_FTP_DIR" && exit 1)
@@ -52,7 +50,7 @@ jobs:
       - name: Upload dist to Hostinger
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ${{ secrets.HOSTINGER_FTP_HOST }}
+          server: ftp.ekimmo.pro
           username: ${{ secrets.HOSTINGER_FTP_USERNAME }}
           password: ${{ secrets.HOSTINGER_FTP_PASSWORD }}
           local-dir: ./dist/
