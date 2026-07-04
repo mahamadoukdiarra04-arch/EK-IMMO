@@ -54,10 +54,17 @@ function find_user_by_identifier(PDO $pdo, string $identifier): ?array
 {
     $statement = $pdo->prepare('
         SELECT * FROM ekimmo_users
-        WHERE LOWER(identifier) = :identifier OR LOWER(email) = :identifier OR LOWER(name) = :identifier
+        WHERE LOWER(identifier) = :identifier_value
+           OR LOWER(email) = :email_value
+           OR LOWER(name) = :name_value
         LIMIT 1
     ');
-    $statement->execute(['identifier' => normalize_identifier($identifier)]);
+    $normalized = normalize_identifier($identifier);
+    $statement->execute([
+        'identifier_value' => $normalized,
+        'email_value' => $normalized,
+        'name_value' => $normalized,
+    ]);
     $user = $statement->fetch();
     return is_array($user) ? $user : null;
 }
