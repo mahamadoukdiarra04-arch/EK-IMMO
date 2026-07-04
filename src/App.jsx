@@ -3115,24 +3115,30 @@ const financeSummaryByPeriod = {
   "Période personnalisée": ["54.2M FCFA", "43.8M FCFA", "10.4M FCFA", "6.3M FCFA", "18.9M FCFA"],
 };
 
-function getDashboardPropertyStats(propertiesList = [], period = "Mois") {
+function getDashboardPropertyStats(propertiesList = [], period = "Mois", rentRowsList = [], paymentsList = [], chargesList = [], commissionsList = [], reversalsList = []) {
   const multiplier = periodWeight[period] ?? 1;
   const maintenanceOnly = propertiesList.filter((property) => property.status === "Entretien seul" || property.financialMode === "Contrat entretien seul");
   const available = propertiesList.filter((property) => property.status === "Disponible");
-  const rented = propertiesList.filter((property) => ["Loué", "Gestion multi-lots"].includes(property.status));
+  const rented = propertiesList.filter(isRentBearingProperty);
   const sale = propertiesList.filter((property) => property.period?.includes("vente") || property.status === "Vendu");
   const reserved = propertiesList.filter((property) => property.status === "Réservé");
   const maintenanceAmount = maintenanceOnly.reduce((sum, property) => sum + parseFCFA(property.price), 0);
-  const rentAmount = rented.reduce((sum, property) => {
-    if (property.period?.includes("vente") || property.financialMode?.includes("direct propriétaire")) return sum;
-    return sum + parseFCFA(property.price);
-  }, 0);
-  const periodRentAmount = Math.round(rentAmount * multiplier);
+  const rentExpected = rentRowsList.reduce((sum, row) => sum + parseFCFA(row.expected), 0);
+  const rentPaid = rentRowsList.reduce((sum, row) => sum + parseFCFA(row.paid), 0);
+  const arrearsAmount = rentRowsList.reduce((sum, row) => sum + parseFCFA(row.balance), 0);
+  const paymentAmount = paymentsList.reduce((sum, payment) => sum + parseFCFA(payment.paid), 0);
+  const commissionAmount = commissionsList.reduce((sum, commission) => sum + parseFCFA(commission.commission), 0);
+  const chargeAmount = chargesList
+    .filter((charge) => !["Annulée", "Annulé"].includes(charge.status))
+    .reduce((sum, charge) => sum + parseFCFA(charge.amount), 0);
+  const reversalBalance = reversalsList.reduce((sum, reversal) => sum + parseFCFA(reversal.balance), 0);
+  const periodRentAmount = Math.round(rentExpected * multiplier);
+  const periodPaidAmount = Math.round((paymentAmount || rentPaid) * multiplier);
   const periodMaintenanceAmount = Math.round(maintenanceAmount * multiplier);
-  const commissionAmount = Math.round(periodRentAmount * 0.05);
-  const arrearsEstimate = rented.length ? Math.round(periodRentAmount * 0.04) : 0;
-  const chargeEstimate = Math.round(periodMaintenanceAmount || (periodRentAmount ? periodRentAmount * 0.018 : 0));
-  const ownerNet = Math.max(0, periodRentAmount - commissionAmount - chargeEstimate);
+  const periodCommissionAmount = Math.round(commissionAmount * multiplier);
+  const periodArrearsAmount = Math.round(arrearsAmount * multiplier);
+  const periodChargeAmount = Math.round(chargeAmount * multiplier);
+  const ownerNet = reversalBalance || Math.max(0, periodPaidAmount - periodCommissionAmount - periodChargeAmount);
 
   return {
     total: propertiesList.length,
@@ -3144,10 +3150,11 @@ function getDashboardPropertyStats(propertiesList = [], period = "Mois") {
     rentalManaged: Math.max(0, propertiesList.length - maintenanceOnly.length),
     toPublish: available.length + reserved.length,
     rentAmount: periodRentAmount,
+    paidAmount: periodPaidAmount,
     maintenanceAmount: periodMaintenanceAmount,
-    commissionAmount,
-    arrearsEstimate,
-    chargeEstimate,
+    commissionAmount: periodCommissionAmount,
+    arrearsEstimate: periodArrearsAmount,
+    chargeEstimate: periodChargeAmount,
     ownerNet,
   };
 }
@@ -3161,9 +3168,17 @@ function createDashboardPipeline(title, items) {
   };
 }
 
-function buildDashboardProfile(currentUser, propertiesList, period) {
+function buildDashboardProfile(currentUser, propertiesList, period, businessData = {}) {
   const role = currentUser?.role ?? "Administrateur";
-  const stats = getDashboardPropertyStats(propertiesList, period);
+  const stats = getDashboardPropertyStats(
+    propertiesList,
+    period,
+    businessData.rentRowsList,
+    businessData.paymentsList,
+    businessData.chargesList,
+    businessData.commissionsList,
+    businessData.reversalsList
+  );
   const zeroAmount = "0 FCFA";
   const overdueFiles = stats.arrearsEstimate ? Math.max(1, Math.ceil(stats.rented * 0.08)) : 0;
   const otherPortfolio = Math.max(0, stats.total - stats.available - stats.rented - stats.reserved - stats.maintenanceOnly - stats.sale);
@@ -3188,7 +3203,7 @@ function buildDashboardProfile(currentUser, propertiesList, period) {
         { label: "Biens en gestion locative", value: String(stats.rentalManaged), icon: Building2, tone: "purple", details: [["Loués", String(stats.rented)], ["Réservés", String(stats.reserved)]], demoTarget: "dashboard-kpi-portfolio" },
         { label: "Loyers à suivre", value: stats.rentAmount ? formatFCFA(stats.rentAmount) : zeroAmount, icon: Banknote, tone: "gray", details: [["Biens concernés", String(stats.rentalManaged)], ["Période", period]], demoTarget: "dashboard-kpi-cashflow" },
         { label: "Paiements à contrôler", value: String(stats.rented), icon: CheckCircle2, tone: "purple", details: [["Locataires actifs", String(stats.rented)], ["Disponibles", String(stats.available)]], demoTarget: "dashboard-kpi-rental" },
-        { label: "Impayés estimés", value: stats.arrearsEstimate ? formatFCFA(stats.arrearsEstimate) : zeroAmount, icon: AlertTriangle, tone: "danger", details: [["Dossiers à relancer", String(stats.arrearsEstimate ? Math.max(1, Math.ceil(stats.rented * 0.08)) : 0)], ["Priorité", stats.arrearsEstimate ? "À suivre" : "RAS"]], demoTarget: "dashboard-kpi-arrears" },
+        { label: "Impayés constatés", value: stats.arrearsEstimate ? formatFCFA(stats.arrearsEstimate) : zeroAmount, icon: AlertTriangle, tone: "danger", details: [["Dossiers à relancer", String(overdueFiles)], ["Priorité", stats.arrearsEstimate ? "À suivre" : "RAS"]], demoTarget: "dashboard-kpi-arrears" },
         { label: "Dossiers locataires", value: String(stats.rented), icon: UserRound, tone: "gray", details: [["Actifs", String(stats.rented)], ["À rattacher", String(Math.max(0, stats.available - stats.reserved))]], demoTarget: "dashboard-kpi-fees" },
         { label: "Courriers et reçus", value: String(stats.rented + stats.reserved), icon: FileText, tone: "gray", details: [["À produire", String(stats.rented)], ["Archives", "À jour"]], demoTarget: "dashboard-kpi-charges" },
         { label: "Interventions à suivre", value: String(stats.maintenanceOnly), icon: Wrench, tone: "gray", details: [["Entretien seul", String(stats.maintenanceOnly)], ["Charges estimées", formatFCFA(stats.chargeEstimate)]], demoTarget: "dashboard-kpi-charges" },
@@ -3204,7 +3219,7 @@ function buildDashboardProfile(currentUser, propertiesList, period) {
       summaryItems: [
         ["Loyers suivis", formatFCFA(stats.rentAmount), Banknote, "dark"],
         ["Paiements à contrôler", String(stats.rented), CheckCircle2, "muted"],
-        ["Retards estimés", formatFCFA(stats.arrearsEstimate), AlertTriangle, "danger"],
+        ["Retards constatés", formatFCFA(stats.arrearsEstimate), AlertTriangle, "danger"],
         ["Charges liées", formatFCFA(stats.chargeEstimate), ReceiptText, "dark"],
         ["Reversements nets", formatFCFA(stats.ownerNet), RefreshCw, "muted"],
       ],
@@ -3288,7 +3303,7 @@ function buildDashboardProfile(currentUser, propertiesList, period) {
     ],
     summaryItems: [
       ["Factures émises", formatFCFA(stats.rentAmount + stats.commissionAmount), FileText, "dark"],
-      ["Paiements reçus", formatFCFA(Math.max(0, stats.rentAmount - stats.arrearsEstimate)), CheckCircle2, "muted"],
+      ["Paiements reçus", formatFCFA(stats.paidAmount), CheckCircle2, "muted"],
       ["Restant dû", formatFCFA(stats.arrearsEstimate), AlertTriangle, "danger"],
       ["Charges enregistrées", formatFCFA(stats.chargeEstimate), ReceiptText, "dark"],
       ["Reversements en attente", formatFCFA(stats.ownerNet), RefreshCw, "muted"],
@@ -3454,6 +3469,148 @@ function isAgencyCollectedProperty(name, propertiesList = []) {
 
 function getAgencyRentRows(propertiesList = []) {
   return rentRows.filter((row) => isAgencyCollectedProperty(row.property, propertiesList));
+}
+
+function isPropertyAgencyCollected(property) {
+  const financialMode = normalizeSearch(property?.financialMode ?? "");
+  return Boolean(property) && !financialMode.includes("direct par le proprietaire") && !financialMode.includes("entretien seul");
+}
+
+function isRentBearingProperty(property) {
+  const status = normalizeSearch(property?.status ?? "");
+  const tenant = normalizeSearch(property?.tenant ?? "");
+  const hasTenant = tenant && !["libre", "n/a", "non applicable"].includes(tenant);
+  return isPropertyAgencyCollected(property) && hasTenant && (status.includes("loue") || status.includes("gestion multi"));
+}
+
+function isOwnerDeductibleCharge(charge) {
+  const payer = normalizeSearch(charge?.payer ?? "");
+  const status = normalizeSearch(charge?.status ?? "");
+  return payer.includes("proprietaire") && ["validee", "payee", "a deduire", "deduite"].includes(status);
+}
+
+function getCommissionAmountFromRule(rule, collectedAmount) {
+  const text = String(rule ?? "").trim();
+  const percentMatch = text.match(/(\d+(?:[.,]\d+)?)\s*%/);
+
+  if (percentMatch) {
+    return collectedAmount > 0
+      ? Math.round(collectedAmount * Number(percentMatch[1].replace(",", ".")) / 100)
+      : 0;
+  }
+
+  return parseFCFA(text);
+}
+
+function buildRentRowsFromProperties(propertiesList = [], tenantsList = [], baseRows = []) {
+  const rows = [...baseRows];
+  const existingPropertyTenantKeys = new Set(baseRows.map((row) => `${normalizeSearch(row.property)}|${normalizeSearch(row.tenant)}`));
+
+  propertiesList
+    .filter(isRentBearingProperty)
+    .forEach((property) => {
+      const tenant = tenantsList.find((item) => item.name === property.tenant);
+      const tenantName = tenant?.name ?? property.tenant;
+      const key = `${normalizeSearch(property.name)}|${normalizeSearch(tenantName)}`;
+      const expectedAmount = parseFCFA(tenant?.rent ?? property.price);
+
+      if (existingPropertyTenantKeys.has(key) || expectedAmount <= 0) return;
+
+      rows.unshift({
+        period: "Juin 2026",
+        tenant: tenantName,
+        property: property.name,
+        owner: property.owner,
+        expected: formatFCFA(expectedAmount),
+        paid: "0 FCFA",
+        balance: formatFCFA(expectedAmount),
+        status: "En retard",
+      });
+    });
+
+  return rows;
+}
+
+function getCommissionAmountForProperty(property, payment) {
+  const paidAmount = parseFCFA(payment?.paid ?? payment?.amountNow);
+  const configuredAmount = getCommissionAmountFromRule(property?.commission, paidAmount);
+  if (configuredAmount > 0) return configuredAmount;
+
+  return Math.round(paidAmount * 0.05);
+}
+
+function buildCommissionRecords(propertiesList = [], paymentsList = [], baseCommissions = [], overrides = {}) {
+  const basePaymentReferences = new Set(baseCommissions.map((commission) => commission.paymentReference).filter(Boolean));
+  const generatedCommissions = paymentsList
+    .filter((payment) => parseFCFA(payment.paid) > 0 && !basePaymentReferences.has(payment.reference))
+    .map((payment, index) => {
+      const property = getPropertyByName(payment.property, propertiesList);
+      if (!isPropertyAgencyCollected(property)) return null;
+      const paidAmount = parseFCFA(payment.paid);
+      const commissionAmount = getCommissionAmountForProperty(property, payment);
+
+      return {
+        id: makeDocumentNumber("COM", 300 + index + 1),
+        operation: `Encaissement ${payment.property}`,
+        property: payment.property,
+        owner: payment.owner,
+        client: payment.tenant,
+        period: payment.period,
+        date: payment.date,
+        collected: formatFCFA(paidAmount),
+        mode: property?.commission?.includes("%") ? "Pourcentage" : "Montant fixe",
+        rate: property?.commission ?? "5%",
+        fixedAmount: property?.commission?.includes("%") ? "" : property?.commission ?? "",
+        calculationBase: "Paiement encaissé",
+        commission: formatFCFA(commissionAmount),
+        ownerNet: formatFCFA(Math.max(paidAmount - commissionAmount, 0)),
+        status: "Calculée",
+        contractNumber: payment.contract ?? property?.activeContractNumber ?? "",
+        paymentReference: payment.reference,
+        integratedInOwnerStatement: false,
+      };
+    })
+    .filter(Boolean);
+
+  return [...generatedCommissions, ...baseCommissions].map((commission) => ({
+    ...commission,
+    ...(overrides[getCommissionKey(commission)] ?? {}),
+  }));
+}
+
+function buildReversalRecords(ownersList = [], paymentsList = [], chargesList = [], commissionsList = [], baseReversals = [], overrides = {}) {
+  const baseOwners = new Set(baseReversals.map((reversal) => reversal.owner));
+  const generatedReversals = ownersList
+    .filter((owner) => !baseOwners.has(owner.name))
+    .map((owner) => {
+      const ownerPayments = paymentsList.filter((payment) => payment.owner === owner.name && parseFCFA(payment.paid) > 0);
+      const ownerCharges = chargesList.filter((charge) => charge.owner === owner.name && isOwnerDeductibleCharge(charge));
+      const ownerCommissions = commissionsList.filter((commission) => commission.owner === owner.name);
+      const collected = ownerPayments.reduce((sum, payment) => sum + parseFCFA(payment.paid), 0);
+      const commission = ownerCommissions.reduce((sum, item) => sum + parseFCFA(item.commission), 0);
+      const chargeTotal = ownerCharges.reduce((sum, charge) => sum + parseFCFA(charge.amount), 0);
+      const balance = Math.max(collected - commission - chargeTotal, 0);
+
+      if (!collected && !chargeTotal && !commission) return null;
+
+      return {
+        owner: owner.name,
+        collected: formatFCFA(collected),
+        commission: formatFCFA(commission),
+        charges: formatFCFA(chargeTotal),
+        paid: "0 FCFA",
+        balance: formatFCFA(balance),
+        status: balance > 0 ? "À reverser" : "Soldé",
+        period: "Juin 2026",
+      };
+    })
+    .filter(Boolean);
+
+  return [...baseReversals, ...generatedReversals].map((reversal) => ({
+    ...reversal,
+    ...(overrides[getReversalKey(reversal)] ?? {}),
+    history: overrides[getReversalKey(reversal)]?.history ?? reversal.history ?? [],
+  }));
 }
 
 function getPaymentKey(item) {
@@ -3910,18 +4067,19 @@ function getReversalKey(reversal) {
   return reversal?.reference ?? normalizeSearch(`${reversal?.owner ?? "proprietaire"}-${reversal?.period ?? "periode"}-${reversal?.balance ?? "solde"}`);
 }
 
-function calculateOwnerReversal(ownerName, paymentsList = paymentRecords, chargesList = charges, reversalsList = reversals) {
-  const ownerData = owners.find((owner) => owner.name === ownerName);
+function calculateOwnerReversal(ownerName, paymentsList = paymentRecords, chargesList = charges, reversalsList = reversals, ownersList = [], commissionsList = []) {
+  const ownerData = ownersList.find((owner) => owner.name === ownerName);
   const ownerPayments = paymentsList.filter((payment) => payment.owner === ownerName);
-  const ownerCharges = chargesList.filter((charge) => charge.owner === ownerName && !["Annulé", "Annulée"].includes(charge.status));
+  const ownerCharges = chargesList.filter((charge) => charge.owner === ownerName && isOwnerDeductibleCharge(charge));
   const ownerReversals = reversalsList.filter((reversal) => reversal.owner === ownerName && !["Annulé", "Annulée", "Archivé"].includes(reversal.status));
+  const ownerCommissions = commissionsList.filter((commission) => commission.owner === ownerName);
   const collectedFromPayments = ownerPayments.reduce((sum, payment) => sum + parseFCFA(payment.paid), 0);
-  const collected = Math.max(collectedFromPayments, parseFCFA(ownerData?.rent));
-  const commissions = parseFCFA(ownerData?.commission) || Math.round(collected * 0.05);
-  const chargesAmount = Math.max(
-    ownerCharges.reduce((sum, charge) => sum + parseFCFA(charge.amount ?? charge.charges), 0),
-    parseFCFA(ownerData?.charges)
-  );
+  const collected = collectedFromPayments || parseFCFA(ownerData?.rent);
+  const commissions = ownerCommissions.reduce((sum, commission) => sum + parseFCFA(commission.commission), 0)
+    || getCommissionAmountFromRule(ownerData?.commission, collected)
+    || (collected > 0 ? Math.round(collected * 0.05) : 0);
+  const chargesAmount = ownerCharges.reduce((sum, charge) => sum + parseFCFA(charge.amount ?? charge.charges), 0)
+    || parseFCFA(ownerData?.charges);
   const alreadyPaid = ownerReversals.reduce((sum, reversal) => sum + parseFCFA(reversal.paid), 0);
   const balance = Math.max(0, collected - commissions - chargesAmount - alreadyPaid);
 
@@ -4189,11 +4347,23 @@ function App() {
     ...(paymentProofs[payment.reference] ? { proof: paymentProofs[payment.reference] } : {}),
     history: paymentHistories[payment.reference] ?? payment.history ?? [],
   })), [demoBasePayments, paymentHistories, paymentProofs, recordedPayments]);
-  const allCommissions = useMemo(() => demoBaseCommissions.map((commission) => ({
-    ...commission,
-    ...(commissionOverrides[getCommissionKey(commission)] ?? {}),
-  })), [demoBaseCommissions, commissionOverrides]);
-  const allRentRows = useMemo(() => mergeRentRowsWithPayments(demoBaseRentRows, recordedPayments), [demoBaseRentRows, recordedPayments]);
+  const propertiesWithArchiveState = useMemo(() => [...createdProperties, ...demoBaseProperties].map((property) => {
+    const propertyWithOverride = { ...property, ...(propertyOverrides[property.code] ?? {}) };
+    const archive = archivedProperties[property.code];
+    if (!archive) return propertyWithOverride;
+    return {
+      ...propertyWithOverride,
+      status: "Archivé",
+      archived: true,
+      archiveReason: archive.reason,
+      archiveDate: archive.date,
+      lastAction: `Archivé : ${archive.reason}`,
+    };
+  }), [archivedProperties, createdProperties, demoBaseProperties, propertyOverrides]);
+  const activeProperties = useMemo(
+    () => propertiesWithArchiveState.filter((property) => !property.archived),
+    [propertiesWithArchiveState]
+  );
   const allMaintenances = useMemo(() => [...scheduledMaintenances, ...demoBaseMaintenances].map((maintenance) => ({
     ...maintenance,
     ...(maintenanceOverrides[getMaintenanceKey(maintenance)] ?? {}),
@@ -4219,6 +4389,15 @@ function App() {
     const applyOverride = (tenant) => ({ ...tenant, ...(tenantOverrides[tenant.id] ?? {}) });
     return [...createdTenants.map(applyOverride), ...demoBaseTenants.map(applyOverride)];
   }, [createdTenants, demoBaseTenants, tenantOverrides]);
+  const operationalRentRows = useMemo(
+    () => buildRentRowsFromProperties(activeProperties, allTenants, demoBaseRentRows),
+    [activeProperties, allTenants, demoBaseRentRows]
+  );
+  const allRentRows = useMemo(() => mergeRentRowsWithPayments(operationalRentRows, recordedPayments), [operationalRentRows, recordedPayments]);
+  const allCommissions = useMemo(
+    () => buildCommissionRecords(activeProperties, allPayments, demoBaseCommissions, commissionOverrides),
+    [activeProperties, allPayments, demoBaseCommissions, commissionOverrides]
+  );
   const allProspects = useMemo(() => {
     const applyOverride = (prospect) => ({ ...prospect, ...(prospectOverrides[getProspectKey(prospect)] ?? {}) });
     return [...createdProspects.map(applyOverride), ...demoBaseProspects.map(applyOverride)];
@@ -4241,11 +4420,10 @@ function App() {
 
     return [...(demoDataLoaded ? notificationAlerts : []), ...visitNotifications];
   }, [allVisits, demoDataLoaded]);
-  const allReversals = useMemo(() => [...ownerReversements, ...demoBaseReversals].map((reversal) => ({
-    ...reversal,
-    ...(reversalOverrides[getReversalKey(reversal)] ?? {}),
-    history: reversalOverrides[getReversalKey(reversal)]?.history ?? reversal.history ?? [],
-  })), [demoBaseReversals, ownerReversements, reversalOverrides]);
+  const allReversals = useMemo(
+    () => buildReversalRecords(allOwners, allPayments, allCharges, allCommissions, [...ownerReversements, ...demoBaseReversals], reversalOverrides),
+    [allCharges, allCommissions, allOwners, allPayments, demoBaseReversals, ownerReversements, reversalOverrides]
+  );
   const allUsers = useMemo(() => {
     const applyOverride = (user) => ({ ...user, ...(userOverrides[getUserKey(user)] ?? {}) });
     return [...createdUsers.map(applyOverride), ...demoBaseUsers.map(applyOverride)];
@@ -4261,24 +4439,6 @@ function App() {
     [currentAccess.pages]
   );
   const availableReports = useMemo(() => getReportTitlesForUser(currentUser), [currentUser]);
-  const propertiesWithArchiveState = useMemo(() => [...createdProperties, ...demoBaseProperties].map((property) => {
-    const propertyWithOverride = { ...property, ...(propertyOverrides[property.code] ?? {}) };
-    const archive = archivedProperties[property.code];
-    if (!archive) return propertyWithOverride;
-    return {
-      ...propertyWithOverride,
-      status: "Archivé",
-      archived: true,
-      archiveReason: archive.reason,
-      archiveDate: archive.date,
-      lastAction: `Archivé : ${archive.reason}`,
-    };
-  }), [archivedProperties, createdProperties, demoBaseProperties, propertyOverrides]);
-  const activeProperties = useMemo(
-    () => propertiesWithArchiveState.filter((property) => !property.archived),
-    [propertiesWithArchiveState]
-  );
-
   useEffect(() => {
     if (!isAuthenticated) return;
 
@@ -8119,7 +8279,19 @@ function App() {
       />
 
       <main className={activePage === "Dashboard" ? "page-shell dashboard-shell" : "page-shell"}>
-        {activePage === "Dashboard" && <DashboardPage currentUser={currentUser} onAction={openAction} onOpenProperty={showPropertyDetail} propertiesList={activeProperties} />}
+        {activePage === "Dashboard" && (
+          <DashboardPage
+            currentUser={currentUser}
+            onAction={openAction}
+            onOpenProperty={showPropertyDetail}
+            propertiesList={activeProperties}
+            rentRowsList={allRentRows}
+            paymentsList={allPayments}
+            chargesList={allCharges}
+            commissionsList={allCommissions}
+            reversalsList={allReversals}
+          />
+        )}
         {activePage === "Biens" && (
           <PropertiesPage
             query={globalQuery}
@@ -8508,6 +8680,7 @@ function App() {
           owner={reversalActionContext?.owner ?? allOwners[0]}
           ownersList={allOwners}
           paymentsList={allPayments}
+          commissionsList={allCommissions}
           chargesList={allCharges}
           reversalsList={allReversals}
           sequence={ownerReversements.length + allReversals.length + 1}
@@ -9366,14 +9539,14 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onLog
   );
 }
 
-function DashboardPage({ currentUser = users[0], onAction, onOpenProperty, propertiesList = [] }) {
+function DashboardPage({ currentUser = users[0], onAction, onOpenProperty, propertiesList = [], rentRowsList = [], paymentsList = [], chargesList = [], commissionsList = [], reversalsList = [] }) {
   const [kpiPeriod, setKpiPeriod] = useState("Mois");
   const [dashboardState, setDashboardState] = useState("Données");
   const hasDashboardData = propertiesList.length > 0;
   const effectiveDashboardState = hasDashboardData || ["Chargement", "Erreur"].includes(dashboardState) ? dashboardState : "Vide";
   const dashboardProfile = useMemo(
-    () => buildDashboardProfile(currentUser, propertiesList, kpiPeriod),
-    [currentUser, kpiPeriod, propertiesList]
+    () => buildDashboardProfile(currentUser, propertiesList, kpiPeriod, { rentRowsList, paymentsList, chargesList, commissionsList, reversalsList }),
+    [chargesList, commissionsList, currentUser, kpiPeriod, paymentsList, propertiesList, rentRowsList, reversalsList]
   );
   const selectedPipeline = dashboardProfile.pipelineData;
   const kpis = dashboardProfile.kpis;
@@ -9417,7 +9590,7 @@ function DashboardPage({ currentUser = users[0], onAction, onOpenProperty, prope
 
       <section className="two-grid" data-demo="dashboard-charts">
         <Panel title={dashboardProfile.chartTitle}>
-          <RentBars period={kpiPeriod} />
+          <RentBars rentRowsList={rentRowsList} period={kpiPeriod} />
         </Panel>
         <Panel title={selectedPipeline.title}>
           <PipelineChart data={selectedPipeline} />
@@ -9749,8 +9922,8 @@ function PropertiesPage({
               <option>Tous équipements</option>
               {tags.map((option) => <option key={option}>{option}</option>)}
             </select></label>
-            <label>Montant min<input inputMode="numeric" value={advancedFilters.minPrice} onChange={(event) => updateAdvancedFilter("minPrice", event.target.value)} placeholder="Ex. 500000" /></label>
-            <label>Montant max<input inputMode="numeric" value={advancedFilters.maxPrice} onChange={(event) => updateAdvancedFilter("maxPrice", event.target.value)} placeholder="Ex. 2000000" /></label>
+            <label>Montant min<MoneyInput value={advancedFilters.minPrice} onChange={(value) => updateAdvancedFilter("minPrice", value)} placeholder="500 000" /></label>
+            <label>Montant max<MoneyInput value={advancedFilters.maxPrice} onChange={(value) => updateAdvancedFilter("maxPrice", value)} placeholder="2 000 000" /></label>
             <label>Surface min<input inputMode="numeric" value={advancedFilters.minSurface} onChange={(event) => updateAdvancedFilter("minSurface", event.target.value)} placeholder="m²" /></label>
             <label>Pièces min<input inputMode="numeric" value={advancedFilters.minRooms} onChange={(event) => updateAdvancedFilter("minRooms", event.target.value)} placeholder="0" /></label>
             <label>Chambres min<input inputMode="numeric" value={advancedFilters.minBedrooms} onChange={(event) => updateAdvancedFilter("minBedrooms", event.target.value)} placeholder="0" /></label>
@@ -13841,8 +14014,8 @@ function OwnerReversementModal({ owner, onSave, onClose }) {
           <div className="form-grid compact-form">
             <label>Propriétaire<input value={owner.name} readOnly /></label>
             <label>Période concernée<input value={values.period} onChange={(event) => update("period", event.target.value)} /></label>
-            <label>Solde à reverser<input value={values.balance} onChange={(event) => update("balance", event.target.value)} /></label>
-            <label>Montant reversé<input value={values.amount} onChange={(event) => update("amount", event.target.value)} /></label>
+            <label>Solde à reverser<MoneyInput value={values.balance} onChange={(value) => update("balance", value)} /></label>
+            <label>Montant reversé<MoneyInput value={values.amount} onChange={(value) => update("amount", value)} /></label>
             <label>Mode de paiement<select value={values.mode} onChange={(event) => update("mode", event.target.value)}><option>Virement bancaire</option><option>Orange Money</option><option>Moov Money</option><option>Chèque</option><option>Espèces</option></select></label>
             <label>Référence<input value={values.reference} onChange={(event) => update("reference", event.target.value)} /></label>
             <label>Date<input type="date" value={values.date} onChange={(event) => update("date", event.target.value)} /></label>
@@ -16016,10 +16189,10 @@ function CommissionEditModal({ commission, onSave, onClose }) {
         <div className="form-grid compact-form">
           <label>Mode de calcul<select value={values.mode} onChange={update("mode")}><option>Pourcentage</option><option>Montant fixe</option></select></label>
           <label>Taux<input value={values.rate} onChange={update("rate")} placeholder="5%" /></label>
-          <label>Montant fixe<input value={values.fixedAmount} onChange={update("fixedAmount")} placeholder="150 000 FCFA" /></label>
+          <label>Montant fixe<MoneyInput value={values.fixedAmount} onChange={(value) => update("fixedAmount")({ target: { value } })} placeholder="150 000" /></label>
           <label>Base de calcul<select value={values.calculationBase} onChange={update("calculationBase")}><option>Loyer encaissé</option><option>Prix de vente</option><option>Mandat de gestion</option><option>Montant manuel</option></select></label>
-          <label>Montant de base<input value={values.calculationBaseAmount} onChange={update("calculationBaseAmount")} /></label>
-          <label>Commission estimée<input value={estimatedCommission} readOnly /></label>
+          <label>Montant de base<MoneyInput value={values.calculationBaseAmount} onChange={(value) => update("calculationBaseAmount")({ target: { value } })} /></label>
+          <label>Commission estimée<MoneyInput value={estimatedCommission} readOnly /></label>
           <label className="full">Commentaire<textarea value={values.comment} onChange={update("comment")} /></label>
           <label className="full">Motif de modification<input value={values.reason} onChange={update("reason")} placeholder="Correction taux, accord propriétaire..." /></label>
           {commission.integratedInOwnerStatement && (
@@ -16808,10 +16981,10 @@ function MaintenanceProfilePanel({ maintenance, propertiesList = [], onAction })
   );
 }
 
-function FinanceReversalPrepareModal({ owner, ownersList = owners, paymentsList = paymentRecords, chargesList = charges, reversalsList = reversals, sequence = 1, onSave, onClose }) {
+function FinanceReversalPrepareModal({ owner, ownersList = owners, paymentsList = paymentRecords, commissionsList = commissions, chargesList = charges, reversalsList = reversals, sequence = 1, onSave, onClose }) {
   const [ownerName, setOwnerName] = useState(owner?.name ?? ownersList[0]?.name ?? "");
   const selectedOwner = ownersList.find((item) => item.name === ownerName) ?? owner ?? ownersList[0];
-  const calculation = calculateOwnerReversal(ownerName, paymentsList, chargesList, reversalsList);
+  const calculation = calculateOwnerReversal(ownerName, paymentsList, chargesList, reversalsList, ownersList, commissionsList);
   const [values, setValues] = useState({
     start: "2026-06-01",
     end: "2026-06-30",
@@ -16891,7 +17064,7 @@ function FinanceReversalPrepareModal({ owner, ownersList = owners, paymentsList 
         <div className="form-section">
           <h3>Paiement</h3>
           <div className="form-grid compact-form">
-            <label>Montant à reverser<input value={values.amount} onChange={update("amount")} /></label>
+            <label>Montant à reverser<MoneyInput value={values.amount} onChange={(value) => update("amount")({ target: { value } })} /></label>
             <label>Mode de paiement<select value={values.mode} onChange={update("mode")}><option>Virement bancaire</option><option>Orange Money</option><option>Moov Money</option><option>Chèque</option><option>Espèces</option></select></label>
             <label>Référence<input value={values.reference} onChange={update("reference")} /></label>
             <label>Date prévue<input type="date" value={values.date} onChange={update("date")} /></label>
@@ -17016,8 +17189,8 @@ function ReversalPartialModal({ reversal, onSave, onClose }) {
           <Badge label={formatFCFA(remaining)} />
         </div>
         <div className="form-grid compact-form">
-          <label>Montant partiel<input value={values.amount} onChange={update("amount")} /></label>
-          <label>Solde restant<input value={formatFCFA(remaining)} readOnly /></label>
+          <label>Montant partiel<MoneyInput value={values.amount} onChange={(value) => update("amount")({ target: { value } })} /></label>
+          <label>Solde restant<MoneyInput value={formatFCFA(remaining)} readOnly /></label>
           <label>Date prochaine échéance<input type="date" value={values.nextDate} onChange={update("nextDate")} /></label>
           <label className="full">Commentaire<textarea value={values.comment} onChange={update("comment")} /></label>
         </div>
@@ -17376,9 +17549,9 @@ function PaymentForm({ onAction, paymentsList = paymentRecords, rentRowsList = r
           <label>Bien<select value={activePayment.property} onChange={(event) => selectByProperty(event.target.value)}>{agencyProperties.map((property) => <option key={property.code}>{property.name}</option>)}</select></label>
           <label>Propriétaire<select value={activePayment.owner} onChange={(event) => selectByOwner(event.target.value)}>{ownersList.map((owner) => <option key={owner.id}>{owner.name}</option>)}</select></label>
           <label>Période<input defaultValue={activePayment.period} /></label>
-          <label>Montant dû<input defaultValue={activePayment.due} /></label>
-          <label>Montant payé<input defaultValue={activePayment.paid} /></label>
-          <label>Solde automatique<input defaultValue={activePayment.balance} readOnly /></label>
+          <label>Montant dû<MoneyInput value={activePayment.due} readOnly /></label>
+          <label>Montant payé<MoneyInput value={activePayment.paid} readOnly /></label>
+          <label>Solde automatique<MoneyInput value={activePayment.balance} readOnly /></label>
           <label>Mode de paiement<select defaultValue={activePayment.mode}>{modes.map((mode) => <option key={mode}>{mode}</option>)}</select></label>
           <label>Référence paiement<input defaultValue={activePayment.paymentRef} /></label>
           <label>Numéro reçu automatique<input value={receiptNumber} onChange={(event) => setReceiptNumber(event.target.value)} /><small>Modifiable si le client impose une référence interne.</small></label>
@@ -18953,11 +19126,56 @@ function DashboardSelect({ value, onChange, options, ariaLabel }) {
   );
 }
 
-function RentBars() {
-  const maxExpected = Math.max(...rentMonthlyEvolution.map((item) => item.expected));
-  const bars = rentMonthlyEvolution.map((item, index, items) => {
+function getMonthShortLabel(period) {
+  const normalized = normalizeSearch(period);
+  const months = [
+    ["janvier", "Jan"],
+    ["fevrier", "Fév"],
+    ["mars", "Mar"],
+    ["avril", "Avr"],
+    ["mai", "Mai"],
+    ["juin", "Juin"],
+    ["juillet", "Juil"],
+    ["aout", "Août"],
+    ["septembre", "Sep"],
+    ["octobre", "Oct"],
+    ["novembre", "Nov"],
+    ["decembre", "Déc"],
+  ];
+  return months.find(([key]) => normalized.includes(key))?.[1] ?? String(period || "Période");
+}
+
+function buildRentMonthlyEvolution(rentRowsList = []) {
+  const rows = rentRowsList.filter((row) => parseFCFA(row.expected) > 0);
+  if (!rows.length) return [];
+
+  const grouped = rows.reduce((acc, row) => {
+    const label = getMonthShortLabel(row.period);
+    const current = acc[label] ?? { month: label, expected: 0, collected: 0 };
+    current.expected += parseFCFA(row.expected);
+    current.collected += parseFCFA(row.paid);
+    acc[label] = current;
+    return acc;
+  }, {});
+
+  return Object.values(grouped).slice(-6);
+}
+
+function RentBars({ rentRowsList = [] }) {
+  const monthlyEvolution = buildRentMonthlyEvolution(rentRowsList);
+
+  if (!monthlyEvolution.length) {
+    return (
+      <div className="rent-chart empty-chart" data-demo="dashboard-rent-chart">
+        <p>Aucune donnée disponible pour cette période.</p>
+      </div>
+    );
+  }
+
+  const maxExpected = Math.max(...monthlyEvolution.map((item) => item.expected), 1);
+  const bars = monthlyEvolution.map((item, index, items) => {
     const unpaid = Math.max(item.expected - item.collected, 0);
-    const collectionRate = Math.round((item.collected / item.expected) * 100);
+    const collectionRate = item.expected ? Math.round((item.collected / item.expected) * 100) : 0;
 
     return {
       ...item,
@@ -19096,6 +19314,34 @@ function Button({ children, variant = "secondary", compact = false, onClick, dis
     <button className={`button ${variant} ${compact ? "compact" : ""}`} onClick={onClick} disabled={disabled} {...props}>
       {children}
     </button>
+  );
+}
+
+function MoneyInput({ value, onChange, readOnly = false, placeholder = "0", ...props }) {
+  const rawValue = value === null || value === undefined ? "" : String(value);
+  const hasAmount = /\d/.test(rawValue);
+  const amount = parseFCFA(value);
+  const displayValue = !rawValue || !hasAmount
+    ? ""
+    : new Intl.NumberFormat("fr-FR").format(amount);
+
+  const handleChange = (event) => {
+    const nextAmount = parseFCFA(event.target.value);
+    onChange(nextAmount > 0 ? formatFCFA(nextAmount) : "");
+  };
+
+  return (
+    <span className={`money-input ${readOnly ? "readonly" : ""}`}>
+      <input
+        {...props}
+        inputMode="numeric"
+        value={displayValue}
+        onChange={handleChange}
+        readOnly={readOnly}
+        placeholder={placeholder}
+      />
+      <b>FCFA</b>
+    </span>
   );
 }
 
@@ -19859,8 +20105,8 @@ function ProspectConversionModal({ prospect, propertiesList = [], onSave, onClos
             {isTenantConversion && (
               <>
                 <label>Date d'entrée<input type="date" value={values.entryDate} onChange={update("entryDate")} /></label>
-                <label>Loyer<input value={values.rent} onChange={update("rent")} /></label>
-                <label>Caution<input value={values.deposit} onChange={update("deposit")} /></label>
+                <label>Loyer<MoneyInput value={values.rent} onChange={(value) => update("rent")({ target: { value } })} /></label>
+                <label>Caution<MoneyInput value={values.deposit} onChange={(value) => update("deposit")({ target: { value } })} /></label>
                 <label>Créer contrat<select value={values.createContract} onChange={update("createContract")}><option>Oui</option><option>Non</option></select></label>
               </>
             )}
@@ -20417,7 +20663,7 @@ function ChargeFormModal({ title, context = null, propertiesList = [], maintenan
           <div className="form-grid compact-form">
             <label>Date<input type="date" value={values.date} onChange={update("date")} /></label>
             <label>Type de charge<select value={values.type} onChange={update("type")}>{chargeCreationTypes.map((item) => <option key={item}>{item}</option>)}</select></label>
-            <label>Montant<input value={values.amount} onChange={update("amount")} placeholder="95 000 FCFA" /></label>
+            <label>Montant<MoneyInput value={values.amount} onChange={(value) => update("amount")({ target: { value } })} placeholder="95 000" /></label>
             <label>Statut<select value={values.status} onChange={update("status")}><option>Brouillon</option><option>À valider</option><option>Validée</option><option>Payée</option></select></label>
             <label className="full">Description<textarea value={values.description} onChange={update("description")} placeholder="Décrire la charge, le besoin ou la dépense engagée." /></label>
           </div>
@@ -20537,8 +20783,8 @@ function TenantFormModal({ tenant, property, propertiesList = [], onSave, onClos
           <h3>Occupation & conditions</h3>
           <div className="form-grid compact-form">
             <label>Bien occupé<select value={values.property} onChange={(event) => update("property", event.target.value)}>{propertyOptions.map((item) => <option key={item.code}>{item.name}</option>)}{!propertyOptions.length && <option>{linkedProperty.name}</option>}</select></label>
-            <label>Loyer mensuel<input value={values.rent} onChange={(event) => update("rent", event.target.value)} /></label>
-            <label>Caution<input value={values.deposit} onChange={(event) => update("deposit", event.target.value)} /></label>
+            <label>Loyer mensuel<MoneyInput value={values.rent} onChange={(value) => update("rent", value)} /></label>
+            <label>Caution<MoneyInput value={values.deposit} onChange={(value) => update("deposit", value)} /></label>
             <label>Contrat actif<input value={values.contract} onChange={(event) => update("contract", event.target.value)} /></label>
             <label>Statut paiement<select value={values.paymentStatus} onChange={(event) => update("paymentStatus", event.target.value)}><option>À jour</option><option>Partiel</option><option>En retard</option><option>Relancé</option><option>Inactif</option></select></label>
             <label className="full">Observations<textarea value={values.observations} onChange={(event) => update("observations", event.target.value)} /></label>
@@ -20695,8 +20941,8 @@ function NewTenantFormModal({ sequence = 1, propertiesList = [], onSave, onClose
         <div className="form-section">
           <h3>Conditions locatives</h3>
           <div className="form-grid tenant-creation-grid">
-            <label>Loyer mensuel<input value={values.rent} onChange={update("rent")} /></label>
-            <label>Caution<input value={values.deposit} onChange={update("deposit")} /></label>
+            <label>Loyer mensuel<MoneyInput value={values.rent} onChange={(value) => update("rent")({ target: { value } })} /></label>
+            <label>Caution<MoneyInput value={values.deposit} onChange={(value) => update("deposit")({ target: { value } })} /></label>
             <label>Périodicité<select value={values.periodicity} onChange={update("periodicity")}><option>Mensuelle</option><option>Trimestrielle</option><option>Semestrielle</option><option>Annuelle</option></select></label>
             <label>Statut initial<select value={values.paymentStatus} onChange={update("paymentStatus")}><option>À jour</option><option>En attente</option><option>Brouillon</option></select></label>
             <label>Créer contrat maintenant ?<select value={values.createContractNow} onChange={update("createContractNow")}><option>Non</option><option>Oui</option></select></label>
@@ -20941,7 +21187,7 @@ function FinanceReceiptModal({ payment, printOnOpen = false, onReceiptAction, on
               <label>Numéro<input value={values.numero} onChange={(event) => update("numero", event.target.value)} /></label>
               <label>Date<input value={values.date} onChange={(event) => update("date", event.target.value)} /></label>
               <label>Nom<input value={values.nom} onChange={(event) => update("nom", event.target.value)} /></label>
-              <label>Montant<input value={values.montantChiffres} onChange={(event) => update("montantChiffres", event.target.value)} /></label>
+              <label>Montant<MoneyInput value={values.montantChiffres} onChange={(value) => update("montantChiffres", value)} /></label>
               <label className="full">Objet<textarea value={values.objet} onChange={(event) => update("objet", event.target.value)} /></label>
             </div>
           </Panel>
@@ -20975,7 +21221,7 @@ function ArrearsPromiseModal({ row, onSave, onClose }) {
           <Badge label={row.balance} />
         </div>
         <div className="form-grid compact-form">
-          <label>Montant promis<input value={values.amount} onChange={update("amount")} /></label>
+          <label>Montant promis<MoneyInput value={values.amount} onChange={(value) => update("amount")({ target: { value } })} /></label>
           <label>Date promise<input type="date" value={values.promisedDate} onChange={update("promisedDate")} /></label>
           <label>Mode probable de paiement<select value={values.paymentMode} onChange={update("paymentMode")}>{paymentModes.map((mode) => <option key={mode}>{mode}</option>)}</select></label>
           <label>Prochaine relance automatique<input value={values.nextReminder} onChange={update("nextReminder")} /></label>
@@ -21541,9 +21787,9 @@ function TenantPaymentModal({ tenant, property, row, payment, paymentsList = pay
             <label>Locataire<input value={values.tenant} readOnly /></label>
             <label>Bien<input value={values.property} readOnly /></label>
             <label>Période<input value={values.period} onChange={(event) => update("period", event.target.value)} /></label>
-            <label>Montant dû<input value={values.due} onChange={(event) => update("due", event.target.value)} /></label>
-            <label>Montant payé<input value={values.paid} onChange={(event) => update("paid", event.target.value)} /></label>
-            <label>Solde automatique<input value={balance} readOnly /></label>
+            <label>Montant dû<MoneyInput value={values.due} onChange={(value) => update("due", value)} /></label>
+            <label>Montant payé<MoneyInput value={values.paid} onChange={(value) => update("paid", value)} /></label>
+            <label>Solde automatique<MoneyInput value={balance} readOnly /></label>
             <label>Mode de paiement<select value={values.mode} onChange={(event) => update("mode", event.target.value)}>{paymentModes.map((mode) => <option key={mode}>{mode}</option>)}</select></label>
             <label>Référence<input value={values.paymentRef} onChange={(event) => update("paymentRef", event.target.value)} /></label>
             <label>Date<input type="date" value={values.date} onChange={(event) => update("date", event.target.value)} /></label>
@@ -21657,7 +21903,7 @@ function TenantReceiptModal({ tenant, property, payment, paymentsList = paymentR
             <div className="form-grid compact-form">
               <label>Paiement concerné<select value={selectedRef} onChange={(event) => setSelectedRef(event.target.value)}>{paymentOptions.map((item) => <option key={item.reference} value={item.reference}>{item.reference} · {item.period}</option>)}</select></label>
               <label>Période<input value={values.period} onChange={(event) => update("period", event.target.value)} /></label>
-              <label>Montant<input value={values.amount} onChange={(event) => update("amount", event.target.value)} /></label>
+              <label>Montant<MoneyInput value={values.amount} onChange={(value) => update("amount", value)} /></label>
               <label>Mode de paiement<select value={values.mode} onChange={(event) => update("mode", event.target.value)}>{paymentModes.map((mode) => <option key={mode}>{mode}</option>)}</select></label>
               <label className="full">Modèle de reçu<select value={values.template} onChange={(event) => update("template", event.target.value)}><option>Reçu d'encaissement E.K immo</option><option>Reçu mobile money</option><option>Reçu locatif standard</option></select></label>
             </div>
@@ -22113,7 +22359,7 @@ function TenantReminderModal({ tenant, property, row, propertiesList = [], onSav
             <label>Bien<input value={values.property} onChange={(event) => update("property", event.target.value)} /></label>
             <label>Période<input value={values.period} onChange={(event) => update("period", event.target.value)} /></label>
             <label>Motif<select value={values.reason} onChange={(event) => update("reason", event.target.value)}><option>Retard de paiement</option><option>Paiement partiel</option><option>Promesse non tenue</option><option>Contrat à régulariser</option><option>Autre</option></select></label>
-            <label>Montant concerné<input value={values.amount} onChange={(event) => update("amount", event.target.value)} /></label>
+            <label>Montant concerné<MoneyInput value={values.amount} onChange={(value) => update("amount", value)} /></label>
             <label>Canal<select value={values.channel} onChange={(event) => update("channel", event.target.value)}><option>Appel</option><option>WhatsApp</option><option>SMS</option><option>Email</option><option>Visite</option></select></label>
             <label>Promesse de paiement<input value={values.promise} onChange={(event) => update("promise", event.target.value)} /></label>
             <label>Date prochaine relance<input type="date" value={values.nextDate} onChange={(event) => update("nextDate", event.target.value)} /></label>
@@ -22389,8 +22635,8 @@ function AttachTenantModal({ property, tenantsList = tenants, onClose, onAttach 
             <div className="form-grid compact-form">
               <label>Sélectionner locataire<select value={existingTenantName} onChange={(event) => setExistingTenantName(event.target.value)}>{tenantOptions.map((tenant) => <option key={tenant.id}>{tenant.name}</option>)}</select></label>
               <label>Date d'entrée<input type="date" value={existingValues.entryDate} onChange={(event) => updateExisting("entryDate", event.target.value)} /></label>
-              <label>Loyer mensuel<input value={existingValues.rent} onChange={(event) => updateExisting("rent", event.target.value)} /></label>
-              <label>Caution<input value={existingValues.deposit} onChange={(event) => updateExisting("deposit", event.target.value)} /></label>
+              <label>Loyer mensuel<MoneyInput value={existingValues.rent} onChange={(value) => updateExisting("rent", value)} /></label>
+              <label>Caution<MoneyInput value={existingValues.deposit} onChange={(value) => updateExisting("deposit", value)} /></label>
               <label>Contrat à créer maintenant ?<select value={contractNow} onChange={(event) => setContractNow(event.target.value)}><option>Oui</option><option>Non</option></select></label>
               <label className="full">Observations<textarea value={existingValues.observations} onChange={(event) => updateExisting("observations", event.target.value)} /></label>
             </div>
@@ -22413,7 +22659,7 @@ function AttachTenantModal({ property, tenantsList = tenants, onClose, onAttach 
               <label>Profession<input value={newValues.profession} onChange={(event) => updateNew("profession", event.target.value)} /></label>
               <label>Pièce d'identité<input value={newValues.identity} onChange={(event) => updateNew("identity", event.target.value)} /></label>
               <label>Date d'entrée<input type="date" value={newValues.entryDate} onChange={(event) => updateNew("entryDate", event.target.value)} /></label>
-              <label>Caution<input value={newValues.deposit} onChange={(event) => updateNew("deposit", event.target.value)} /></label>
+              <label>Caution<MoneyInput value={newValues.deposit} onChange={(value) => updateNew("deposit", value)} /></label>
               <label className="full">Observations<textarea value={newValues.observations} onChange={(event) => updateNew("observations", event.target.value)} /></label>
             </div>
           </div>
@@ -22530,10 +22776,10 @@ function PaymentRegistrationModal({ context, paymentsList = paymentRecords, rent
               <h3>Montants</h3>
               <div className="form-grid compact-form">
                 <label>Période concernée<input value={period} onChange={(event) => setPeriod(event.target.value)} /></label>
-                <label>Loyer attendu<input value={expected} onChange={(event) => setExpected(event.target.value)} /></label>
-                <label>Montant déjà payé<input value={alreadyPaid} onChange={(event) => setAlreadyPaid(event.target.value)} /></label>
-                <label>Montant payé maintenant<input value={paidNow} onChange={(event) => setPaidNow(event.target.value)} /></label>
-                <label>Solde restant<input value={remaining} readOnly /></label>
+                <label>Loyer attendu<MoneyInput value={expected} onChange={setExpected} /></label>
+                <label>Montant déjà payé<MoneyInput value={alreadyPaid} onChange={setAlreadyPaid} /></label>
+                <label>Montant payé maintenant<MoneyInput value={paidNow} onChange={setPaidNow} /></label>
+                <label>Solde restant<MoneyInput value={remaining} readOnly /></label>
                 <label>Statut automatique<input value={status} readOnly /></label>
               </div>
             </div>
@@ -22665,7 +22911,7 @@ function UrgentMaintenanceModal({ context, propertiesList = [], onSave, onClose 
         <div className="form-section">
           <h3>Coût & prise en charge</h3>
           <div className="form-grid compact-form">
-            <label>Coût estimatif<input value={values.cost} onChange={update("cost")} /></label>
+            <label>Coût estimatif<MoneyInput value={values.cost} onChange={(value) => update("cost")({ target: { value } })} /></label>
             <label>Prise en charge<select value={values.payer} onChange={update("payer")}>{payers.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label>Adresse du bien<input value={selectedProperty.address} readOnly /></label>
             <label>Statut de suivi<input value={values.priority === "Critique" ? "Intervention critique" : "Intervention urgente"} readOnly /></label>
@@ -22750,8 +22996,8 @@ function MaintenanceCostModal({ maintenance, onSave, onClose }) {
           <Badge label={maintenance.cost} />
         </div>
         <div className="form-grid compact-form">
-          <label>Coût estimé<input value={values.estimatedCost} onChange={update("estimatedCost")} /></label>
-          <label>Coût réel<input value={values.realCost} onChange={update("realCost")} placeholder="À confirmer" /></label>
+          <label>Coût estimé<MoneyInput value={values.estimatedCost} onChange={(value) => update("estimatedCost")({ target: { value } })} /></label>
+          <label>Coût réel<MoneyInput value={values.realCost} onChange={(value) => update("realCost")({ target: { value } })} placeholder="À confirmer" /></label>
           <label>Prise en charge<select value={values.payer} onChange={update("payer")}>{payers.map((payer) => <option key={payer}>{payer}</option>)}</select></label>
           <label>Créer charge liée<select value={values.createCharge} onChange={update("createCharge")}><option>Oui</option><option>Non</option></select></label>
           <label>Justificatif<input type="file" onChange={(event) => setValues((current) => ({ ...current, proof: event.target.files?.[0]?.name ?? current.proof }))} /><small>{values.proof || "Aucun fichier sélectionné"}</small></label>
@@ -22891,7 +23137,7 @@ function MaintenanceValidationModal({ maintenance, onSave, onClose }) {
           <p><span>Prise en charge</span><strong>{maintenance.payer}</strong></p>
         </div>
         <div className="form-grid compact-form">
-          <label>Coût réel<input value={values.realCost} onChange={update("realCost")} /></label>
+          <label>Coût réel<MoneyInput value={values.realCost} onChange={(value) => update("realCost")({ target: { value } })} /></label>
           <label>Prise en charge<select value={values.payer} onChange={update("payer")}><option>Agence</option><option>Propriétaire</option><option>Locataire</option><option>À déterminer</option></select></label>
           <label className="full">Commentaire de validation<textarea value={values.comment} onChange={update("comment")} /></label>
         </div>
@@ -22929,7 +23175,7 @@ function MaintenanceCompletionModal({ maintenance, onSave, onClose }) {
         </div>
         <div className="form-grid compact-form">
           <label>Date de réalisation<input type="date" value={values.completedDate} onChange={update("completedDate")} /></label>
-          <label>Coût réel<input value={values.realCost} onChange={update("realCost")} /></label>
+          <label>Coût réel<MoneyInput value={values.realCost} onChange={(value) => update("realCost")({ target: { value } })} /></label>
           <label>Photos après<input type="file" accept=".jpg,.jpeg,.png" multiple onChange={(event) => setValues((current) => ({ ...current, afterPhotos: `${event.target.files?.length ?? 0} photo(s) après` }))} /><small>{values.afterPhotos || "Aucune photo après"}</small></label>
           <label>Créer rapport<select value={values.createReport} onChange={update("createReport")}><option>Oui</option><option>Non</option></select></label>
           <label className="full">Travail effectué<textarea value={values.workDone} onChange={update("workDone")} /></label>
@@ -23168,8 +23414,8 @@ function MaintenanceFormModal({ context, propertiesList = [], onSave, onClose })
         <div className="form-section" data-demo="modal-maintenance-cost">
           <h3>Coût & prise en charge</h3>
           <div className="form-grid compact-form">
-            <label>Coût estimé<input value={estimatedCost} onChange={(event) => setEstimatedCost(event.target.value)} /></label>
-            <label>Coût réel, si déjà réalisé<input value={realCost} onChange={(event) => setRealCost(event.target.value)} placeholder="À confirmer" /></label>
+            <label>Coût estimé<MoneyInput value={estimatedCost} onChange={setEstimatedCost} /></label>
+            <label>Coût réel, si déjà réalisé<MoneyInput value={realCost} onChange={setRealCost} placeholder="À confirmer" /></label>
             <label>Prise en charge<select value={payer} onChange={(event) => setPayer(event.target.value)}>{payers.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label>Créer une charge liée ?<select value={createCharge} onChange={(event) => setCreateCharge(event.target.value)}><option>Oui</option><option>Non</option></select></label>
           </div>
@@ -23684,8 +23930,8 @@ function ContractEditModal({ contract, propertiesList = [], ownersList = [], ten
         <div className="form-section">
           <h3>Conditions financieres</h3>
           <div className="form-grid compact-form">
-            <label>Montant<input value={values.amount} onChange={update("amount")} /></label>
-            <label>Caution<input value={values.deposit} onChange={update("deposit")} /></label>
+            <label>Montant<MoneyInput value={values.amount} onChange={(value) => update("amount")({ target: { value } })} /></label>
+            <label>Caution<MoneyInput value={values.deposit} onChange={(value) => update("deposit")({ target: { value } })} /></label>
             <label>Commission<input value={values.commission} onChange={update("commission")} /></label>
             <label>Mode financier<select value={values.financialMode} onChange={update("financialMode")}><option>Encaissement par l'agence</option><option>Encaissement direct propriétaire</option><option>Entretien seul</option></select></label>
             <label className="full">Conditions particulieres<textarea value={values.specialTerms} onChange={update("specialTerms")} /></label>
@@ -23768,8 +24014,8 @@ function ContractRenewalModal({ contract, onSave, onClose }) {
           <div className="form-grid compact-form">
             <label>Nouvelle date de début<input value={values.newStart} onChange={update("newStart")} /></label>
             <label>Nouvelle date de fin<input value={values.newEnd} onChange={update("newEnd")} /></label>
-            <label>Nouveau loyer<input value={values.newAmount} onChange={update("newAmount")} /></label>
-            <label>Nouvelle caution<input value={values.newDeposit} onChange={update("newDeposit")} /></label>
+            <label>Nouveau loyer<MoneyInput value={values.newAmount} onChange={(value) => update("newAmount")({ target: { value } })} /></label>
+            <label>Nouvelle caution<MoneyInput value={values.newDeposit} onChange={(value) => update("newDeposit")({ target: { value } })} /></label>
             <label>Commission agence<input value={values.newCommission} onChange={update("newCommission")} /></label>
             <label>Générer avenant ?<select value={values.generateAmendment} onChange={update("generateAmendment")}><option>Oui</option><option>Non</option></select></label>
             <label className="full">Conditions particulières<textarea value={values.terms} onChange={update("terms")} /></label>
@@ -23847,8 +24093,8 @@ function ContractTerminationModal({ contract, onSave, onClose }) {
             <label>Date de résiliation<input type="date" value={values.date} onChange={update("date")} /></label>
             <label>Motif<select value={values.reason} onChange={update("reason")}><option>Fin normale</option><option>Départ locataire</option><option>Non-paiement</option><option>Accord amiable</option><option>Vente du bien</option><option>Autre</option></select></label>
             <label>Caution à restituer<select value={values.returnDeposit} onChange={update("returnDeposit")}><option>Oui</option><option>Non</option></select></label>
-            <label>Montant à restituer<input value={values.returnAmount} onChange={update("returnAmount")} /></label>
-            <label>Impayés restants<input value={values.remainingArrears} onChange={update("remainingArrears")} /></label>
+            <label>Montant à restituer<MoneyInput value={values.returnAmount} onChange={(value) => update("returnAmount")({ target: { value } })} /></label>
+            <label>Impayés restants<MoneyInput value={values.remainingArrears} onChange={(value) => update("remainingArrears")({ target: { value } })} /></label>
             <label>Document de résiliation à générer<select value={values.generateDocument} onChange={update("generateDocument")}><option>Oui</option><option>Non</option></select></label>
             <label>Statut du bien après résiliation<select value={values.propertyStatus} onChange={update("propertyStatus")}><option>Disponible</option><option>Indisponible</option></select></label>
             <label>Détacher le locataire du bien ?<select value={values.detachTenant} onChange={update("detachTenant")}><option>Oui</option><option>Non</option></select></label>
@@ -24231,9 +24477,9 @@ function PropertyFormModal({
             <label className="full">Adresse détaillée<input value={formValues.address} onChange={updateValue("address")} /></label>
             <label className="full">Description<textarea value={formValues.description} onChange={updateValue("description")} /></label>
             <label>Statut<select value={sensitiveValues.status} onChange={(event) => updateSensitiveValue("status", event.target.value)}>{withCurrentOption("status").map((option) => <option key={option}>{option}</option>)}</select></label>
-            <label>Prix de location<input value={sensitiveValues.rent} onChange={(event) => updateSensitiveValue("rent", event.target.value)} /></label>
-            <label>Prix de vente<input value={formValues.salePrice} onChange={updateValue("salePrice")} placeholder="Si applicable" /></label>
-            <label>Montant de caution<input value={sensitiveValues.deposit} onChange={(event) => updateSensitiveValue("deposit", event.target.value)} /></label>
+            <label>Prix de location<MoneyInput value={sensitiveValues.rent} onChange={(value) => updateSensitiveValue("rent", value)} /></label>
+            <label>Prix de vente<MoneyInput value={formValues.salePrice} onChange={(value) => updateValue("salePrice")({ target: { value } })} placeholder="Si applicable" /></label>
+            <label>Montant de caution<MoneyInput value={sensitiveValues.deposit} onChange={(value) => updateSensitiveValue("deposit", value)} /></label>
             <label>Commission applicable<input value={sensitiveValues.commission} onChange={(event) => updateSensitiveValue("commission", event.target.value)} /></label>
           </div>
         </div>
