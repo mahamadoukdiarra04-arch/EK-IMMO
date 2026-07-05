@@ -9920,6 +9920,7 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onLog
     setup: "Base à configurer",
     offline: "Hors ligne",
   }[persistenceStatus] ?? "Synchronisé";
+  const persistenceTitle = `État de synchronisation : ${persistenceLabel}`;
 
   const handleResultClick = (page) => {
     onNav(page);
@@ -9966,9 +9967,8 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onLog
             <span>Mode DEMO</span>
           </button>
         )}
-        <span className={`sync-status ${persistenceStatus}`} title="État de synchronisation des données">
+        <span className={`sync-status ${persistenceStatus}`} title={persistenceTitle} aria-label={persistenceTitle} role="status">
           <span />
-          {persistenceLabel}
         </span>
         <div className="search-menu">
           <button
