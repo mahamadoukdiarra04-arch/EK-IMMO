@@ -4220,6 +4220,7 @@ function visitMatchesQuickFilter(visit, quickFilter) {
 
 const AUTH_ENDPOINT = "/api/auth.php";
 const PERSISTENCE_ENDPOINT = "/api/state.php";
+const DOCUMENT_ENDPOINT = "/api/documents.php";
 const PERSISTENCE_SAVE_DELAY = 900;
 const PERSISTED_STATE_KEYS = [
   "createdProperties",
@@ -4620,6 +4621,15 @@ function App() {
     () => navItems.filter((item) => currentAccess.pages.includes(item.page)),
     [currentAccess.pages]
   );
+
+  useEffect(() => {
+    window.__ekimmoCsrfToken = csrfToken;
+    return () => {
+      if (window.__ekimmoCsrfToken === csrfToken) {
+        window.__ekimmoCsrfToken = "";
+      }
+    };
+  }, [csrfToken]);
   const availableReports = useMemo(() => getReportTitlesForUser(currentUser), [currentUser]);
   const persistedStateSetters = {
     createdProperties: setCreatedProperties,
@@ -11739,6 +11749,12 @@ function exportClientReportAsXlsx(payload) {
 }
 
 function openClientReportPrintView(payload, mode) {
+  if (mode === "pdf" && !payload.__browserFallback) {
+    downloadServerPdf(buildServerReportPayload(payload, "Clients", "Rapport clients"), `${payload.filename}.pdf`)
+      .catch((error) => handleServerPdfFailure(error, () => openClientReportPrintView({ ...payload, __browserFallback: true }, mode)));
+    return;
+  }
+
   const reportWindow = window.open("", "_blank", "width=1180,height=820");
   if (!reportWindow) return;
 
@@ -14170,16 +14186,137 @@ function createSimplePdfBlob(template, values) {
   return new Blob([pdf], { type: "application/pdf" });
 }
 
-function downloadGeneratedPdf(template, values, fileName) {
+function humanizeDocumentField(field) {
+  return String(field)
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function getServerDocumentModule(template = {}) {
+  const source = normalizeSearch(`${template.label ?? ""} ${template.key ?? ""}`);
+  if (source.includes("rapport")) return "Rapports";
+  if (source.includes("charge") || source.includes("entretien") || source.includes("recu") || source.includes("facture") || source.includes("commission") || source.includes("reversement")) return "Finance";
+  if (source.includes("fiche") && source.includes("bien")) return "Biens";
+  if (source.includes("client") || source.includes("proprietaire") || source.includes("locataire") || source.includes("prospect")) return "Clients";
+  return "Contrats";
+}
+
+function getServerPdfTable(values = {}) {
+  if (values.table?.columns && values.table?.rows) return values.table;
+
+  const entry = Object.entries(values).find(([, value]) => (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every((item) => item && typeof item === "object" && !Array.isArray(item))
+  ));
+  if (!entry) return null;
+
+  const [key, rows] = entry;
+  const columns = Object.keys(rows[0]).slice(0, 6);
+  return {
+    title: humanizeDocumentField(key),
+    columns: columns.map(humanizeDocumentField),
+    rows: rows.map((row) => columns.map((column) => row[column] ?? "")),
+  };
+}
+
+function buildServerPdfPayload(template, values = {}, fileName) {
+  const primitiveFields = Object.entries(values)
+    .filter(([, value]) => ["string", "number", "boolean"].includes(typeof value))
+    .slice(0, 42)
+    .map(([key, value]) => ({
+      label: humanizeDocumentField(key),
+      value: String(value).replace(/\n/g, " / "),
+    }));
+
+  return {
+    title: template.label || "Document E.K immo",
+    subtitle: template.source ? `Modèle source : ${template.source}` : "Document généré depuis E.K immo",
+    documentType: template.label || "Document",
+    reference: getDocumentReferenceFromValues(values, template),
+    module: template.module || getServerDocumentModule(template),
+    fileName,
+    fields: primitiveFields,
+    table: getServerPdfTable(values),
+    footer: "E.K immo - Niarela rue ACHKHABAD en face de la mairie - contact@ekimmo-mali.com",
+  };
+}
+
+async function downloadServerPdf(payload, fileName) {
+  const csrfToken = window.__ekimmoCsrfToken || "";
+  if (!csrfToken) {
+    throw new Error("Session documentaire absente.");
+  }
+
+  const response = await fetch(DOCUMENT_ENDPOINT, {
+    method: "POST",
+    headers: {
+      Accept: "application/pdf",
+      "Content-Type": "application/json",
+      "X-CSRF-Token": csrfToken,
+    },
+    credentials: "include",
+    body: JSON.stringify({ action: "generate_pdf", fileName, payload }),
+  });
+
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => ({}));
+    const error = new Error(errorPayload.message || "Génération PDF serveur indisponible.");
+    error.status = response.status;
+    error.code = errorPayload.code;
+    throw error;
+  }
+
+  const blob = await response.blob();
+  downloadBlob(blob, fileName);
+}
+
+function buildServerReportPayload(payload, module, documentType) {
+  return {
+    title: payload.title || documentType || "Rapport E.K immo",
+    subtitle: `${payload.rows?.length ?? 0} ligne(s) - export serveur`,
+    documentType: documentType || payload.title || "Rapport",
+    reference: payload.filename || slugifyFilename(payload.title || "rapport"),
+    module,
+    fields: [
+      { label: "Date d'export", value: payload.exportedAtLabel ?? "" },
+      { label: "Utilisateur", value: payload.user ?? "" },
+      { label: "Filtres appliqués", value: (payload.filters ?? []).join(" | ") || "Aucun filtre spécifique" },
+      ...(payload.summary ? Object.entries(payload.summary).map(([key, value]) => ({ label: humanizeDocumentField(key), value })) : []),
+    ],
+    table: {
+      title: "Détail",
+      columns: payload.columns ?? [],
+      rows: payload.rows ?? [],
+    },
+    footer: "E.K immo - Export généré côté serveur",
+  };
+}
+
+function handleServerPdfFailure(error, fallback) {
+  if ([401, 403, 419].includes(error.status)) {
+    window.alert(error.message || "Export PDF non autorisé.");
+    return;
+  }
+  console.warn(error);
+  fallback?.();
+}
+
+async function downloadGeneratedPdf(template, values, fileName) {
+  try {
+    await downloadServerPdf(buildServerPdfPayload(template, values, fileName), fileName);
+    return;
+  } catch (error) {
+    if ([401, 403, 419].includes(error.status)) {
+      window.alert(error.message || "Export PDF non autorisé.");
+      return;
+    }
+    console.warn(error);
+  }
+
   const blob = createSimplePdfBlob(template, values);
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1200);
+  downloadBlob(blob, fileName);
 }
 
 function DocumentArchiveModal({ template, values, data = {}, sequence = 1, onConfirm, onClose }) {
@@ -14300,9 +14437,36 @@ function DocumentPreviewModal({ template, values, onChange, data = {}, archiveSe
 function PropertyPdfModal({ property, archived, onArchive, onClose }) {
   const owner = owners.find((item) => item.name === property.owner);
   const tenant = tenants.find((item) => item.name === property.tenant);
+  const fileName = `EKIMMO_FicheBien_${property.code || slugifyFilename(property.name)}_${new Date().toISOString().slice(0, 10)}.pdf`;
 
   const archive = () => {
     onArchive(property);
+  };
+
+  const downloadPdf = () => {
+    downloadGeneratedPdf(
+      { label: "Fiche PDF du bien", module: "Biens" },
+      {
+        reference: property.code,
+        nom: property.name,
+        type: property.type,
+        quartier: property.district,
+        adresse: property.address,
+        prix: property.price,
+        caution: property.deposit,
+        proprietaire: property.owner,
+        locataire: property.tenant || "Non renseigné",
+        statut: property.status,
+        surface: property.surface,
+        pieces: property.rooms,
+        chambres: property.bedrooms,
+        sallesDeBain: property.baths,
+        modeFinancier: property.financialMode,
+        equipements: property.amenities?.join(", ") || "",
+        observations: property.lastAction || "",
+      },
+      fileName
+    );
   };
 
   return (
@@ -14316,7 +14480,7 @@ function PropertyPdfModal({ property, archived, onArchive, onClose }) {
             <p>Fiche prête à transmettre au client, à imprimer ou à archiver dans les documents du bien.</p>
           </div>
           <div className="document-editor-actions">
-            <Button variant="primary" onClick={() => window.print()}><Download size={17} /> Télécharger PDF</Button>
+            <Button variant="primary" onClick={downloadPdf}><Download size={17} /> Télécharger PDF</Button>
             <Button onClick={() => window.print()}><Printer size={17} /> Imprimer</Button>
             <Button onClick={archive} disabled={archived}><Archive size={17} /> {archived ? "Archivé" : "Archiver dans documents"}</Button>
           </div>
@@ -17033,6 +17197,12 @@ function exportChargesAsXlsx(payload) {
 }
 
 function openChargeReportPrintView(payload, mode = "pdf") {
+  if (mode === "pdf" && !payload.__browserFallback) {
+    downloadServerPdf(buildServerReportPayload(payload, "Finance", "État des charges"), `${payload.filename}.pdf`)
+      .catch((error) => handleServerPdfFailure(error, () => openChargeReportPrintView({ ...payload, __browserFallback: true }, mode)));
+    return;
+  }
+
   const reportWindow = window.open("", "_blank", "width=1180,height=820");
   if (!reportWindow) return;
   reportWindow.document.open();
@@ -18381,6 +18551,12 @@ function exportReportAsXlsx(payload) {
 }
 
 function openReportPrintView(payload, mode = "pdf") {
+  if (mode === "pdf" && !payload.__browserFallback) {
+    downloadServerPdf(buildServerReportPayload(payload, "Rapports", payload.title || "Rapport"), `${payload.filename}.pdf`)
+      .catch((error) => handleServerPdfFailure(error, () => openReportPrintView({ ...payload, __browserFallback: true }, mode)));
+    return;
+  }
+
   const blobUrl = URL.createObjectURL(new Blob([buildReportHtml(payload, mode)], { type: "text/html;charset=utf-8" }));
   const reportWindow = window.open(blobUrl, "_blank", "width=1180,height=820");
   if (!reportWindow) {
