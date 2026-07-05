@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/auth_lib.php';
+require_once __DIR__ . '/business_lib.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
@@ -162,7 +163,7 @@ function persist_state(PDO $pdo, array $data, int $clientRevision, array $user):
         $allowedData = filter_write_state_for_user($pdo, $data, $user);
 
         if (!$row) {
-            $payload = json_encode(merge_values(empty_state(), $allowedData), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $payload = json_encode(ek_business_normalize_state(merge_values(empty_state(), $allowedData)), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             $insert = $pdo->prepare('INSERT INTO ekimmo_app_state (id, payload, revision) VALUES (:id, :payload, 1)');
             $insert->execute(['id' => APP_STATE_ID, 'payload' => $payload]);
             $pdo->commit();
@@ -180,6 +181,8 @@ function persist_state(PDO $pdo, array $data, int $clientRevision, array $user):
         } else {
             $merged = merge_values($currentData, $allowedData);
         }
+
+        $merged = ek_business_normalize_state($merged);
 
         $nextRevision = $currentRevision + 1;
         $payload = json_encode($merged, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -205,17 +208,20 @@ function persist_state(PDO $pdo, array $data, int $clientRevision, array $user):
 $pdo = db();
 $user = require_user($pdo);
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+$canReadFinance = user_can_access_state_module($pdo, $user, 'Finance', 'read');
 
 if ($method === 'GET') {
     $state = read_state($pdo);
     $data = merge_values(empty_state(), $state['data']);
+    $filteredData = filter_state_for_user($pdo, $data, $user);
     json_response([
         'ok' => true,
-        'data' => filter_state_for_user($pdo, $data, $user),
+        'data' => $filteredData,
         'revision' => $state['revision'],
         'updated_at' => $state['updated_at'],
         'user' => user_public_payload($user),
         'permissions' => role_permissions($pdo, (string) $user['role']),
+        'business' => ek_business_payload($data, $user, $canReadFinance),
         'csrfToken' => csrf_token(),
     ]);
 }
@@ -240,6 +246,7 @@ if ($method === 'POST' || $method === 'PUT') {
         'merged' => $result['merged'],
         'user' => user_public_payload($user),
         'permissions' => role_permissions($pdo, (string) $user['role']),
+        'business' => ek_business_payload($result['data'], $user, $canReadFinance),
         'csrfToken' => csrf_token(),
     ]);
 }

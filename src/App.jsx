@@ -4399,6 +4399,7 @@ function App() {
   const [authChecked, setAuthChecked] = useState(false);
   const [csrfToken, setCsrfToken] = useState("");
   const [serverUser, setServerUser] = useState(null);
+  const [serverBusiness, setServerBusiness] = useState(null);
   const [modal, setModal] = useState(null);
   const [demoDataLoaded, setDemoDataLoaded] = useState(false);
   const [demoTrack, setDemoTrack] = useState("complete");
@@ -4512,6 +4513,12 @@ function App() {
   const demoBaseMaintenances = demoDataLoaded ? maintenances : [];
   const demoBaseReversals = demoDataLoaded ? reversals : [];
   const demoBaseUsers = users;
+  const serverFinanceBusiness = !demoDataLoaded && serverBusiness ? serverBusiness : null;
+  const serverPayments = Array.isArray(serverFinanceBusiness?.payments) ? serverFinanceBusiness.payments : null;
+  const serverRentRows = Array.isArray(serverFinanceBusiness?.rentRows) ? serverFinanceBusiness.rentRows : null;
+  const serverCharges = Array.isArray(serverFinanceBusiness?.charges) ? serverFinanceBusiness.charges : null;
+  const serverCommissions = Array.isArray(serverFinanceBusiness?.commissions) ? serverFinanceBusiness.commissions : null;
+  const serverReversals = Array.isArray(serverFinanceBusiness?.reversals) ? serverFinanceBusiness.reversals : null;
   const activeDemoSteps = useMemo(() => getDemoStepsForTrack(demoTrack), [demoTrack]);
   const demoStep = activeDemoSteps[demoIndex];
   const modalGuidancePhases = demoActive && demoStep?.waitFor ? modalDemoGuidance[modal] : null;
@@ -4521,11 +4528,11 @@ function App() {
     const applyOverride = (contract) => ({ ...contract, ...(contractOverrides[getContractKey(contract)] ?? {}) });
     return [...generatedContracts.map(applyOverride), ...demoBaseContracts.map(applyOverride)];
   }, [demoBaseContracts, generatedContracts, contractOverrides]);
-  const allPayments = useMemo(() => mergePaymentRecords(demoBasePayments, recordedPayments).map((payment) => ({
+  const allPayments = useMemo(() => (serverPayments ?? mergePaymentRecords(demoBasePayments, recordedPayments)).map((payment) => ({
     ...payment,
     ...(paymentProofs[payment.reference] ? { proof: paymentProofs[payment.reference] } : {}),
     history: paymentHistories[payment.reference] ?? payment.history ?? [],
-  })), [demoBasePayments, paymentHistories, paymentProofs, recordedPayments]);
+  })), [demoBasePayments, paymentHistories, paymentProofs, recordedPayments, serverPayments]);
   const propertiesWithArchiveState = useMemo(() => [...createdProperties, ...demoBaseProperties].map((property) => {
     const propertyWithOverride = { ...property, ...(propertyOverrides[property.code] ?? {}) };
     const archive = archivedProperties[property.code];
@@ -4549,13 +4556,19 @@ function App() {
     history: maintenanceOverrides[getMaintenanceKey(maintenance)]?.history ?? maintenance.history ?? [],
   })), [demoBaseMaintenances, maintenanceOverrides, scheduledMaintenances]);
   const allCharges = useMemo(() => {
+    if (serverCharges) {
+      return serverCharges.map((charge) => ({
+        ...charge,
+        history: chargeOverrides[getChargeKey(charge)]?.history ?? charge.history ?? [],
+      }));
+    }
     const dynamicChargeIds = new Set(maintenanceCharges.map((charge) => charge.id));
     return [...maintenanceCharges, ...demoBaseCharges.filter((charge) => !dynamicChargeIds.has(charge.id))].map((charge) => ({
       ...charge,
       ...(chargeOverrides[getChargeKey(charge)] ?? {}),
       history: chargeOverrides[getChargeKey(charge)]?.history ?? charge.history ?? [],
     }));
-  }, [chargeOverrides, demoBaseCharges, maintenanceCharges]);
+  }, [chargeOverrides, demoBaseCharges, maintenanceCharges, serverCharges]);
   const allPropertyDocumentArchives = useMemo(
     () => [...propertyDocumentArchives, ...propertyPdfArchives],
     [propertyDocumentArchives, propertyPdfArchives]
@@ -4572,10 +4585,10 @@ function App() {
     () => buildRentRowsFromProperties(activeProperties, allTenants, demoBaseRentRows),
     [activeProperties, allTenants, demoBaseRentRows]
   );
-  const allRentRows = useMemo(() => mergeRentRowsWithPayments(operationalRentRows, recordedPayments), [operationalRentRows, recordedPayments]);
+  const allRentRows = useMemo(() => serverRentRows ?? mergeRentRowsWithPayments(operationalRentRows, recordedPayments), [operationalRentRows, recordedPayments, serverRentRows]);
   const allCommissions = useMemo(
-    () => buildCommissionRecords(activeProperties, allPayments, demoBaseCommissions, commissionOverrides),
-    [activeProperties, allPayments, demoBaseCommissions, commissionOverrides]
+    () => serverCommissions ?? buildCommissionRecords(activeProperties, allPayments, demoBaseCommissions, commissionOverrides),
+    [activeProperties, allPayments, demoBaseCommissions, commissionOverrides, serverCommissions]
   );
   const allProspects = useMemo(() => {
     const applyOverride = (prospect) => ({ ...prospect, ...(prospectOverrides[getProspectKey(prospect)] ?? {}) });
@@ -4600,8 +4613,8 @@ function App() {
     return [...(demoDataLoaded ? notificationAlerts : []), ...visitNotifications];
   }, [allVisits, demoDataLoaded]);
   const allReversals = useMemo(
-    () => buildReversalRecords(allOwners, allPayments, allCharges, allCommissions, [...ownerReversements, ...demoBaseReversals], reversalOverrides),
-    [allCharges, allCommissions, allOwners, allPayments, demoBaseReversals, ownerReversements, reversalOverrides]
+    () => serverReversals ?? buildReversalRecords(allOwners, allPayments, allCharges, allCommissions, [...ownerReversements, ...demoBaseReversals], reversalOverrides),
+    [allCharges, allCommissions, allOwners, allPayments, demoBaseReversals, ownerReversements, reversalOverrides, serverReversals]
   );
   const allUsers = useMemo(() => {
     const applyOverride = (user) => ({ ...user, ...(userOverrides[getUserKey(user)] ?? {}) });
@@ -4773,6 +4786,7 @@ function App() {
     const authenticatedUser = payload.user ?? users[0];
     const access = getRoleAccess(authenticatedUser);
     setServerUser(authenticatedUser);
+    setServerBusiness(null);
     setCsrfToken(payload.csrfToken ?? "");
     setCurrentUserId(authenticatedUser.id);
     setIsAuthenticated(true);
@@ -4801,6 +4815,7 @@ function App() {
         setIsAuthenticated(false);
         setShowLogin(true);
         setServerUser(null);
+        setServerBusiness(null);
         setCsrfToken("");
         setPersistenceStatus("offline");
       } finally {
@@ -4835,6 +4850,7 @@ function App() {
         const data = payload.data ?? {};
         if (payload.csrfToken) setCsrfToken(payload.csrfToken);
         if (payload.user) setServerUser(payload.user);
+        setServerBusiness(payload.business ?? null);
         lastPersistedSignatureRef.current = stringifyState(data);
         applyPersistedState(data);
         setPersistenceRevision(Number(payload.revision) || 0);
@@ -4868,6 +4884,7 @@ function App() {
     if (!signature || signature === lastPersistedSignatureRef.current) return;
 
     setPersistenceStatus("saving");
+    setServerBusiness(null);
     if (persistenceSaveTimerRef.current) {
       clearTimeout(persistenceSaveTimerRef.current);
     }
@@ -4878,9 +4895,11 @@ function App() {
         const nextData = payload.data ?? persistedState;
         if (payload.csrfToken) setCsrfToken(payload.csrfToken);
         if (payload.user) setServerUser(payload.user);
-        lastPersistedSignatureRef.current = stringifyState(nextData);
+        setServerBusiness(payload.business ?? null);
+        const nextSignature = stringifyState(nextData);
+        lastPersistedSignatureRef.current = nextSignature;
         setPersistenceRevision(Number(payload.revision) || persistenceRevision);
-        if (payload.merged) {
+        if (payload.merged || nextSignature !== signature) {
           applyPersistedState(nextData);
         }
         setPersistenceStatus("ready");
@@ -4898,6 +4917,7 @@ function App() {
         const payload = await readRemoteState();
         if (payload.csrfToken) setCsrfToken(payload.csrfToken);
         if (payload.user) setServerUser(payload.user);
+        setServerBusiness(payload.business ?? null);
         const remoteRevision = Number(payload.revision) || 0;
         if (remoteRevision > persistenceRevision) {
           const data = payload.data ?? {};
@@ -6001,6 +6021,7 @@ function App() {
     setIsAuthenticated(false);
     setShowLogin(true);
     setServerUser(null);
+    setServerBusiness(null);
     setCsrfToken("");
     setModal(null);
     setDemoActive(false);
