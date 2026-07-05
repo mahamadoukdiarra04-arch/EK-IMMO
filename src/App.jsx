@@ -5988,8 +5988,6 @@ function App() {
     } catch {
       // La session locale est tout de même fermée si le serveur ne répond pas.
     }
-    window.sessionStorage.setItem("ekimmo-session", "logged-out");
-    window.sessionStorage.removeItem("ekimmo-user-id");
     setIsAuthenticated(false);
     setShowLogin(true);
     setServerUser(null);
@@ -8682,18 +8680,6 @@ function App() {
     setModal(null);
     setArchiveContext(null);
   };
-
-  useEffect(() => {
-    const enforceLoginAfterLogout = () => {
-      if (window.sessionStorage.getItem("ekimmo-session") === "logged-out") {
-        setIsAuthenticated(false);
-        setShowLogin(true);
-      }
-    };
-
-    window.addEventListener("popstate", enforceLoginAfterLogout);
-    return () => window.removeEventListener("popstate", enforceLoginAfterLogout);
-  }, []);
 
   useEffect(() => {
     if (!demoActive) return;

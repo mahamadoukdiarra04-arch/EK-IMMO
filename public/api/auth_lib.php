@@ -180,7 +180,31 @@ function audit_admin(PDO $pdo, ?array $actor, string $action, ?string $targetId 
     ]);
 }
 
-function state_keys_for_user(PDO $pdo, array $user): array
+function user_can_access_state_module(PDO $pdo, array $user, string $module, string $mode): bool
+{
+    if (($user['role'] ?? '') === 'Administrateur') {
+        return true;
+    }
+
+    if ($mode === 'read') {
+        foreach (['voir', 'creer', 'modifier', 'valider'] as $permission) {
+            if (user_has_permission($pdo, $user, $module, $permission)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    foreach (['creer', 'modifier', 'valider'] as $permission) {
+        if (user_has_permission($pdo, $user, $module, $permission)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function state_keys_for_user(PDO $pdo, array $user, string $mode = 'read'): array
 {
     if (($user['role'] ?? '') === 'Administrateur') {
         return ['*'];
@@ -195,19 +219,19 @@ function state_keys_for_user(PDO $pdo, array $user): array
         }
     };
 
-    if (user_has_permission($pdo, $user, 'Biens', 'modifier')) {
+    if (user_can_access_state_module($pdo, $user, 'Biens', $mode)) {
         $add(['createdProperties', 'propertyOverrides', 'propertyHistoryOverrides', 'propertyPdfArchives', 'propertyDocumentArchives', 'archivedProperties']);
     }
-    if (user_has_permission($pdo, $user, 'Clients', 'modifier')) {
+    if (user_can_access_state_module($pdo, $user, 'Clients', $mode)) {
         $add(['createdOwners', 'ownerOverrides', 'createdTenants', 'tenantOverrides', 'tenantRelances', 'tenantReceiptArchives', 'createdProspects', 'prospectOverrides', 'prospectProposals', 'prospectActivities', 'scheduledProspectVisits', 'prospectConversions', 'visitOverrides', 'visitHistories']);
     }
-    if (user_has_permission($pdo, $user, 'Contrats', 'modifier')) {
+    if (user_can_access_state_module($pdo, $user, 'Contrats', $mode)) {
         $add(['generatedContracts', 'contractOverrides', 'contractTimelines', 'contractDeadlines', 'missingDocumentRequests', 'propertyDocumentArchives']);
     }
-    if (user_has_permission($pdo, $user, 'Finance', 'modifier')) {
+    if (user_can_access_state_module($pdo, $user, 'Finance', $mode)) {
         $add(['ownerReversements', 'recordedPayments', 'paymentHistories', 'paymentProofs', 'arrearsStatusOverrides', 'arrearsPromises', 'arrearsHistories', 'commissionOverrides', 'scheduledMaintenances', 'maintenanceCharges', 'maintenanceOverrides', 'reversalOverrides', 'chargeOverrides']);
     }
-    if (user_has_permission($pdo, $user, 'Administration', 'modifier')) {
+    if (user_can_access_state_module($pdo, $user, 'Administration', $mode)) {
         $add(['createdUsers', 'userOverrides', 'userHistories']);
     }
 
@@ -220,7 +244,7 @@ function filter_state_for_user(PDO $pdo, array $data, array $user): array
         return $data;
     }
 
-    $allowed = state_keys_for_user($pdo, $user);
+    $allowed = state_keys_for_user($pdo, $user, 'read');
     return array_intersect_key($data, array_flip($allowed));
 }
 
@@ -230,6 +254,6 @@ function filter_write_state_for_user(PDO $pdo, array $data, array $user): array
         return $data;
     }
 
-    $allowed = state_keys_for_user($pdo, $user);
+    $allowed = state_keys_for_user($pdo, $user, 'write');
     return array_intersect_key($data, array_flip($allowed));
 }
