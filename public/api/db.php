@@ -101,11 +101,13 @@ function ensure_schema(PDO $pdo): void
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS ekimmo_role_permissions (
             role_name VARCHAR(120) NOT NULL PRIMARY KEY,
+            description TEXT NULL,
             payload LONGTEXT NOT NULL,
             status VARCHAR(40) NOT NULL DEFAULT 'Actif',
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
+    ensure_column($pdo, 'ekimmo_role_permissions', 'description', 'TEXT NULL AFTER role_name');
 
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS ekimmo_admin_audit (
@@ -133,8 +135,52 @@ function ensure_schema(PDO $pdo): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
 
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS ekimmo_admin_settings (
+            setting_key VARCHAR(120) NOT NULL PRIMARY KEY,
+            payload LONGTEXT NOT NULL,
+            updated_by VARCHAR(80) NULL,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS ekimmo_template_archives (
+            id VARCHAR(140) NOT NULL PRIMARY KEY,
+            template_key VARCHAR(120) NOT NULL,
+            label VARCHAR(180) NOT NULL,
+            source VARCHAR(220) NOT NULL DEFAULT '',
+            format VARCHAR(40) NOT NULL DEFAULT '',
+            reason TEXT NULL,
+            comment TEXT NULL,
+            status VARCHAR(40) NOT NULL DEFAULT 'Archivé',
+            archived_by VARCHAR(80) NULL,
+            archived_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_template_archives_key (template_key),
+            INDEX idx_template_archives_status (status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+
     seed_default_users($pdo);
     seed_default_role_permissions($pdo);
+    seed_default_settings($pdo);
+}
+
+function ensure_column(PDO $pdo, string $table, string $column, string $definition): void
+{
+    $statement = $pdo->prepare('
+        SELECT COUNT(*) AS count_columns
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = :table_name
+          AND COLUMN_NAME = :column_name
+    ');
+    $statement->execute(['table_name' => $table, 'column_name' => $column]);
+    $row = $statement->fetch();
+    if ((int) ($row['count_columns'] ?? 0) > 0) {
+        return;
+    }
+    $pdo->exec("ALTER TABLE `$table` ADD COLUMN `$column` $definition");
 }
 
 function seed_default_users(PDO $pdo): void
@@ -229,21 +275,73 @@ function default_permission_matrix(string $role): array
     return $matrix;
 }
 
+function empty_permission_matrix(): array
+{
+    $modules = ['Dashboard', 'Biens', 'Clients', 'Contrats', 'Finance', 'Rapports', 'Administration'];
+    $permissions = ['voir', 'creer', 'modifier', 'supprimer', 'valider', 'exporter'];
+    $matrix = [];
+
+    foreach ($modules as $module) {
+        $matrix[$module] = [];
+        foreach ($permissions as $permission) {
+            $matrix[$module][$permission] = false;
+        }
+    }
+
+    return $matrix;
+}
+
 function seed_default_role_permissions(PDO $pdo): void
 {
-    $roles = ['Administrateur', 'Gestion locative & recouvrement', 'Communication & prospection'];
+    $roles = [
+        'Administrateur' => 'Accès complet à tous les modules et réglages sensibles.',
+        'Gestion locative & recouvrement' => 'Gestion des loyers, paiements, relances, dossiers locataires, visites et courriers.',
+        'Communication & prospection' => 'Mise en ligne des biens, prospection, visites, contenus et visibilité commerciale.',
+    ];
     $exists = $pdo->prepare('SELECT role_name FROM ekimmo_role_permissions WHERE role_name = :role_name LIMIT 1');
-    $insert = $pdo->prepare('INSERT INTO ekimmo_role_permissions (role_name, payload, status) VALUES (:role_name, :payload, :status)');
+    $insert = $pdo->prepare('INSERT INTO ekimmo_role_permissions (role_name, description, payload, status) VALUES (:role_name, :description, :payload, :status)');
 
-    foreach ($roles as $role) {
+    foreach ($roles as $role => $description) {
         $exists->execute(['role_name' => $role]);
         if ($exists->fetch()) {
             continue;
         }
         $insert->execute([
             'role_name' => $role,
+            'description' => $description,
             'payload' => json_encode(default_permission_matrix($role), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             'status' => 'Actif',
         ]);
     }
+}
+
+function default_admin_settings(): array
+{
+    return [
+        'agencyName' => 'E.K immo',
+        'city' => 'Bamako',
+        'currency' => 'FCFA',
+        'defaultCommission' => '5%',
+        'address' => 'Niaréla rue ACHKHABAD en face de la mairie, Bamako',
+        'latePaymentAlerts' => 'Activé',
+        'managerReversalValidation' => 'Activé',
+        'receiptAutoArchive' => 'Activé',
+        'ownerDirectCollection' => 'Suivi séparé',
+        'notificationEmail' => 'contact@ekimmo-mali.com',
+    ];
+}
+
+function seed_default_settings(PDO $pdo): void
+{
+    $exists = $pdo->prepare('SELECT setting_key FROM ekimmo_admin_settings WHERE setting_key = :setting_key LIMIT 1');
+    $exists->execute(['setting_key' => 'general']);
+    if ($exists->fetch()) {
+        return;
+    }
+
+    $insert = $pdo->prepare('INSERT INTO ekimmo_admin_settings (setting_key, payload) VALUES (:setting_key, :payload)');
+    $insert->execute([
+        'setting_key' => 'general',
+        'payload' => json_encode(default_admin_settings(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+    ]);
 }

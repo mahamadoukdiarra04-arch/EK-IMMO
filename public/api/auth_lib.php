@@ -50,6 +50,23 @@ function user_public_payload(array $user): array
     ];
 }
 
+function safe_mail_headers(): string
+{
+    return implode("\r\n", [
+        'From: E.K immo <noreply@ekimmo.pro>',
+        'Reply-To: contact@ekimmo-mali.com',
+        'MIME-Version: 1.0',
+        'Content-Type: text/plain; charset=UTF-8',
+        'X-Mailer: PHP/' . phpversion(),
+    ]);
+}
+
+function send_app_mail(string $to, string $subject, string $message): bool
+{
+    $cleanSubject = trim(preg_replace('/[\r\n]+/', ' ', $subject) ?? $subject);
+    return @mail($to, $cleanSubject, $message, safe_mail_headers());
+}
+
 function find_user_by_identifier(PDO $pdo, string $identifier): ?array
 {
     $statement = $pdo->prepare('
@@ -79,11 +96,18 @@ function find_user_by_id(PDO $pdo, string $id): ?array
 
 function role_permissions(PDO $pdo, string $role): array
 {
+    if ($role === 'Administrateur') {
+        return default_permission_matrix('Administrateur');
+    }
+
     $statement = $pdo->prepare('SELECT payload, status FROM ekimmo_role_permissions WHERE role_name = :role_name LIMIT 1');
     $statement->execute(['role_name' => $role]);
     $row = $statement->fetch();
-    if (!$row || $row['status'] === 'Inactif') {
+    if (!$row) {
         return default_permission_matrix($role);
+    }
+    if ($row['status'] === 'Inactif') {
+        return empty_permission_matrix();
     }
 
     $decoded = json_decode((string) $row['payload'], true);
@@ -178,6 +202,110 @@ function audit_admin(PDO $pdo, ?array $actor, string $action, ?string $targetId 
         'target_id' => $targetId,
         'detail' => $detail,
     ]);
+}
+
+function list_public_users(PDO $pdo): array
+{
+    $statement = $pdo->query('
+        SELECT *
+        FROM ekimmo_users
+        ORDER BY FIELD(role, "Administrateur", "Gestion locative & recouvrement", "Communication & prospection") = 0,
+                 FIELD(role, "Administrateur", "Gestion locative & recouvrement", "Communication & prospection"),
+                 created_at ASC,
+                 name ASC
+    ');
+    $rows = $statement->fetchAll();
+    return array_map('user_public_payload', is_array($rows) ? $rows : []);
+}
+
+function list_role_profiles(PDO $pdo): array
+{
+    $statement = $pdo->query('SELECT role_name, description, payload, status, updated_at FROM ekimmo_role_permissions ORDER BY role_name ASC');
+    $rows = $statement->fetchAll();
+    $roles = [];
+    foreach (is_array($rows) ? $rows : [] as $row) {
+        $name = (string) $row['role_name'];
+        $permissions = json_decode((string) $row['payload'], true);
+        $roles[] = [
+            'name' => $name,
+            'description' => (string) ($row['description'] ?? ''),
+            'status' => (string) ($row['status'] ?? 'Actif'),
+            'permissions' => $name === 'Administrateur'
+                ? default_permission_matrix('Administrateur')
+                : (is_array($permissions) ? $permissions : default_permission_matrix($name)),
+            'updatedAt' => (string) ($row['updated_at'] ?? ''),
+        ];
+    }
+    return $roles;
+}
+
+function admin_settings_payload(PDO $pdo): array
+{
+    $statement = $pdo->prepare('SELECT payload FROM ekimmo_admin_settings WHERE setting_key = :setting_key LIMIT 1');
+    $statement->execute(['setting_key' => 'general']);
+    $row = $statement->fetch();
+    $decoded = $row ? json_decode((string) $row['payload'], true) : [];
+    return array_merge(default_admin_settings(), is_array($decoded) ? $decoded : []);
+}
+
+function template_archives_payload(PDO $pdo): array
+{
+    $statement = $pdo->query('
+        SELECT id, template_key, label, source, format, reason, comment, status, archived_by, archived_at
+        FROM ekimmo_template_archives
+        ORDER BY archived_at DESC
+        LIMIT 200
+    ');
+    $rows = $statement->fetchAll();
+    return array_map(static function (array $row): array {
+        return [
+            'id' => (string) $row['id'],
+            'key' => (string) $row['template_key'],
+            'label' => (string) $row['label'],
+            'source' => (string) $row['source'],
+            'format' => (string) $row['format'],
+            'reason' => (string) ($row['reason'] ?? ''),
+            'comment' => (string) ($row['comment'] ?? ''),
+            'status' => (string) $row['status'],
+            'date' => $row['archived_at'] ? date('d/m/Y H:i', strtotime((string) $row['archived_at'])) : '',
+            'archivedBy' => (string) ($row['archived_by'] ?? ''),
+        ];
+    }, is_array($rows) ? $rows : []);
+}
+
+function audit_payload(PDO $pdo): array
+{
+    $statement = $pdo->query('
+        SELECT audit.*, users.name AS actor_name
+        FROM ekimmo_admin_audit audit
+        LEFT JOIN ekimmo_users users ON users.id = audit.actor_id
+        ORDER BY audit.created_at DESC
+        LIMIT 200
+    ');
+    $rows = $statement->fetchAll();
+    return array_map(static function (array $row): array {
+        $date = $row['created_at'] ? strtotime((string) $row['created_at']) : false;
+        return [
+            'id' => (int) $row['id'],
+            'date' => $date ? date('d/m/Y', $date) : '',
+            'time' => $date ? date('H:i', $date) : '',
+            'user' => (string) ($row['actor_name'] ?? 'Système'),
+            'action' => (string) $row['action'],
+            'target' => (string) ($row['target_id'] ?? ''),
+            'detail' => (string) ($row['detail'] ?? ''),
+        ];
+    }, is_array($rows) ? $rows : []);
+}
+
+function admin_payload(PDO $pdo): array
+{
+    return [
+        'users' => list_public_users($pdo),
+        'roles' => list_role_profiles($pdo),
+        'settings' => admin_settings_payload($pdo),
+        'templateArchives' => template_archives_payload($pdo),
+        'audit' => audit_payload($pdo),
+    ];
 }
 
 function user_can_access_state_module(PDO $pdo, array $user, string $module, string $mode): bool

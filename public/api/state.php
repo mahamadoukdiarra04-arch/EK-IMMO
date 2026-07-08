@@ -254,7 +254,7 @@ if ($method === 'GET') {
     $state = read_state($pdo);
     $data = merge_values(empty_state(), $state['data']);
     $filteredData = filter_state_for_user($pdo, $data, $user);
-    json_response([
+    $payload = [
         'ok' => true,
         'data' => $filteredData,
         'revision' => $state['revision'],
@@ -263,7 +263,11 @@ if ($method === 'GET') {
         'permissions' => role_permissions($pdo, (string) $user['role']),
         'business' => ek_business_payload($data, $user, $canReadFinance),
         'csrfToken' => csrf_token(),
-    ]);
+    ];
+    if (user_has_permission($pdo, $user, 'Administration', 'voir')) {
+        $payload['admin'] = admin_payload($pdo);
+    }
+    json_response($payload);
 }
 
 if ($method === 'POST' || $method === 'PUT') {
@@ -279,7 +283,7 @@ if ($method === 'POST' || $method === 'PUT') {
     }
 
     $result = persist_state($pdo, $body['data'], (int) ($body['revision'] ?? 0), $user);
-    json_response([
+    $payload = [
         'ok' => true,
         'data' => filter_state_for_user($pdo, $result['data'], $user),
         'revision' => $result['revision'],
@@ -288,7 +292,11 @@ if ($method === 'POST' || $method === 'PUT') {
         'permissions' => role_permissions($pdo, (string) $user['role']),
         'business' => ek_business_payload($result['data'], $user, $canReadFinance),
         'csrfToken' => csrf_token(),
-    ]);
+    ];
+    if (user_has_permission($pdo, $user, 'Administration', 'voir')) {
+        $payload['admin'] = admin_payload($pdo);
+    }
+    json_response($payload);
 }
 
 json_response([

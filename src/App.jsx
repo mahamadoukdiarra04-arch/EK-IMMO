@@ -89,16 +89,41 @@ const roleAccessProfiles = {
   },
 };
 
-function getRoleAccess(user) {
-  return roleAccessProfiles[user?.role] ?? roleAccessProfiles.Administrateur;
+const emptyRoleAccess = {
+  defaultPage: "Dashboard",
+  pages: ["Dashboard"],
+  clientTabs: [],
+  contractTabs: [],
+  financeTabs: [],
+  reports: [],
+};
+
+function buildAccessFromPermissions(permissions = {}) {
+  const has = (module, permission = "voir") => Boolean(permissions?.[module]?.[permission]);
+  const pages = navItems
+    .filter((item) => item.page === "Dashboard" || has(item.page === "Plus" ? "Administration" : item.page))
+    .map((item) => item.page);
+  return {
+    defaultPage: pages.includes("Dashboard") ? "Dashboard" : pages[0] ?? "Dashboard",
+    pages: pages.length ? pages : ["Dashboard"],
+    clientTabs: has("Clients") ? ["Propriétaires", "Locataires", "Prospects", "Visites"] : [],
+    contractTabs: has("Contrats") ? ["Contrats", "Génération de document", "Archives"] : [],
+    financeTabs: has("Finance") ? ["Loyers", "Paiements", "Impayés", "Commissions", "Charges", "Entretiens", "Reversements"] : [],
+    reports: has("Rapports") ? "all" : [],
+  };
+}
+
+function getRoleAccess(user, permissions = null) {
+  if (permissions) return buildAccessFromPermissions(permissions);
+  return roleAccessProfiles[user?.role] ?? emptyRoleAccess;
 }
 
 function getDefaultPageForUser(user) {
   return getRoleAccess(user).defaultPage;
 }
 
-function userCanAccessPage(user, page) {
-  return getRoleAccess(user).pages.includes(page);
+function userCanAccessPage(user, page, permissions = null) {
+  return getRoleAccess(user, permissions).pages.includes(page);
 }
 
 function getUserInitials(user) {
@@ -2961,7 +2986,7 @@ function buildRolePermissionMatrix(roleName) {
     module,
     Object.fromEntries(permissionDefinitions.map(({ key }) => {
       if (roleName === "Administrateur") return [key, true];
-      if (!access) return [key, key === "voir" || key === "exporter"];
+      if (!access) return [key, false];
 
       const linkedPage = module === "Administration" ? "Plus" : module;
       const canSeeModule = access.pages.includes(linkedPage);
@@ -4370,6 +4395,25 @@ async function postAuthAction(action, body = {}, csrfToken = "") {
   return payload;
 }
 
+async function forgotPasswordRemote(email) {
+  const response = await fetch(AUTH_ENDPOINT, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+    body: JSON.stringify({ action: "forgot_password", email }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.ok === false) {
+    const error = new Error(payload.message || "Impossible d'envoyer la demande pour le moment.");
+    error.code = payload.code || `http_${response.status}`;
+    throw error;
+  }
+  return payload;
+}
+
 async function readRemoteState() {
   const response = await fetch(PERSISTENCE_ENDPOINT, {
     method: "GET",
@@ -4415,6 +4459,8 @@ function App() {
   const [csrfToken, setCsrfToken] = useState("");
   const [serverUser, setServerUser] = useState(null);
   const [serverBusiness, setServerBusiness] = useState(null);
+  const [serverAdmin, setServerAdmin] = useState(null);
+  const [serverPermissions, setServerPermissions] = useState(null);
   const [modal, setModal] = useState(null);
   const [demoDataLoaded, setDemoDataLoaded] = useState(false);
   const [demoTrack, setDemoTrack] = useState("complete");
@@ -4633,18 +4679,46 @@ function App() {
   );
   const allUsers = useMemo(() => {
     const applyOverride = (user) => ({ ...user, ...(userOverrides[getUserKey(user)] ?? {}) });
+    if (serverAdmin?.users?.length) {
+      return serverAdmin.users.map(applyOverride);
+    }
     const baseUsers = [...createdUsers.map(applyOverride), ...demoBaseUsers.map(applyOverride)];
     if (!serverUser) return baseUsers;
     const serverKey = getUserKey(serverUser);
     const merged = baseUsers.map((user) => (getUserKey(user) === serverKey ? { ...user, ...serverUser } : user));
     return merged.some((user) => getUserKey(user) === serverKey) ? merged : [serverUser, ...merged];
-  }, [createdUsers, demoBaseUsers, serverUser, userOverrides]);
+  }, [createdUsers, demoBaseUsers, serverAdmin, serverUser, userOverrides]);
+  const adminRoleOptions = useMemo(
+    () => (serverAdmin?.roles?.length ? serverAdmin.roles.map((role) => role.name) : roleProfiles),
+    [serverAdmin]
+  );
+  const adminUserHistories = useMemo(() => {
+    const histories = { ...userHistories };
+    (serverAdmin?.audit ?? []).forEach((item) => {
+      const user = allUsers.find((candidate) => [candidate.id, candidate.email, candidate.identifier, candidate.name].includes(item.target));
+      if (!user) return;
+      const key = getUserKey(user);
+      histories[key] = [
+        {
+          date: `${item.date ?? ""} ${item.time ?? ""}`.trim(),
+          type: item.action,
+          detail: item.detail,
+          by: item.user || "Système",
+        },
+        ...(histories[key] ?? []),
+      ];
+    });
+    return histories;
+  }, [allUsers, serverAdmin, userHistories]);
   const currentUser = useMemo(
     () => allUsers.find((user) => user.id === currentUserId) ?? serverUser ?? users.find((user) => user.id === currentUserId) ?? users[0],
     [allUsers, currentUserId, serverUser]
   );
   const canUseDemoMode = currentUser?.role === "Administrateur";
-  const currentAccess = getRoleAccess(currentUser);
+  const currentAccess = useMemo(
+    () => getRoleAccess(currentUser, serverPermissions),
+    [currentUser, serverPermissions]
+  );
   const accessibleNavItems = useMemo(
     () => navItems.filter((item) => currentAccess.pages.includes(item.page)),
     [currentAccess.pages]
@@ -4658,7 +4732,10 @@ function App() {
       }
     };
   }, [csrfToken]);
-  const availableReports = useMemo(() => getReportTitlesForUser(currentUser), [currentUser]);
+  const availableReports = useMemo(() => {
+    if (serverPermissions && !serverPermissions.Rapports?.voir && currentUser?.reportAccessMode !== "Tous rapports") return [];
+    return getReportTitlesForUser(currentUser);
+  }, [currentUser, serverPermissions]);
   const persistedStateSetters = {
     createdProperties: setCreatedProperties,
     propertyOverrides: setPropertyOverrides,
@@ -4799,9 +4876,11 @@ function App() {
 
   const applyAuthenticatedSession = (payload) => {
     const authenticatedUser = payload.user ?? users[0];
-    const access = getRoleAccess(authenticatedUser);
+    const access = getRoleAccess(authenticatedUser, payload.permissions ?? null);
     setServerUser(authenticatedUser);
     setServerBusiness(null);
+    setServerAdmin(payload.admin ?? null);
+    setServerPermissions(payload.permissions ?? null);
     setCsrfToken(payload.csrfToken ?? "");
     setCurrentUserId(authenticatedUser.id);
     setIsAuthenticated(true);
@@ -4831,6 +4910,8 @@ function App() {
         setShowLogin(true);
         setServerUser(null);
         setServerBusiness(null);
+        setServerAdmin(null);
+        setServerPermissions(null);
         setCsrfToken("");
         setPersistenceStatus("offline");
       } finally {
@@ -4865,6 +4946,8 @@ function App() {
         const data = payload.data ?? {};
         if (payload.csrfToken) setCsrfToken(payload.csrfToken);
         if (payload.user) setServerUser(payload.user);
+        if (payload.admin) setServerAdmin(payload.admin);
+        if (payload.permissions) setServerPermissions(payload.permissions);
         setServerBusiness(payload.business ?? null);
         lastPersistedSignatureRef.current = stringifyState(data);
         applyPersistedState(data);
@@ -4910,6 +4993,8 @@ function App() {
         const nextData = payload.data ?? persistedState;
         if (payload.csrfToken) setCsrfToken(payload.csrfToken);
         if (payload.user) setServerUser(payload.user);
+        if (payload.admin) setServerAdmin(payload.admin);
+        if (payload.permissions) setServerPermissions(payload.permissions);
         setServerBusiness(payload.business ?? null);
         const nextSignature = stringifyState(nextData);
         lastPersistedSignatureRef.current = nextSignature;
@@ -4932,6 +5017,8 @@ function App() {
         const payload = await readRemoteState();
         if (payload.csrfToken) setCsrfToken(payload.csrfToken);
         if (payload.user) setServerUser(payload.user);
+        if (payload.admin) setServerAdmin(payload.admin);
+        if (payload.permissions) setServerPermissions(payload.permissions);
         setServerBusiness(payload.business ?? null);
         const remoteRevision = Number(payload.revision) || 0;
         if (remoteRevision > persistenceRevision) {
@@ -6006,7 +6093,7 @@ function App() {
 
   const handleNav = (item) => {
     if (!isAuthenticated) return;
-    if (!userCanAccessPage(currentUser, item)) return;
+    if (!currentAccess.pages.includes(item)) return;
     setActivePage(item);
     if (item === "Biens") {
       setPropertyReturnContext(null);
@@ -6016,7 +6103,7 @@ function App() {
 
   const handleLogin = async ({ identifier, password }) => {
     const payload = await loginRemote(identifier, password);
-    const access = getRoleAccess(payload.user ?? users[0]);
+    const access = getRoleAccess(payload.user ?? users[0], payload.permissions ?? null);
     applyAuthenticatedSession(payload);
     setPropertyTab("Résumé");
     setModal(null);
@@ -6037,6 +6124,8 @@ function App() {
     setShowLogin(true);
     setServerUser(null);
     setServerBusiness(null);
+    setServerAdmin(null);
+    setServerPermissions(null);
     setCsrfToken("");
     setModal(null);
     setDemoActive(false);
@@ -6063,14 +6152,21 @@ function App() {
     }));
   };
 
+  const applyAdminResponse = (payload = {}) => {
+    if (payload.admin) setServerAdmin(payload.admin);
+    if (payload.permissions) setServerPermissions(payload.permissions);
+  };
+
   const handleUserCreate = async ({ user, sendInvitation = false }) => {
     let savedUser = user;
     try {
       const payload = await postAuthAction("create_user", {
         user,
         temporaryPassword: user.temporaryPassword || "123456",
+        sendInvitation,
       }, csrfToken);
       savedUser = payload.user ?? user;
+      applyAdminResponse(payload);
     } catch (error) {
       window.alert(error.message || "Impossible de créer l'utilisateur.");
       return;
@@ -6110,6 +6206,7 @@ function App() {
     try {
       const payload = await postAuthAction("update_user", { user, values }, csrfToken);
       nextUser = payload.user ?? nextUser;
+      applyAdminResponse(payload);
     } catch (error) {
       window.alert(error.message || "Impossible de modifier l'utilisateur.");
       return;
@@ -6137,6 +6234,7 @@ function App() {
     try {
       const payload = await postAuthAction("set_user_status", { user, status: nextStatus }, csrfToken);
       nextUser = payload.user ?? nextUser;
+      applyAdminResponse(payload);
     } catch (error) {
       window.alert(error.message || "Impossible de modifier le statut.");
       return;
@@ -6163,6 +6261,7 @@ function App() {
     try {
       const payload = await postAuthAction("set_user_role", { user, role: values.role }, csrfToken);
       nextUser = payload.user ?? nextUser;
+      applyAdminResponse(payload);
     } catch (error) {
       window.alert(error.message || "Impossible de modifier le rôle.");
       return;
@@ -6184,22 +6283,25 @@ function App() {
   };
 
   const handleUserPasswordAction = async ({ user, action, values }) => {
-    if (action === "temporary") {
-      try {
-        await postAuthAction("set_user_password", {
-          user,
-          temporaryPassword: values.temporaryPassword,
-        }, csrfToken);
-      } catch (error) {
-        window.alert(error.message || "Impossible de générer le mot de passe.");
-        return;
-      }
+    try {
+      const payload = await postAuthAction("set_user_password", {
+        user,
+        temporaryPassword: values.temporaryPassword,
+        notifyContact: action === "notify" || values.sendByEmail === "Oui",
+        detail: action === "notify"
+          ? "Mot de passe modifié et notification transmise à contact@ekimmo-mali.com."
+          : "Mot de passe modifié par l'administration.",
+      }, csrfToken);
+      applyAdminResponse(payload);
+    } catch (error) {
+      window.alert(error.message || "Impossible de modifier le mot de passe.");
+      return;
     }
     appendUserHistory(user, {
       type: "Mot de passe",
-      detail: action === "temporary"
-        ? `Mot de passe temporaire généré${values.sendByEmail ? " et envoyé par email" : ""}`
-        : "Lien de réinitialisation envoyé par email",
+      detail: action === "notify"
+        ? "Mot de passe modifié et notification transmise à l'administration"
+        : "Mot de passe modifié par l'administration",
     });
     setUserActionContext(null);
     setModal(null);
@@ -6213,11 +6315,30 @@ function App() {
   };
 
   const handleRolePermissionsSave = async ({ role, permissions, status = "Actif" }) => {
-    await postAuthAction("save_role_permissions", {
+    const payload = await postAuthAction("save_role_permissions", {
       role,
       permissions,
       status,
     }, csrfToken);
+    applyAdminResponse(payload);
+  };
+
+  const handleRoleAdminAction = async (action, body = {}) => {
+    const payload = await postAuthAction(action, body, csrfToken);
+    applyAdminResponse(payload);
+    return payload;
+  };
+
+  const handleAdminSettingsSave = async (settings) => {
+    const payload = await postAuthAction("save_admin_settings", { settings }, csrfToken);
+    applyAdminResponse(payload);
+    return payload;
+  };
+
+  const handleAdminTemplateArchive = async ({ template, values }) => {
+    const payload = await postAuthAction("archive_template", { template, values }, csrfToken);
+    applyAdminResponse(payload);
+    return payload;
   };
 
   const showPropertyDetail = (property) => {
@@ -8983,7 +9104,21 @@ function App() {
             reversalsList={allReversals}
           />
         )}
-        {activePage === "Plus" && <AdminPage activeTab={adminTab} onTab={setAdminTab} onAction={openAction} usersList={allUsers} userHistories={userHistories} onSaveRolePermissions={handleRolePermissionsSave} />}
+        {activePage === "Plus" && (
+          <AdminPage
+            activeTab={adminTab}
+            onTab={setAdminTab}
+            onAction={openAction}
+            usersList={allUsers}
+            userHistories={adminUserHistories}
+            adminData={serverAdmin}
+            roleOptions={adminRoleOptions}
+            onSaveRolePermissions={handleRolePermissionsSave}
+            onRoleAction={handleRoleAdminAction}
+            onSaveSettings={handleAdminSettingsSave}
+            onArchiveTemplate={handleAdminTemplateArchive}
+          />
+        )}
       </main>
 
       <Footer />
@@ -9657,6 +9792,7 @@ function App() {
       ) : modal === "Ajouter utilisateur" ? (
         <UserFormAdminModal
           sequence={users.length + createdUsers.length + 1}
+          roleOptions={adminRoleOptions}
           onCreate={handleUserCreate}
           onClose={() => {
             setUserActionContext(null);
@@ -9667,6 +9803,7 @@ function App() {
         <UserFormAdminModal
           mode="edit"
           user={userActionContext?.user ?? allUsers[0]}
+          roleOptions={adminRoleOptions}
           onUpdate={handleUserUpdate}
           onClose={() => {
             setUserActionContext(null);
@@ -9686,6 +9823,7 @@ function App() {
       ) : modal === "Changer rôle utilisateur" ? (
         <UserRoleModal
           user={userActionContext?.user ?? allUsers[0]}
+          roleOptions={adminRoleOptions}
           onSave={handleUserRoleChange}
           onClose={() => {
             setUserActionContext(null);
@@ -9704,7 +9842,7 @@ function App() {
       ) : modal === "Historique utilisateur" ? (
         <UserHistoryModal
           user={userActionContext?.user ?? allUsers[0]}
-          history={userHistories[getUserKey(userActionContext?.user ?? allUsers[0])] ?? getDefaultUserHistory(userActionContext?.user ?? allUsers[0])}
+          history={adminUserHistories[getUserKey(userActionContext?.user ?? allUsers[0])] ?? getDefaultUserHistory(userActionContext?.user ?? allUsers[0])}
           onClose={() => {
             setUserActionContext(null);
             setModal(null);
@@ -18841,7 +18979,19 @@ function ReportsPage({
   );
 }
 
-function AdminPage({ activeTab, onTab, onAction, usersList = users, userHistories = {}, onSaveRolePermissions }) {
+function AdminPage({
+  activeTab,
+  onTab,
+  onAction,
+  usersList = users,
+  userHistories = {},
+  adminData = null,
+  roleOptions = roleProfiles,
+  onSaveRolePermissions,
+  onRoleAction,
+  onSaveSettings,
+  onArchiveTemplate,
+}) {
   const tabs = ["Utilisateurs", "Rôles & permissions", "Paramètres", "Modèles documents", "Historique"];
   return (
     <>
@@ -18857,10 +19007,17 @@ function AdminPage({ activeTab, onTab, onAction, usersList = users, userHistorie
       />
       <Tabs tabs={tabs} active={activeTab} onChange={onTab} demo="admin-tabs" />
       {activeTab === "Utilisateurs" && <UsersAdmin onAction={onAction} usersList={usersList} userHistories={userHistories} />}
-      {activeTab === "Rôles & permissions" && <RolesAdmin onAction={onAction} onSaveRolePermissions={onSaveRolePermissions} />}
-      {activeTab === "Paramètres" && <SettingsAdmin />}
-      {activeTab === "Modèles documents" && <TemplatesAdmin onAction={onAction} />}
-      {activeTab === "Historique" && <HistoryAdmin />}
+      {activeTab === "Rôles & permissions" && (
+        <RolesAdmin
+          rolesList={adminData?.roles}
+          onAction={onAction}
+          onSaveRolePermissions={onSaveRolePermissions}
+          onRoleAction={onRoleAction}
+        />
+      )}
+      {activeTab === "Paramètres" && <SettingsAdmin settings={adminData?.settings} onSave={onSaveSettings} />}
+      {activeTab === "Modèles documents" && <TemplatesAdmin onAction={onAction} archives={adminData?.templateArchives} onArchiveTemplate={onArchiveTemplate} />}
+      {activeTab === "Historique" && <HistoryAdmin auditRows={adminData?.audit} usersList={usersList} />}
     </>
   );
 }
@@ -18963,8 +19120,8 @@ function UserProfilePanel({ user, history = [], onAction }) {
   );
 }
 
-function RolesAdmin({ onSaveRolePermissions }) {
-  const [roles, setRoles] = useState(() => roleProfiles.map((role) => ({
+function getDefaultAdminRoles() {
+  return roleProfiles.map((role) => ({
     name: role,
     description: role === "Administrateur"
       ? "Accès complet à tous les modules et réglages sensibles."
@@ -18972,12 +19129,34 @@ function RolesAdmin({ onSaveRolePermissions }) {
         ? "Gestion des loyers, paiements, relances, dossiers locataires, visites et courriers."
         : "Mise en ligne des biens, prospection, visites, contenus et visibilité commerciale.",
     status: "Actif",
-  })));
+    permissions: buildRolePermissionMatrix(role),
+  }));
+}
+
+function rolePermissionMap(rolesList) {
+  return Object.fromEntries(rolesList.map((role) => [
+    role.name,
+    clonePermissionMatrix(role.permissions ?? buildRolePermissionMatrix(role.name)),
+  ]));
+}
+
+function RolesAdmin({ rolesList = null, onSaveRolePermissions, onRoleAction }) {
+  const normalizedRoles = rolesList?.length ? rolesList : getDefaultAdminRoles();
+  const [roles, setRoles] = useState(() => normalizedRoles);
   const [profile, setProfile] = useState(roleProfiles[0]);
-  const [savedPermissions, setSavedPermissions] = useState(() => Object.fromEntries(roleProfiles.map((role) => [role, buildRolePermissionMatrix(role)])));
-  const [draftPermissions, setDraftPermissions] = useState(() => Object.fromEntries(roleProfiles.map((role) => [role, buildRolePermissionMatrix(role)])));
+  const [savedPermissions, setSavedPermissions] = useState(() => rolePermissionMap(normalizedRoles));
+  const [draftPermissions, setDraftPermissions] = useState(() => rolePermissionMap(normalizedRoles));
   const [roleModal, setRoleModal] = useState(null);
   const [feedback, setFeedback] = useState("");
+
+  useEffect(() => {
+    const nextRoles = rolesList?.length ? rolesList : getDefaultAdminRoles();
+    setRoles(nextRoles);
+    setSavedPermissions(rolePermissionMap(nextRoles));
+    setDraftPermissions(rolePermissionMap(nextRoles));
+    setProfile((current) => nextRoles.some((role) => role.name === current) ? current : nextRoles[0]?.name ?? roleProfiles[0]);
+  }, [rolesList]);
+
   const activeRole = roles.find((role) => role.name === profile) ?? roles[0];
   const activePermissions = draftPermissions[profile] ?? buildRolePermissionMatrix(profile);
   const savedForProfile = savedPermissions[profile] ?? buildRolePermissionMatrix(profile);
@@ -19011,11 +19190,17 @@ function RolesAdmin({ onSaveRolePermissions }) {
     setFeedback("Permissions enregistrées avec succès.");
   };
 
-  const createRole = ({ values }) => {
+  const createRole = async ({ values }) => {
     const name = values.name.trim() || `Nouveau rôle ${roles.length + 1}`;
     const sourceMatrix = values.copyPermissions === "Oui"
       ? draftPermissions[values.sourceRole] ?? buildRolePermissionMatrix(values.sourceRole)
       : buildRolePermissionMatrix("Communication & prospection");
+    try {
+      await onRoleAction?.("create_role", { values });
+    } catch (error) {
+      setFeedback(error.message || "Impossible de créer le rôle.");
+      return;
+    }
     const nextRole = {
       name,
       description: values.description || "Rôle personnalisé E.K immo.",
@@ -19029,8 +19214,14 @@ function RolesAdmin({ onSaveRolePermissions }) {
     setRoleModal(null);
   };
 
-  const updateRole = ({ role, values }) => {
+  const updateRole = async ({ role, values }) => {
     const nextName = values.name.trim() || role.name;
+    try {
+      await onRoleAction?.("update_role", { role: role.name, values });
+    } catch (error) {
+      setFeedback(error.message || "Impossible de modifier le rôle.");
+      return;
+    }
     setRoles((current) => current.map((item) => (item.name === role.name ? { ...item, name: nextName, description: values.description || item.description } : item)));
     if (nextName !== role.name) {
       setSavedPermissions((current) => {
@@ -19047,9 +19238,15 @@ function RolesAdmin({ onSaveRolePermissions }) {
     setRoleModal(null);
   };
 
-  const duplicateRole = ({ values }) => {
+  const duplicateRole = async ({ values }) => {
     const name = values.name.trim() || `${values.sourceRole} copie`;
     const sourceMatrix = draftPermissions[values.sourceRole] ?? buildRolePermissionMatrix(values.sourceRole);
+    try {
+      await onRoleAction?.("duplicate_role", { values });
+    } catch (error) {
+      setFeedback(error.message || "Impossible de dupliquer le rôle.");
+      return;
+    }
     setRoles((current) => [{ name, description: `Copie du rôle ${values.sourceRole}`, status: "Actif" }, ...current.filter((role) => role.name !== name)]);
     setSavedPermissions((current) => ({ ...current, [name]: clonePermissionMatrix(sourceMatrix) }));
     setDraftPermissions((current) => ({ ...current, [name]: clonePermissionMatrix(sourceMatrix) }));
@@ -19058,7 +19255,13 @@ function RolesAdmin({ onSaveRolePermissions }) {
     setRoleModal(null);
   };
 
-  const disableRole = (role) => {
+  const disableRole = async (role) => {
+    try {
+      await onRoleAction?.("set_role_status", { role: role.name, status: "Inactif" });
+    } catch (error) {
+      setFeedback(error.message || "Impossible de désactiver le rôle.");
+      return;
+    }
     setRoles((current) => current.map((item) => (item.name === role.name ? { ...item, status: "Inactif" } : item)));
     setFeedback("Rôle désactivé. Les utilisateurs associés devront recevoir un nouveau rôle.");
     setRoleModal(null);
@@ -19238,36 +19441,85 @@ function RoleDeactivateModal({ role, onConfirm, onClose }) {
   );
 }
 
-function SettingsAdmin() {
+function SettingsAdmin({ settings = null, onSave }) {
+  const defaults = {
+    agencyName: "E.K immo",
+    city: "Bamako",
+    currency: "FCFA",
+    defaultCommission: "5%",
+    address: "Niaréla rue ACHKHABAD en face de la mairie, Bamako",
+    latePaymentAlerts: "Activé",
+    managerReversalValidation: "Activé",
+    receiptAutoArchive: "Activé",
+    ownerDirectCollection: "Suivi séparé",
+    notificationEmail: "contact@ekimmo-mali.com",
+  };
+  const [values, setValues] = useState(() => ({ ...defaults, ...(settings ?? {}) }));
+  const [feedback, setFeedback] = useState("");
+
+  useEffect(() => {
+    setValues({ ...defaults, ...(settings ?? {}) });
+  }, [settings]);
+
+  const update = (field) => (event) => {
+    setValues((current) => ({ ...current, [field]: event.target.value }));
+    setFeedback("");
+  };
+
+  const save = async () => {
+    try {
+      await onSave?.(values);
+      setFeedback("Paramètres enregistrés.");
+    } catch (error) {
+      setFeedback(error.message || "Impossible d'enregistrer les paramètres.");
+    }
+  };
+
   return (
     <section className="settings-grid">
       <Panel title="Paramètres généraux">
         <div className="form-grid compact-form">
-          <label>Nom de l'agence<input defaultValue="E.K immo" /></label>
-          <label>Ville<input defaultValue="Bamako" /></label>
-          <label>Devise<select><option>FCFA</option></select></label>
-          <label>Taux commission par défaut<input defaultValue="5%" /></label>
-          <label className="full">Adresse<input defaultValue="ACI 2000, Bamako, Mali" /></label>
+          <label>Nom de l'agence<input value={values.agencyName} onChange={update("agencyName")} /></label>
+          <label>Ville<input value={values.city} onChange={update("city")} /></label>
+          <label>Devise<select value={values.currency} onChange={update("currency")}><option>FCFA</option></select></label>
+          <label>Taux commission par défaut<input value={values.defaultCommission} onChange={update("defaultCommission")} /></label>
+          <label className="full">Adresse<input value={values.address} onChange={update("address")} /></label>
+          <label className="full">Email de notification<input type="email" value={values.notificationEmail} onChange={update("notificationEmail")} /></label>
+        </div>
+        {feedback && <p className={feedback.includes("Impossible") ? "form-alert" : "form-success"}>{feedback}</p>}
+        <div className="action-row compact-row">
+          <Button variant="primary" onClick={save}><CheckCircle2 size={17} /> Enregistrer les paramètres</Button>
         </div>
       </Panel>
       <Panel title="Préférences métier">
-        <div className="toggle-list">
-          <p><span>Alertes impayés automatiques</span><strong>Activé</strong></p>
-          <p><span>Validation reversement manager</span><strong>Activé</strong></p>
-          <p><span>Archivage automatique des reçus</span><strong>Activé</strong></p>
-          <p><span>Encaissement direct propriétaire</span><strong>Suivi séparé</strong></p>
+        <div className="form-grid compact-form">
+          <label>Alertes impayés automatiques<select value={values.latePaymentAlerts} onChange={update("latePaymentAlerts")}><option>Activé</option><option>Désactivé</option></select></label>
+          <label>Validation reversement manager<select value={values.managerReversalValidation} onChange={update("managerReversalValidation")}><option>Activé</option><option>Désactivé</option></select></label>
+          <label>Archivage automatique des reçus<select value={values.receiptAutoArchive} onChange={update("receiptAutoArchive")}><option>Activé</option><option>Désactivé</option></select></label>
+          <label>Encaissement direct propriétaire<select value={values.ownerDirectCollection} onChange={update("ownerDirectCollection")}><option>Suivi séparé</option><option>Masqué finance agence</option><option>À valider manuellement</option></select></label>
         </div>
       </Panel>
     </section>
   );
 }
 
-function TemplatesAdmin({ onAction }) {
-  const [templateArchives, setTemplateArchives] = useState([]);
+function TemplatesAdmin({ onAction, archives = [], onArchiveTemplate }) {
+  const [templateArchives, setTemplateArchives] = useState(archives ?? []);
+  const [feedback, setFeedback] = useState("");
+  useEffect(() => {
+    setTemplateArchives(archives ?? []);
+  }, [archives]);
   const archivedKeys = templateArchives.map((archive) => archive.key);
   const availableTemplates = documentTemplates.filter((template) => !archivedKeys.includes(template.key));
 
-  const archiveTemplate = ({ template, values }) => {
+  const archiveTemplate = async ({ template, values }) => {
+    try {
+      await onArchiveTemplate?.({ template, values });
+      setFeedback("Modèle archivé.");
+    } catch (error) {
+      setFeedback(error.message || "Impossible d'archiver le modèle.");
+      return;
+    }
     const archive = {
       id: `template-archive-${template.key}-${templateArchives.length + 1}`,
       key: template.key,
@@ -19303,6 +19555,7 @@ function TemplatesAdmin({ onAction }) {
         availableTemplates={availableTemplates}
         onArchiveTemplate={archiveTemplate}
       />
+      {feedback && <p className={feedback.includes("Impossible") ? "form-alert" : "form-success"}>{feedback}</p>}
       <Panel title="Archives des modèles" className="template-archives-panel">
         {templateArchives.length === 0 ? (
           <div className="empty-state compact-empty">
@@ -19329,23 +19582,34 @@ function TemplatesAdmin({ onAction }) {
   );
 }
 
-function HistoryAdmin() {
+function HistoryAdmin({ auditRows = [], usersList = [] }) {
+  const rows = auditRows?.length
+    ? auditRows.map((item) => [
+      item.user || "Système",
+      item.action,
+      item.target || "Administration",
+      item.date,
+      item.time,
+      "",
+      item.detail,
+    ])
+    : [
+      ["Aïssata Diarra", "Enregistrement de paiement", "Finance", "28/05/2026", "07:52", "Solde 400 000 FCFA", "Paiement 450 000 FCFA"],
+      ["Issa Maïga", "Génération de document", "Contrats", "27/05/2026", "18:22", "Brouillon", "Contrat généré"],
+      ["Mariam Traoré", "Modification", "Biens", "27/05/2026", "15:40", "Réservé", "Loué"],
+      [usersList[0]?.name ?? "Admin", "Annulation de reçu", "Finance", "18/05/2026", "12:01", "Reçu généré", "Reçu annulé"],
+    ];
   return (
     <Panel title="Historique des actions">
       <DataTable
         columns={["Utilisateur", "Action réalisée", "Module", "Date", "Heure", "Ancienne valeur", "Nouvelle valeur"]}
-        rows={[
-          ["Aïssata Diarra", "Enregistrement de paiement", "Finance", "28/05/2026", "07:52", "Solde 400 000 FCFA", "Paiement 450 000 FCFA"],
-          ["Issa Maïga", "Génération de document", "Contrats", "27/05/2026", "18:22", "Brouillon", "Contrat généré"],
-          ["Mariam Traoré", "Modification", "Biens", "27/05/2026", "15:40", "Réservé", "Loué"],
-          ["Admin", "Annulation de reçu", "Finance", "18/05/2026", "12:01", "Reçu généré", "Reçu annulé"],
-        ]}
+        rows={rows}
       />
     </Panel>
   );
 }
 
-function UserFormAdminModal({ mode = "create", user = null, sequence = 1, onCreate, onUpdate, onClose }) {
+function UserFormAdminModal({ mode = "create", user = null, sequence = 1, roleOptions = roleProfiles, onCreate, onUpdate, onClose }) {
   const isEdit = mode === "edit";
   const [values, setValues] = useState({
     name: user?.name ?? "",
@@ -19400,7 +19664,7 @@ function UserFormAdminModal({ mode = "create", user = null, sequence = 1, onCrea
           <label>Nom<input value={values.name} onChange={update("name")} placeholder="Nom complet" /></label>
           <label>Email<input value={values.email} onChange={update("email")} placeholder="nom@ekimmo.ml" /></label>
           <label>Téléphone<input value={values.phone} onChange={update("phone")} placeholder="+223 70 00 00 00" /></label>
-          <label>Rôle<select value={values.role} onChange={update("role")}>{roleProfiles.map((role) => <option key={role}>{role}</option>)}</select></label>
+          <label>Rôle<select value={values.role} onChange={update("role")}>{roleOptions.map((role) => <option key={role}>{role}</option>)}</select></label>
           <label>Statut<select value={values.status} onChange={update("status")}><option>Actif</option><option>Suspendu</option></select></label>
           <label>Accès rapports<select value={values.reportAccessMode} onChange={update("reportAccessMode")}><option>Selon le rôle</option><option>Tous rapports</option></select></label>
           {!isEdit && (
@@ -19449,7 +19713,7 @@ function UserStatusModal({ user, nextStatus, onConfirm, onClose }) {
   );
 }
 
-function UserRoleModal({ user, onSave, onClose }) {
+function UserRoleModal({ user, roleOptions = roleProfiles, onSave, onClose }) {
   const [values, setValues] = useState({
     role: user.role,
     comment: "Mise à jour des responsabilités dans l'agence.",
@@ -19464,7 +19728,7 @@ function UserRoleModal({ user, onSave, onClose }) {
         <p>{user.name}</p>
         <div className="form-grid compact-form">
           <label>Rôle actuel<input value={user.role} readOnly /></label>
-          <label>Nouveau rôle<select value={values.role} onChange={(event) => setValues((current) => ({ ...current, role: event.target.value }))}>{roleProfiles.map((role) => <option key={role}>{role}</option>)}</select></label>
+          <label>Nouveau rôle<select value={values.role} onChange={(event) => setValues((current) => ({ ...current, role: event.target.value }))}>{roleOptions.map((role) => <option key={role}>{role}</option>)}</select></label>
           <label className="full">Commentaire<textarea value={values.comment} onChange={(event) => setValues((current) => ({ ...current, comment: event.target.value }))} /></label>
         </div>
         <div className="action-row">
@@ -19478,7 +19742,7 @@ function UserRoleModal({ user, onSave, onClose }) {
 
 function UserPasswordAdminModal({ user, onSave, onClose }) {
   const [values, setValues] = useState({
-    temporaryPassword: `EK-${new Date().getFullYear()}-${getInitials(user.name)}`,
+    temporaryPassword: "123456",
     sendByEmail: "Oui",
   });
 
@@ -19490,13 +19754,13 @@ function UserPasswordAdminModal({ user, onSave, onClose }) {
         <h2>Mot de passe utilisateur</h2>
         <p>{user.name} · {user.email}</p>
         <div className="form-grid compact-form">
-          <label className="full">Mot de passe temporaire<input value={values.temporaryPassword} onChange={(event) => setValues((current) => ({ ...current, temporaryPassword: event.target.value }))} /></label>
-          <label>Envoyer par email<select value={values.sendByEmail} onChange={(event) => setValues((current) => ({ ...current, sendByEmail: event.target.value }))}><option>Oui</option><option>Non</option></select></label>
+          <label className="full">Nouveau mot de passe<input type="password" value={values.temporaryPassword} onChange={(event) => setValues((current) => ({ ...current, temporaryPassword: event.target.value }))} /></label>
+          <label>Notifier l'administration<select value={values.sendByEmail} onChange={(event) => setValues((current) => ({ ...current, sendByEmail: event.target.value }))}><option>Oui</option><option>Non</option></select></label>
         </div>
         <div className="action-row">
           <Button onClick={onClose}>Annuler</Button>
-          <Button onClick={() => onSave({ user, action: "temporary", values })}><KeyRound size={17} /> Générer mot de passe temporaire</Button>
-          <Button variant="primary" onClick={() => onSave({ user, action: "reset", values })}><Send size={17} /> Envoyer lien de réinitialisation</Button>
+          <Button onClick={() => onSave({ user, action: "set", values })}><KeyRound size={17} /> Modifier mot de passe</Button>
+          <Button variant="primary" onClick={() => onSave({ user, action: "notify", values })}><Send size={17} /> Modifier et notifier</Button>
         </div>
       </section>
     </div>
@@ -19599,9 +19863,10 @@ function ForgotPasswordModal({ onClose }) {
   const [status, setStatus] = useState(null);
   const [message, setMessage] = useState("");
   const [detail, setDetail] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
-  const sendResetLink = () => {
+  const sendResetLink = async () => {
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail) {
       setStatus("error");
@@ -19615,16 +19880,20 @@ function ForgotPasswordModal({ onClose }) {
       setDetail("");
       return;
     }
-    if (normalizedEmail.includes("erreur") || normalizedEmail.includes("server")) {
-      setStatus("error");
-      setMessage("L'envoi du lien a échoué. Réessayez dans quelques instants.");
-      setDetail("");
-      return;
-    }
 
-    setStatus("success");
-    setMessage("Lien de réinitialisation envoyé.");
-    setDetail("Si cette adresse est associée à un compte, un lien de réinitialisation a été envoyé.");
+    setSubmitting(true);
+    try {
+      await forgotPasswordRemote(normalizedEmail);
+      setStatus("success");
+      setMessage("Lien de réinitialisation envoyé.");
+      setDetail("Si cette adresse est associée à un compte, un lien de réinitialisation a été envoyé.");
+    } catch (error) {
+      setStatus("error");
+      setMessage(error.message || "Impossible d'envoyer le lien pour le moment. Veuillez réessayer.");
+      setDetail("");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -19657,7 +19926,7 @@ function ForgotPasswordModal({ onClose }) {
         )}
         <div className="action-row compact-row">
           <Button onClick={onClose}>Annuler</Button>
-          <Button variant="primary" onClick={sendResetLink}><Mail size={17} /> Envoyer le lien</Button>
+          <Button variant="primary" onClick={sendResetLink} disabled={submitting}><Mail size={17} /> {submitting ? "Envoi..." : "Envoyer le lien"}</Button>
         </div>
       </section>
     </div>
