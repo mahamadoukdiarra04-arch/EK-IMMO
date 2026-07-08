@@ -153,6 +153,28 @@ function merge_values($current, $incoming)
     return $incoming;
 }
 
+function normalize_state_for_signature($value)
+{
+    if (!is_array($value)) {
+        return $value;
+    }
+
+    if (is_list_array($value)) {
+        return array_map('normalize_state_for_signature', $value);
+    }
+
+    ksort($value);
+    foreach ($value as $key => $item) {
+        $value[$key] = normalize_state_for_signature($item);
+    }
+    return $value;
+}
+
+function state_signature(array $data): string
+{
+    return json_encode(normalize_state_for_signature($data), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '';
+}
+
 function persist_state(PDO $pdo, array $data, int $clientRevision, array $user): array
 {
     $pdo->beginTransaction();
@@ -183,6 +205,15 @@ function persist_state(PDO $pdo, array $data, int $clientRevision, array $user):
         }
 
         $merged = ek_business_normalize_state($merged);
+
+        if (state_signature($merged) === state_signature($currentData)) {
+            $pdo->commit();
+            return [
+                'data' => $currentData,
+                'revision' => $currentRevision,
+                'merged' => false,
+            ];
+        }
 
         $nextRevision = $currentRevision + 1;
         $payload = json_encode($merged, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

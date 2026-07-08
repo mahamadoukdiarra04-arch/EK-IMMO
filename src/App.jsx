@@ -4292,9 +4292,24 @@ function normalizePersistedCollection(key, value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
+function normalizeStateForSignature(value) {
+  if (Array.isArray(value)) {
+    return value.map(normalizeStateForSignature);
+  }
+  if (value && typeof value === "object") {
+    return Object.keys(value)
+      .sort()
+      .reduce((normalized, key) => {
+        normalized[key] = normalizeStateForSignature(value[key]);
+        return normalized;
+      }, {});
+  }
+  return value;
+}
+
 function stringifyState(data) {
   try {
-    return JSON.stringify(data);
+    return JSON.stringify(normalizeStateForSignature(data));
   } catch {
     return "";
   }
