@@ -7859,7 +7859,20 @@ function App() {
     completeDemoEvent("save:contract-print");
     setContractActionContext(null);
     setModal(null);
-    window.setTimeout(() => window.print(), 0);
+    printGeneratedPdf(
+      { label: `Impression ${targetLabel}`, module: "Contrats" },
+      {
+        contrat: contract.number,
+        cible: targetLabel,
+        echeances: deadlineLabel,
+        bien: contract.property,
+        proprietaire: contract.owner,
+        locataire: contract.client,
+        statut: contract.status,
+      },
+      `EKIMMO_Contrat_${contract.number}_${values.target}.pdf`,
+      () => window.setTimeout(() => window.print(), 0)
+    );
   };
 
   const handleContractArchive = ({ contract, values }) => {
@@ -11993,6 +12006,14 @@ function openClientReportPrintView(payload, mode) {
       .catch((error) => handleServerPdfFailure(error, () => openClientReportPrintView({ ...payload, __browserFallback: true }, mode)));
     return;
   }
+  if (mode === "print" && !payload.__browserFallback) {
+    printServerPdf(
+      buildServerReportPayload(payload, "Clients", "Rapport clients"),
+      `${payload.filename}.pdf`,
+      () => openClientReportPrintView({ ...payload, __browserFallback: true }, mode)
+    );
+    return;
+  }
 
   const reportWindow = window.open("", "_blank", "width=1180,height=820");
   if (!reportWindow) return;
@@ -14482,7 +14503,7 @@ function buildServerPdfPayload(template, values = {}, fileName) {
   };
 }
 
-async function downloadServerPdf(payload, fileName) {
+async function requestServerPdfBlob(payload, fileName) {
   const csrfToken = window.__ekimmoCsrfToken || "";
   if (!csrfToken) {
     throw new Error("Session documentaire absente.");
@@ -14507,8 +14528,81 @@ async function downloadServerPdf(payload, fileName) {
     throw error;
   }
 
-  const blob = await response.blob();
+  return response.blob();
+}
+
+async function downloadServerPdf(payload, fileName) {
+  const blob = await requestServerPdfBlob(payload, fileName);
   downloadBlob(blob, fileName);
+}
+
+function openServerPdfPreview(blob, fileName, { print = false } = {}) {
+  const url = URL.createObjectURL(blob);
+  const pdfWindow = window.open("", "_blank", "width=1180,height=860");
+  if (!pdfWindow) {
+    downloadBlob(blob, fileName);
+    window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+    return;
+  }
+
+  const safeUrl = escapeHtml(url);
+  const safeName = escapeHtml(fileName);
+  pdfWindow.document.open();
+  pdfWindow.document.write(`<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>${safeName}</title>
+  <style>
+    :root { color: #071b3d; font-family: Arial, sans-serif; }
+    body { margin: 0; background: #eef4f8; }
+    .bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 18px; background: #fff; border-bottom: 1px solid #d7e2eb; }
+    strong { font-size: 15px; }
+    .actions { display: flex; gap: 10px; }
+    button, a { border: 1px solid #bcd0df; border-radius: 10px; background: #fff; color: #07376b; font-weight: 700; padding: 10px 14px; text-decoration: none; cursor: pointer; }
+    .primary { background: #07376b; color: #fff; border-color: #07376b; }
+    iframe { display: block; width: 100%; height: calc(100vh - 58px); border: 0; background: #fff; }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <strong>${safeName}</strong>
+    <div class="actions">
+      <a class="primary" href="${safeUrl}" download="${safeName}">Télécharger PDF</a>
+      <button onclick="document.getElementById('pdf-frame').contentWindow.focus(); document.getElementById('pdf-frame').contentWindow.print();">Imprimer</button>
+    </div>
+  </div>
+  <iframe id="pdf-frame" src="${safeUrl}" title="${safeName}"></iframe>
+</body>
+</html>`);
+  pdfWindow.document.close();
+  if (print) {
+    pdfWindow.setTimeout(() => {
+      const frame = pdfWindow.document.getElementById("pdf-frame");
+      frame?.contentWindow?.focus();
+      frame?.contentWindow?.print();
+    }, 900);
+  }
+  pdfWindow.addEventListener?.("beforeunload", () => URL.revokeObjectURL(url), { once: true });
+  window.setTimeout(() => URL.revokeObjectURL(url), 120000);
+}
+
+async function printServerPdf(payload, fileName, fallback) {
+  try {
+    const blob = await requestServerPdfBlob(payload, fileName);
+    openServerPdfPreview(blob, fileName, { print: true });
+  } catch (error) {
+    handleServerPdfFailure(error, fallback);
+  }
+}
+
+async function previewServerPdf(payload, fileName, fallback) {
+  try {
+    const blob = await requestServerPdfBlob(payload, fileName);
+    openServerPdfPreview(blob, fileName, { print: false });
+  } catch (error) {
+    handleServerPdfFailure(error, fallback);
+  }
 }
 
 function buildServerReportPayload(payload, module, documentType) {
@@ -14556,6 +14650,14 @@ async function downloadGeneratedPdf(template, values, fileName) {
 
   const blob = createSimplePdfBlob(template, values);
   downloadBlob(blob, fileName);
+}
+
+async function printGeneratedPdf(template, values, fileName, fallback) {
+  await printServerPdf(buildServerPdfPayload(template, values, fileName), fileName, fallback);
+}
+
+async function previewGeneratedPdf(template, values, fileName, fallback) {
+  await previewServerPdf(buildServerPdfPayload(template, values, fileName), fileName, fallback);
 }
 
 function DocumentArchiveModal({ template, values, data = {}, sequence = 1, onConfirm, onClose }) {
@@ -14636,7 +14738,7 @@ function DocumentPreviewModal({ template, values, onChange, data = {}, archiveSe
   };
 
   const printDocument = () => {
-    window.print();
+    printGeneratedPdf(template, values, fileName, () => window.print());
   };
 
   return (
@@ -14720,7 +14822,25 @@ function PropertyPdfModal({ property, archived, onArchive, onClose }) {
           </div>
           <div className="document-editor-actions">
             <Button variant="primary" onClick={downloadPdf}><Download size={17} /> Télécharger PDF</Button>
-            <Button onClick={() => window.print()}><Printer size={17} /> Imprimer</Button>
+            <Button onClick={() => printGeneratedPdf({ label: "Fiche PDF du bien", module: "Biens" }, {
+              reference: property.code,
+              nom: property.name,
+              type: property.type,
+              quartier: property.district,
+              adresse: property.address,
+              prix: property.price,
+              caution: property.deposit,
+              proprietaire: property.owner,
+              locataire: property.tenant || "Non renseigné",
+              statut: property.status,
+              surface: property.surface,
+              pieces: property.rooms,
+              chambres: property.bedrooms,
+              sallesDeBain: property.baths,
+              modeFinancier: property.financialMode,
+              equipements: property.amenities?.join(", ") || "",
+              observations: property.lastAction || "",
+            }, fileName, () => window.print())}><Printer size={17} /> Imprimer</Button>
             <Button onClick={archive} disabled={archived}><Archive size={17} /> {archived ? "Archivé" : "Archiver dans documents"}</Button>
           </div>
         </div>
@@ -14855,11 +14975,23 @@ function OwnerStatementModal({ owner, chargesList = charges, paymentsList = paym
     includeReversals: "Oui",
   });
   const [preview, setPreview] = useState(false);
+  const fileName = `EKIMMO_SituationProprietaire_${slugifyFilename(owner.name)}_${values.start}.pdf`;
+  const pdfValues = {
+    proprietaire: owner.name,
+    identifiant: owner.id,
+    periodeDebut: fromDateInputValue(values.start),
+    periodeFin: fromDateInputValue(values.end),
+    inclureCharges: values.includeCharges,
+    inclureReversements: values.includeReversals,
+    valeurLocative: owner.rent,
+    charges: owner.charges,
+    solde: owner.balance,
+  };
 
   const update = (key, value) => setValues((current) => ({ ...current, [key]: value }));
   const generatePdf = () => {
     setPreview(true);
-    window.setTimeout(() => window.print(), 90);
+    downloadGeneratedPdf({ label: "Situation propriétaire", module: "Clients" }, pdfValues, fileName);
   };
 
   return (
@@ -15005,11 +15137,41 @@ function OwnerReversementModal({ owner, onUpload, onSave, onClose }) {
 
 function OwnerPrintableModal({ owner, activeTab = "Résumé", output = "Impression", chargesList = charges, paymentsList = paymentRecords, reversalsList = reversals, propertiesList = [], onClose }) {
   const isStatement = ["Situation financière", "Reversements"].includes(activeTab);
+  const ownedProperties = propertiesList.filter((property) => property.owner === owner.name);
   const period = {
     start: "2026-05-01",
     end: "2026-05-31",
     includeCharges: "Oui",
     includeReversals: "Oui",
+  };
+  const fileName = `EKIMMO_${isStatement ? "SituationProprietaire" : "FicheProprietaire"}_${slugifyFilename(owner.name)}_2026-05-31.pdf`;
+  const pdfValues = {
+    proprietaire: owner.name,
+    identifiant: owner.id,
+    telephone: owner.phone,
+    email: owner.email,
+    adresse: owner.address,
+    commission: owner.commission,
+    solde: owner.balance,
+    onglet: activeTab,
+    table: {
+      title: isStatement ? "Situation financière" : "Biens rattachés",
+      columns: isStatement ? ["Type", "Montant", "Statut"] : ["Référence", "Bien", "Statut", "Loyer"],
+      rows: isStatement
+        ? [
+            ["Valeur locative", owner.rent, "Suivi"],
+            ["Charges", owner.charges, "Déductible si applicable"],
+            ["Solde", owner.balance, "À vérifier"],
+          ]
+        : ownedProperties.map((property) => [property.code, property.name, property.status, property.price]),
+    },
+  };
+  const runOutput = () => {
+    if (output === "Export PDF") {
+      downloadGeneratedPdf({ label: isStatement ? "Situation propriétaire" : "Fiche propriétaire complète", module: "Clients" }, pdfValues, fileName);
+      return;
+    }
+    printGeneratedPdf({ label: isStatement ? "Situation propriétaire" : "Fiche propriétaire complète", module: "Clients" }, pdfValues, fileName, () => window.print());
   };
 
   return (
@@ -15023,7 +15185,7 @@ function OwnerPrintableModal({ owner, activeTab = "Résumé", output = "Impressi
             <p>{isStatement ? "La sortie reprend l'onglet financier actif de la fiche propriétaire." : "La sortie reprend l'identité, les biens, les conditions de gestion, les documents et les éléments financiers."}</p>
           </div>
           <div className="document-editor-actions">
-            <Button variant="primary" onClick={() => window.print()}>
+            <Button variant="primary" onClick={runOutput}>
               {output === "Export PDF" ? <Download size={17} /> : <Printer size={17} />}
               {output === "Export PDF" ? "Télécharger PDF" : "Imprimer"}
             </Button>
@@ -17243,7 +17405,7 @@ function CommissionExportModal({ commission, payment, contract, onArchive, onClo
           <div className="document-editor-actions">
             <Button onClick={() => setPreview(true)}><Eye size={17} /> Aperçu</Button>
             <Button variant="primary" onClick={() => downloadGeneratedPdf({ label: "État commission" }, values, fileName)}><Download size={17} /> Télécharger PDF</Button>
-            <Button onClick={() => window.print()}><Printer size={17} /> Imprimer</Button>
+            <Button onClick={() => printGeneratedPdf({ label: "État commission", module: "Finance" }, values, fileName, () => window.print())}><Printer size={17} /> Imprimer</Button>
             <Button onClick={archive} disabled={archived}><Archive size={17} /> {archived ? "Archivé" : "Archiver"}</Button>
           </div>
         </div>
@@ -17450,6 +17612,14 @@ function openChargeReportPrintView(payload, mode = "pdf") {
   if (mode === "pdf" && !payload.__browserFallback) {
     downloadServerPdf(buildServerReportPayload(payload, "Finance", "État des charges"), `${payload.filename}.pdf`)
       .catch((error) => handleServerPdfFailure(error, () => openChargeReportPrintView({ ...payload, __browserFallback: true }, mode)));
+    return;
+  }
+  if (mode === "print" && !payload.__browserFallback) {
+    printServerPdf(
+      buildServerReportPayload(payload, "Finance", "État des charges"),
+      `${payload.filename}.pdf`,
+      () => openChargeReportPrintView({ ...payload, __browserFallback: true }, mode)
+    );
     return;
   }
 
@@ -18193,15 +18363,17 @@ function ReversalStatementModal({ reversal, intent = "preview", paymentsList = p
     date: "25/06/2026",
     observation: reversal.note ?? "État de reversement généré depuis Finance.",
   };
+  const pdfFileName = `EKIMMO_EtatReversement_${values.reference}_2026-06-25.pdf`;
+  const pdfValues = { ...values, owner: reversal.owner, balance: reversal.balance, ...calculation };
 
   useEffect(() => {
     if (intent === "pdf") {
-      downloadGeneratedPdf({ label: "État de reversement" }, { ...values, owner: reversal.owner, balance: reversal.balance }, `EKIMMO_EtatReversement_${values.reference}_2026-06-25.pdf`);
+      downloadGeneratedPdf({ label: "État de reversement", module: "Finance" }, pdfValues, pdfFileName);
       setPreview(true);
     }
     if (intent === "print") {
       setPreview(true);
-      window.setTimeout(() => window.print(), 250);
+      printGeneratedPdf({ label: "État de reversement", module: "Finance" }, pdfValues, pdfFileName, () => window.print());
     }
   }, [intent]);
 
@@ -18222,8 +18394,8 @@ function ReversalStatementModal({ reversal, intent = "preview", paymentsList = p
           </div>
           <div className="document-editor-actions">
             <Button onClick={() => setPreview(true)}><Eye size={17} /> Aperçu</Button>
-            <Button variant="primary" onClick={() => downloadGeneratedPdf({ label: "État de reversement" }, { ...values, owner: reversal.owner, balance: reversal.balance }, `EKIMMO_EtatReversement_${values.reference}_2026-06-25.pdf`)}><Download size={17} /> PDF</Button>
-            <Button onClick={() => window.print()}><Printer size={17} /> Imprimer</Button>
+            <Button variant="primary" onClick={() => downloadGeneratedPdf({ label: "État de reversement", module: "Finance" }, pdfValues, pdfFileName)}><Download size={17} /> PDF</Button>
+            <Button onClick={() => printGeneratedPdf({ label: "État de reversement", module: "Finance" }, pdfValues, pdfFileName, () => window.print())}><Printer size={17} /> Imprimer</Button>
             <Button onClick={archive} disabled={archived}><Archive size={17} /> {archived ? "Archivé" : "Archiver"}</Button>
           </div>
         </div>
@@ -18815,6 +18987,14 @@ function openReportPrintView(payload, mode = "pdf") {
   if (mode === "pdf" && !payload.__browserFallback) {
     downloadServerPdf(buildServerReportPayload(payload, "Rapports", payload.title || "Rapport"), `${payload.filename}.pdf`)
       .catch((error) => handleServerPdfFailure(error, () => openReportPrintView({ ...payload, __browserFallback: true }, mode)));
+    return;
+  }
+  if (mode === "print" && !payload.__browserFallback) {
+    printServerPdf(
+      buildServerReportPayload(payload, "Rapports", payload.title || "Rapport"),
+      `${payload.filename}.pdf`,
+      () => openReportPrintView({ ...payload, __browserFallback: true }, mode)
+    );
     return;
   }
 
@@ -21595,7 +21775,7 @@ function ChargeProofModal({ charge, onUpload, onSave, onClose }) {
         {message && <p className="form-feedback">{message}</p>}
         <div className="action-row compact-row">
           <Button onClick={onClose}>Fermer</Button>
-          {hasProof && <Button onClick={() => window.print()}><Eye size={17} /> Previsualiser</Button>}
+          {hasProof && <Button onClick={() => previewGeneratedPdf({ label: "Justificatif charge" }, { id: charge.id, fileName, reference }, `EKIMMO_JustificatifCharge_${charge.id}_2026-06-25.pdf`, () => window.print())}><Eye size={17} /> Previsualiser</Button>}
           {hasProof && <Button onClick={() => downloadGeneratedPdf({ label: "Justificatif charge" }, { id: charge.id, fileName, reference }, `EKIMMO_JustificatifCharge_${charge.id}_2026-06-25.pdf`)}><Download size={17} /> Telecharger</Button>}
           <Button variant="primary" onClick={submit}><Upload size={17} /> Enregistrer</Button>
           {hasProof && <Button onClick={() => onSave({ charge, proof: null })}><Trash2 size={17} /> Supprimer</Button>}
@@ -22375,7 +22555,7 @@ function PaymentProofModal({ payment, onUpload, onSave, onClose }) {
         {message && <p className="form-feedback">{message}</p>}
         <div className="action-row compact-row">
           <Button onClick={onClose}>Fermer</Button>
-          {existingProof && <Button onClick={() => window.print()}><Eye size={17} /> Prévisualiser</Button>}
+          {existingProof && <Button onClick={() => previewGeneratedPdf({ label: "Justificatif paiement" }, { reference, fileName, payment: payment.reference }, `EKIMMO_Justificatif_${payment.reference}_2026-06-24.pdf`, () => window.print())}><Eye size={17} /> Prévisualiser</Button>}
           {existingProof && <Button onClick={() => downloadGeneratedPdf({ label: "Justificatif paiement" }, { reference, fileName, payment: payment.reference }, `EKIMMO_Justificatif_${payment.reference}_2026-06-24.pdf`)}><Download size={17} /> Télécharger</Button>}
           <Button variant="primary" onClick={() => submit()}><Upload size={17} /> Enregistrer</Button>
           {existingProof && <Button onClick={() => onSave({ payment, proof: null })}><XCircle size={17} /> Supprimer</Button>}
@@ -22398,7 +22578,9 @@ function FinanceReceiptModal({ payment, printOnOpen = false, onReceiptAction, on
 
   useEffect(() => {
     if (printOnOpen) {
-      const timer = window.setTimeout(() => window.print(), 140);
+      const timer = window.setTimeout(() => {
+        printGeneratedPdf(receiptTemplate, values, fileName, () => window.print());
+      }, 140);
       return () => window.clearTimeout(timer);
     }
     return undefined;
@@ -22421,7 +22603,7 @@ function FinanceReceiptModal({ payment, printOnOpen = false, onReceiptAction, on
           </div>
           <div className="document-editor-actions">
             <Button variant="primary" onClick={() => downloadGeneratedPdf(receiptTemplate, values, fileName)}><Download size={17} /> Télécharger PDF</Button>
-            <Button onClick={() => window.print()}><Printer size={17} /> Imprimer</Button>
+            <Button onClick={() => printGeneratedPdf(receiptTemplate, values, fileName, () => window.print())}><Printer size={17} /> Imprimer</Button>
             <Button onClick={() => runReceiptAction("archive-tenant", "Reçu archivé dans la fiche locataire.")}><Archive size={17} /> Archiver locataire</Button>
             <Button onClick={() => runReceiptAction("archive-property", "Reçu archivé dans la fiche du bien.")}><Archive size={17} /> Archiver bien</Button>
             <Button onClick={() => runReceiptAction("link", "Reçu lié au paiement.")}><LinkIcon size={17} /> Lier au paiement</Button>
@@ -22564,8 +22746,8 @@ function ArrearsStatementModal({ row, relancesList = [], promise, history = [], 
           </div>
           <div className="document-editor-actions">
             <Button onClick={() => setPreview(true)}><Eye size={17} /> Aperçu</Button>
-            <Button variant="primary" onClick={() => downloadGeneratedPdf({ label: "État impayé" }, pdfValues, `EKIMMO_EtatImpaye_${row.tenant.replace(/\s+/g, "")}_2026-06-24.pdf`)}><Download size={17} /> PDF</Button>
-            <Button onClick={() => window.print()}><Printer size={17} /> Impression</Button>
+            <Button variant="primary" onClick={() => downloadGeneratedPdf({ label: "État impayé", module: "Finance" }, pdfValues, `EKIMMO_EtatImpaye_${row.tenant.replace(/\s+/g, "")}_2026-06-24.pdf`)}><Download size={17} /> PDF</Button>
+            <Button onClick={() => printGeneratedPdf({ label: "État impayé", module: "Finance" }, pdfValues, `EKIMMO_EtatImpaye_${row.tenant.replace(/\s+/g, "")}_2026-06-24.pdf`, () => window.print())}><Printer size={17} /> Impression</Button>
             <Button onClick={archive} disabled={archived}><Archive size={17} /> {archived ? "Archivé" : "Archiver"}</Button>
           </div>
         </div>
@@ -22827,9 +23009,26 @@ function RentStatementModal({ row, paymentsList = paymentRecords, relancesList =
   });
   const [preview, setPreview] = useState(false);
   const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+  const fileName = `EKIMMO_EtatLoyer_${slugifyFilename(row.tenant)}_${slugifyFilename(values.period)}.pdf`;
+  const pdfValues = {
+    locataire: row.tenant,
+    bien: row.property,
+    proprietaire: row.owner,
+    periode: values.period,
+    montantAttendu: row.expected,
+    montantPaye: row.paid,
+    solde: row.balance,
+    statut: row.status,
+    inclurePaiements: values.includePayments,
+    inclureRelances: values.includeRelances,
+  };
   const generatePdf = () => {
     setPreview(true);
-    window.setTimeout(() => window.print(), 90);
+    if (values.format === "Impression") {
+      printGeneratedPdf({ label: "État de loyer", module: "Finance" }, pdfValues, fileName, () => window.print());
+      return;
+    }
+    downloadGeneratedPdf({ label: "État de loyer", module: "Finance" }, pdfValues, fileName);
   };
 
   return (
@@ -23121,10 +23320,12 @@ function TenantReceiptModal({ tenant, property, payment, paymentsList = paymentR
     onArchive({ tenant, receipt: { ...receiptValues, periode: values.period, montant: values.amount } });
     setArchived(true);
   };
+  const receiptTemplate = documentTemplates.find((item) => item.key === "recu") ?? { label: "Reçu d'encaissement", module: "Finance" };
+  const receiptFileName = `EKIMMO_Recu_${receiptValues.numero}_2026-06-24.pdf`;
 
   const generatePdf = () => {
     setPreview(true);
-    window.setTimeout(() => window.print(), 90);
+    downloadGeneratedPdf(receiptTemplate, receiptValues, receiptFileName);
   };
 
   return (
@@ -23140,7 +23341,7 @@ function TenantReceiptModal({ tenant, property, payment, paymentsList = paymentR
           <div className="document-editor-actions">
             <Button onClick={() => setPreview(true)}><Eye size={17} /> Prévisualiser</Button>
             <Button variant="primary" onClick={generatePdf}><Download size={17} /> Générer PDF</Button>
-            <Button onClick={() => window.print()}><Printer size={17} /> Imprimer</Button>
+            <Button onClick={() => printGeneratedPdf(receiptTemplate, receiptValues, receiptFileName, () => window.print())}><Printer size={17} /> Imprimer</Button>
             <Button onClick={archiveReceipt} disabled={archived}><Archive size={17} /> {archived ? "Archivé" : "Archiver"}</Button>
           </div>
         </div>
@@ -23662,9 +23863,22 @@ function TenantSituationModal({ tenant, property, paymentsList = paymentRecords,
   });
   const [preview, setPreview] = useState(false);
   const update = (key, value) => setValues((current) => ({ ...current, [key]: value }));
+  const fileName = `EKIMMO_SituationLocataire_${slugifyFilename(tenant.name)}_${slugifyFilename(values.period)}.pdf`;
+  const pdfValues = {
+    locataire: tenant.name,
+    identifiant: tenant.id,
+    bien: tenant.property ?? property?.name ?? "",
+    proprietaire: tenant.owner ?? property?.owner ?? "",
+    periode: values.period,
+    loyer: tenant.rent,
+    statutPaiement: tenant.paymentStatus,
+    inclurePaiements: values.includePayments,
+    inclureImpayes: values.includeArrears,
+    inclureRecus: values.includeReceipts,
+  };
   const generatePdf = () => {
     setPreview(true);
-    window.setTimeout(() => window.print(), 90);
+    downloadGeneratedPdf({ label: "Situation locataire", module: "Clients" }, pdfValues, fileName);
   };
 
   return (
@@ -24354,7 +24568,7 @@ function MaintenanceProofModal({ maintenance, onUpload, onSave, onClose }) {
         {message && <p className="form-feedback">{message}</p>}
         <div className="action-row compact-row">
           <Button onClick={onClose}>Fermer</Button>
-          {hasProof && <Button onClick={() => window.print()}><Eye size={17} /> Prévisualiser</Button>}
+          {hasProof && <Button onClick={() => previewGeneratedPdf({ label: "Justificatif entretien", module: "Finance" }, { fileName, reference, entretien: maintenance.type }, `EKIMMO_JustificatifEntretien_${getMaintenanceKey(maintenance)}.pdf`, () => window.print())}><Eye size={17} /> Prévisualiser</Button>}
           {hasProof && <Button onClick={() => downloadGeneratedPdf({ label: "Justificatif entretien" }, { fileName, reference, entretien: maintenance.type }, `EKIMMO_JustificatifEntretien_${getMaintenanceKey(maintenance)}.pdf`)}><Download size={17} /> Télécharger</Button>}
           <Button variant="primary" onClick={save}><Upload size={17} /> Enregistrer</Button>
           {hasProof && <Button onClick={() => onSave({ maintenance, proof: null })}><Trash2 size={17} /> Supprimer</Button>}
@@ -24566,8 +24780,8 @@ function MaintenanceReportModal({ maintenance, propertiesList = [], onArchive, o
           </div>
           <div className="document-editor-actions">
             <Button onClick={() => setPreview(true)}><Eye size={17} /> Aperçu</Button>
-            <Button variant="primary" onClick={() => downloadGeneratedPdf({ label: "Rapport entretien" }, values, `EKIMMO_RapportEntretien_${values.reference}_2026-06-25.pdf`)}><Download size={17} /> PDF</Button>
-            <Button onClick={() => window.print()}><Printer size={17} /> Impression</Button>
+            <Button variant="primary" onClick={() => downloadGeneratedPdf({ label: "Rapport entretien", module: "Finance" }, values, `EKIMMO_RapportEntretien_${values.reference}_2026-06-25.pdf`)}><Download size={17} /> PDF</Button>
+            <Button onClick={() => printGeneratedPdf({ label: "Rapport entretien", module: "Finance" }, values, `EKIMMO_RapportEntretien_${values.reference}_2026-06-25.pdf`, () => window.print())}><Printer size={17} /> Impression</Button>
             <Button onClick={archive} disabled={archived}><Archive size={17} /> {archived ? "Archivé" : "Archiver"}</Button>
           </div>
         </div>
