@@ -4246,6 +4246,7 @@ function visitMatchesQuickFilter(visit, quickFilter) {
 const AUTH_ENDPOINT = "/api/auth.php";
 const PERSISTENCE_ENDPOINT = "/api/state.php";
 const DOCUMENT_ENDPOINT = "/api/documents.php";
+const UPLOAD_ENDPOINT = "/api/uploads.php";
 const PERSISTENCE_SAVE_DELAY = 900;
 const PERSISTED_STATE_KEYS = [
   "createdProperties",
@@ -4408,6 +4409,32 @@ async function forgotPasswordRemote(email) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || payload.ok === false) {
     const error = new Error(payload.message || "Impossible d'envoyer la demande pour le moment.");
+    error.code = payload.code || `http_${response.status}`;
+    throw error;
+  }
+  return payload;
+}
+
+async function uploadRemoteFile(file, metadata = {}, csrfToken = "") {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("module", metadata.module ?? "Docs");
+  form.append("category", metadata.category ?? "");
+  form.append("linkedType", metadata.linkedType ?? "");
+  form.append("linkedId", metadata.linkedId ?? "");
+
+  const response = await fetch(UPLOAD_ENDPOINT, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+    },
+    credentials: "include",
+    body: form,
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.ok === false) {
+    const error = new Error(payload.message || "Envoi du fichier impossible.");
     error.code = payload.code || `http_${response.status}`;
     throw error;
   }
@@ -6341,6 +6368,12 @@ function App() {
     return payload;
   };
 
+  const handleFileUpload = async (file, metadata = {}) => {
+    const payload = await uploadRemoteFile(file, metadata, csrfToken);
+    if (payload.csrfToken) setCsrfToken(payload.csrfToken);
+    return payload.upload;
+  };
+
   const showPropertyDetail = (property) => {
     if (!isAuthenticated) return;
     setPropertyReturnContext(null);
@@ -7667,6 +7700,9 @@ function App() {
       signedSigners: values.signers,
       signedObservation: values.observation,
       signedDocumentType: values.fileType || "PDF",
+      signedDocumentUrl: values.upload?.url ?? contract.signedDocumentUrl ?? "",
+      signedUploadId: values.upload?.id ?? contract.signedUploadId ?? "",
+      signedUpload: values.upload ?? contract.signedUpload ?? null,
       signedDeleteAllowed: true,
       signedAt: values.signatureDate,
     }, {
@@ -8333,6 +8369,9 @@ function App() {
       realCost: values.realCost,
       payer: values.payer,
       proof: values.proof || maintenance.proof,
+      proofUrl: values.proofUpload?.url ?? maintenance.proofUrl ?? "",
+      proofUploadId: values.proofUpload?.id ?? maintenance.proofUploadId ?? "",
+      proofUpload: values.proofUpload ?? maintenance.proofUpload ?? null,
       costObservation: values.observation,
     }, `Coût : estimation ${values.estimatedCost}, réel ${values.realCost || "non renseigné"}.`);
 
@@ -8350,12 +8389,18 @@ function App() {
           proofReference: proof.reference,
           proofComment: proof.comment,
           proofStatus: "Présent",
+          proofUrl: proof.url,
+          proofUploadId: proof.uploadId,
+          proofUpload: proof.upload ?? null,
         }
       : {
           proof: "",
           proofReference: "",
           proofComment: "",
           proofStatus: "Manquant",
+          proofUrl: "",
+          proofUploadId: "",
+          proofUpload: null,
         },
     proof ? `Justificatif : ${proof.fileName} importé.` : "Justificatif : fichier supprimé.");
     setMaintenanceActionContext((current) => current ? { ...current, maintenance: { ...maintenance, proof: proof?.fileName ?? "", proofStatus: proof ? "Présent" : "Manquant" } } : null);
@@ -8365,6 +8410,8 @@ function App() {
     updateMaintenanceRecord(maintenance, {
       beforePhotos: values.beforePhotos,
       afterPhotos: values.afterPhotos,
+      beforePhotoUploads: values.beforePhotoUploads ?? maintenance.beforePhotoUploads ?? [],
+      afterPhotoUploads: values.afterPhotoUploads ?? maintenance.afterPhotoUploads ?? [],
       photosComment: values.comment,
     }, `Photos : ${values.beforePhotos || "aucune photo avant"} / ${values.afterPhotos || "aucune photo après"}.`);
     closeMaintenanceAction();
@@ -8390,6 +8437,7 @@ function App() {
       realCost: values.realCost,
       note: values.observation || maintenance.note,
       afterPhotos: values.afterPhotos || maintenance.afterPhotos,
+      afterPhotoUploads: values.afterPhotoUploads ?? maintenance.afterPhotoUploads ?? [],
     }, `Clôture : ${values.workDone}.`);
 
     if (values.createReport === "Oui") {
@@ -8565,11 +8613,17 @@ function App() {
           proofStatus: "Présent",
           paymentRef: proof.reference || charge.paymentRef,
           proofComment: proof.comment,
+          proofUrl: proof.url,
+          proofUploadId: proof.uploadId,
+          proofUpload: proof.upload ?? null,
         }
       : {
           proof: "Justificatif à joindre",
           proofStatus: "Manquant",
           proofComment: "",
+          proofUrl: "",
+          proofUploadId: "",
+          proofUpload: null,
         };
     updateChargeRecord(charge, patch, proof ? `Justificatif ajouté : ${proof.fileName}` : "Justificatif supprimé");
     setChargeActionContext((current) => current ? { ...current, charge: { ...charge, ...patch } } : null);
@@ -9152,6 +9206,7 @@ function App() {
           propertiesList={activeProperties}
           maintenancesList={allMaintenances}
           chargesList={allCharges}
+          onUpload={handleFileUpload}
           onSave={handleChargeSave}
           onClose={() => {
             setChargeContext(null);
@@ -9179,6 +9234,7 @@ function App() {
       ) : modal === "Justificatif charge" ? (
         <ChargeProofModal
           charge={chargeActionContext?.charge ?? allCharges[0]}
+          onUpload={handleFileUpload}
           onSave={handleChargeProofSave}
           onClose={() => {
             setChargeActionContext(null);
@@ -9234,6 +9290,7 @@ function App() {
           ownersList={allOwners}
           tenantsList={allTenants}
           ownerPrefill={propertyOwnerPrefill}
+          onUpload={handleFileUpload}
           onSave={handlePropertySave}
           onClose={() => {
             setPropertyOwnerPrefill("");
@@ -9243,6 +9300,7 @@ function App() {
       ) : modal === "Nouveau propriétaire" ? (
         <OwnerFormModal
           sequence={owners.length + createdOwners.length + 1}
+          onUpload={handleFileUpload}
           onSave={handleOwnerSave}
           onClose={() => setModal(null)}
         />
@@ -9368,6 +9426,7 @@ function App() {
         <OwnerFormModal
           mode="edit"
           owner={ownerActionContext?.owner ?? selectedOwner}
+          onUpload={handleFileUpload}
           onSave={handleOwnerSave}
           onClose={() => {
             setOwnerActionContext(null);
@@ -9389,6 +9448,7 @@ function App() {
       ) : modal === "Enregistrer reversement propriétaire" ? (
         <OwnerReversementModal
           owner={ownerActionContext?.owner ?? selectedOwner}
+          onUpload={handleFileUpload}
           onSave={handleOwnerReversementSave}
           onClose={() => {
             setOwnerActionContext(null);
@@ -9404,6 +9464,7 @@ function App() {
           chargesList={allCharges}
           reversalsList={allReversals}
           sequence={ownerReversements.length + allReversals.length + 1}
+          onUpload={handleFileUpload}
           onSave={handleFinanceReversalPrepareSave}
           onClose={closeReversalAction}
         />
@@ -9467,6 +9528,7 @@ function App() {
           tenant={tenantActionContext?.tenant ?? selectedTenant}
           property={tenantActionContext?.property}
           propertiesList={activeProperties}
+          onUpload={handleFileUpload}
           onSave={handleTenantSave}
           onClose={() => {
             setTenantActionContext(null);
@@ -9477,6 +9539,7 @@ function App() {
         <NewTenantFormModal
           sequence={tenants.length + createdTenants.length + 1}
           propertiesList={activeProperties}
+          onUpload={handleFileUpload}
           onSave={handleNewTenantSave}
           onClose={() => setModal(null)}
         />
@@ -9522,6 +9585,7 @@ function App() {
       ) : modal === "Justificatif paiement" ? (
         <PaymentProofModal
           payment={paymentActionContext?.payment ?? allPayments[0]}
+          onUpload={handleFileUpload}
           onSave={handlePaymentProofSave}
           onClose={() => {
             setPaymentActionContext(null);
@@ -9731,7 +9795,7 @@ function App() {
       ) : modal === "Actions echeance contrat" ? (
         <ContractDueActionsModal contract={contractActionContext?.contract ?? allContracts[0]} onAction={openAction} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "Document signe contrat" ? (
-        <ContractDocumentModal contract={contractActionContext?.contract ?? allContracts[0]} action={contractActionContext?.documentAction} onImport={handleContractSignedDocumentImport} onSignedAction={handleContractSignedDocumentAction} onClose={() => { setContractActionContext(null); setModal(null); }} />
+        <ContractDocumentModal contract={contractActionContext?.contract ?? allContracts[0]} action={contractActionContext?.documentAction} onUpload={handleFileUpload} onImport={handleContractSignedDocumentImport} onSignedAction={handleContractSignedDocumentAction} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "PDF contrat" ? (
         <ContractPdfModal contract={contractActionContext?.contract ?? allContracts[0]} propertiesList={propertiesWithArchiveState} ownersList={allOwners} tenantsList={allTenants} onPdfAction={handleContractPdfAction} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "Imprimer contrat" ? (
@@ -9749,23 +9813,23 @@ function App() {
       ) : modal === "Responsable entretien" ? (
         <MaintenanceResponsibleModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onSave={handleMaintenanceResponsibleSave} onClose={closeMaintenanceAction} />
       ) : modal === "Cout entretien" ? (
-        <MaintenanceCostModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onSave={handleMaintenanceCostSave} onClose={closeMaintenanceAction} />
+        <MaintenanceCostModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onUpload={handleFileUpload} onSave={handleMaintenanceCostSave} onClose={closeMaintenanceAction} />
       ) : modal === "Justificatif entretien" ? (
-        <MaintenanceProofModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onSave={handleMaintenanceProofSave} onClose={closeMaintenanceAction} />
+        <MaintenanceProofModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onUpload={handleFileUpload} onSave={handleMaintenanceProofSave} onClose={closeMaintenanceAction} />
       ) : modal === "Photos entretien" ? (
-        <MaintenancePhotosModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onSave={handleMaintenancePhotosSave} onClose={closeMaintenanceAction} />
+        <MaintenancePhotosModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onUpload={handleFileUpload} onSave={handleMaintenancePhotosSave} onClose={closeMaintenanceAction} />
       ) : modal === "Valider entretien" ? (
         <MaintenanceValidationModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onSave={handleMaintenanceValidationSave} onClose={closeMaintenanceAction} />
       ) : modal === "Terminer entretien" ? (
-        <MaintenanceCompletionModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onSave={handleMaintenanceCompletionSave} onClose={closeMaintenanceAction} />
+        <MaintenanceCompletionModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onUpload={handleFileUpload} onSave={handleMaintenanceCompletionSave} onClose={closeMaintenanceAction} />
       ) : modal === "Rapport entretien" ? (
         <MaintenanceReportModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} propertiesList={propertiesWithArchiveState} onArchive={handleMaintenanceReportArchive} onClose={closeMaintenanceAction} />
       ) : modal === "Annuler entretien" ? (
         <MaintenanceCancelModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onSave={handleMaintenanceCancelSave} onClose={closeMaintenanceAction} />
       ) : modal === "Ajouter entretien" ? (
-        <MaintenanceFormModal context={maintenanceContext} propertiesList={activeProperties} onSave={handleMaintenanceSchedule} onClose={() => { setMaintenanceContext(null); setModal(null); }} />
+        <MaintenanceFormModal context={maintenanceContext} propertiesList={activeProperties} onUpload={handleFileUpload} onSave={handleMaintenanceSchedule} onClose={() => { setMaintenanceContext(null); setModal(null); }} />
       ) : modal === "Intervention urgente" ? (
-        <UrgentMaintenanceModal context={maintenanceContext} propertiesList={activeProperties} onSave={handleMaintenanceSchedule} onClose={() => setModal(null)} />
+        <UrgentMaintenanceModal context={maintenanceContext} propertiesList={activeProperties} onUpload={handleFileUpload} onSave={handleMaintenanceSchedule} onClose={() => setModal(null)} />
       ) : modal === "Document manquant" ? (
         <MissingDocumentModal
           request={missingDocumentContext}
@@ -9783,6 +9847,7 @@ function App() {
           chargesList={allCharges}
           maintenancesList={allMaintenances}
           sequence={propertyDocumentArchives.length + propertyPdfArchives.length + 1}
+          onUpload={handleFileUpload}
           onImport={handlePropertyDocumentImport}
           onClose={() => {
             setPropertyDocumentImportContext(null);
@@ -14849,7 +14914,7 @@ function OwnerStatementModal({ owner, chargesList = charges, paymentsList = paym
   );
 }
 
-function OwnerReversementModal({ owner, onSave, onClose }) {
+function OwnerReversementModal({ owner, onUpload, onSave, onClose }) {
   const [values, setValues] = useState({
     period: "Mai 2026",
     balance: owner.balance,
@@ -14858,6 +14923,7 @@ function OwnerReversementModal({ owner, onSave, onClose }) {
     reference: `REV-2026-${String(Math.max(100, parseFCFA(owner.id) % 900)).padStart(3, "0")}`,
     date: "2026-06-19",
     proof: "",
+    proofUpload: null,
     observation: `Reversement au profit de ${owner.name}.`,
   });
   const remainingBalance = formatFCFA(Math.max(parseFCFA(values.balance) - parseFCFA(values.amount), 0));
@@ -14878,6 +14944,9 @@ function OwnerReversementModal({ owner, onSave, onClose }) {
       reference: values.reference,
       date: values.date,
       proof: values.proof || "Justificatif à archiver",
+      proofUrl: values.proofUpload?.url ?? "",
+      proofUploadId: values.proofUpload?.id ?? "",
+      proofUpload: values.proofUpload,
       note: values.observation,
     };
 
@@ -14907,7 +14976,14 @@ function OwnerReversementModal({ owner, onSave, onClose }) {
             <label>Mode de paiement<select value={values.mode} onChange={(event) => update("mode", event.target.value)}><option>Virement bancaire</option><option>Orange Money</option><option>Moov Money</option><option>Chèque</option><option>Espèces</option></select></label>
             <label>Référence<input value={values.reference} onChange={(event) => update("reference", event.target.value)} /></label>
             <label>Date<input type="date" value={values.date} onChange={(event) => update("date", event.target.value)} /></label>
-            <label>Justificatif<input type="file" onChange={(event) => update("proof", event.target.files?.[0]?.name ?? "")} /></label>
+            <ServerFileInput
+              label="Justificatif"
+              value={values.proof}
+              onUpload={onUpload}
+              metadata={{ module: "Finance", category: "Justificatif reversement", linkedType: "owner", linkedId: owner.id }}
+              onUploaded={(upload) => setValues((current) => ({ ...current, proofUpload: upload, proof: upload?.originalName ?? current.proof }))}
+              fallbackText="Aucun justificatif sélectionné"
+            />
             <label className="full">Observation<textarea value={values.observation} onChange={(event) => update("observation", event.target.value)} /></label>
           </div>
         </div>
@@ -17875,7 +17951,7 @@ function MaintenanceProfilePanel({ maintenance, propertiesList = [], onAction })
   );
 }
 
-function FinanceReversalPrepareModal({ owner, ownersList = owners, paymentsList = paymentRecords, commissionsList = commissions, chargesList = charges, reversalsList = reversals, sequence = 1, onSave, onClose }) {
+function FinanceReversalPrepareModal({ owner, ownersList = owners, paymentsList = paymentRecords, commissionsList = commissions, chargesList = charges, reversalsList = reversals, sequence = 1, onUpload, onSave, onClose }) {
   const [ownerName, setOwnerName] = useState(owner?.name ?? ownersList[0]?.name ?? "");
   const selectedOwner = ownersList.find((item) => item.name === ownerName) ?? owner ?? ownersList[0];
   const calculation = calculateOwnerReversal(ownerName, paymentsList, chargesList, reversalsList, ownersList, commissionsList);
@@ -17887,6 +17963,7 @@ function FinanceReversalPrepareModal({ owner, ownersList = owners, paymentsList 
     reference: makeDocumentNumber("REV", 120 + sequence),
     date: "2026-06-28",
     proof: "",
+    proofUpload: null,
     observation: "Reversement préparé depuis Finance → Reversements.",
   });
   const [preview, setPreview] = useState(false);
@@ -17913,6 +17990,9 @@ function FinanceReversalPrepareModal({ owner, ownersList = owners, paymentsList 
       reference: values.reference,
       date: fromDateInputValue(values.date),
       proof: values.proof || "Justificatif à archiver",
+      proofUrl: values.proofUpload?.url ?? "",
+      proofUploadId: values.proofUpload?.id ?? "",
+      proofUpload: values.proofUpload,
       note: values.observation,
       preparedAt: "25/06/2026",
     };
@@ -17962,7 +18042,14 @@ function FinanceReversalPrepareModal({ owner, ownersList = owners, paymentsList 
             <label>Mode de paiement<select value={values.mode} onChange={update("mode")}><option>Virement bancaire</option><option>Orange Money</option><option>Moov Money</option><option>Chèque</option><option>Espèces</option></select></label>
             <label>Référence<input value={values.reference} onChange={update("reference")} /></label>
             <label>Date prévue<input type="date" value={values.date} onChange={update("date")} /></label>
-            <label>Justificatif<input type="file" onChange={(event) => setValues((current) => ({ ...current, proof: event.target.files?.[0]?.name ?? "" }))} /><small>{values.proof || "Aucun fichier sélectionné"}</small></label>
+            <ServerFileInput
+              label="Justificatif"
+              value={values.proof}
+              onUpload={onUpload}
+              metadata={{ module: "Finance", category: "Justificatif reversement", linkedType: "owner", linkedId: selectedOwner.id }}
+              onUploaded={(upload) => setValues((current) => ({ ...current, proof: upload?.originalName ?? current.proof, proofUpload: upload }))}
+              fallbackText="Aucun fichier sélectionné"
+            />
             <label className="full">Observation<textarea value={values.observation} onChange={update("observation")} /></label>
           </div>
         </div>
@@ -20390,6 +20477,63 @@ function MoneyInput({ value, onChange, readOnly = false, placeholder = "0", ...p
   );
 }
 
+function ServerFileInput({
+  label,
+  value = "",
+  accept = ".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx",
+  multiple = false,
+  onUpload,
+  onUploaded,
+  onFilesSelected,
+  metadata = {},
+  fallbackText = "Aucun fichier sélectionné",
+  small,
+  className = "",
+}) {
+  const [display, setDisplay] = useState(value);
+  const [status, setStatus] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setDisplay(value);
+  }, [value]);
+
+  const uploadFiles = async (event) => {
+    const files = Array.from(event.target.files ?? []);
+    if (!files.length) return;
+    onFilesSelected?.(multiple ? files : files[0], files);
+    setBusy(true);
+    setStatus("Envoi du fichier...");
+    try {
+      const uploads = [];
+      if (onUpload) {
+        for (const file of files) {
+          uploads.push(await onUpload(file, metadata));
+        }
+      } else {
+        uploads.push(...files.map((file) => ({ originalName: file.name, url: "" })));
+      }
+      const labelText = uploads.map((upload) => upload.originalName || upload.name).filter(Boolean).join(", ");
+      setDisplay(labelText);
+      setStatus("Fichier enregistré.");
+      onUploaded?.(multiple ? uploads : uploads[0]);
+    } catch (error) {
+      setStatus(error.message || "Envoi du fichier impossible.");
+    } finally {
+      setBusy(false);
+      event.target.value = "";
+    }
+  };
+
+  return (
+    <label className={className}>
+      {label}
+      <input type="file" accept={accept} multiple={multiple} onChange={uploadFiles} disabled={busy} />
+      <small>{status || display || small || fallbackText}</small>
+    </label>
+  );
+}
+
 function getInitials(name) {
   return name
     .split(" ")
@@ -21166,7 +21310,7 @@ function ProspectConversionModal({ prospect, propertiesList = [], onSave, onClos
   );
 }
 
-function OwnerFormModal({ sequence = owners.length + 1, owner = null, mode = "create", onSave, onClose }) {
+function OwnerFormModal({ sequence = owners.length + 1, owner = null, mode = "create", onUpload, onSave, onClose }) {
   const isEditMode = mode === "edit" && owner;
   const generatedId = useMemo(() => `PRO-2026-${String(sequence).padStart(3, "0")}`, [sequence]);
   const initialValues = useMemo(() => ({
@@ -21184,6 +21328,7 @@ function OwnerFormModal({ sequence = owners.length + 1, owner = null, mode = "cr
     observations: owner?.observations ?? "Propriétaire à rattacher aux biens après validation du mandat.",
   }), [generatedId, owner]);
   const [values, setValues] = useState(initialValues);
+  const [documentUploads, setDocumentUploads] = useState(owner?.documentUploads ?? {});
   const isCompany = values.type === "Société";
   const canSave = values.name.trim() && values.phone.trim();
 
@@ -21223,6 +21368,7 @@ function OwnerFormModal({ sequence = owners.length + 1, owner = null, mode = "cr
       reversementPeriod: values.reversementPeriod,
       observations: values.observations,
       documents: owner?.documents ?? ["Pièce d'identité", "Mandat", "RIB", "Autre document"],
+      documentUploads,
     };
 
     onSave({ owner: nextOwner, addProperty });
@@ -21270,10 +21416,10 @@ function OwnerFormModal({ sequence = owners.length + 1, owner = null, mode = "cr
         <div className="form-section">
           <h3>Documents</h3>
           <div className="document-upload-grid owner-document-grid">
-            <label>Pièce d'identité<input type="file" /><small>Carte NINA, passeport ou registre de commerce.</small></label>
-            <label>Mandat<input type="file" /><small>Mandat signé ou projet de mandat.</small></label>
-            <label>RIB<input type="file" /><small>Compte bancaire ou référence mobile money.</small></label>
-            <label>Autre document<input type="file" multiple /><small>Titre, procuration, pièce complémentaire.</small></label>
+            <ServerFileInput label="Pièce d'identité" value={documentUploads.identity?.originalName ?? ""} onUpload={onUpload} metadata={{ module: "Clients", category: "Pièce identité propriétaire", linkedType: "owner", linkedId: values.id }} onUploaded={(upload) => setDocumentUploads((current) => ({ ...current, identity: upload }))} fallbackText="Carte NINA, passeport ou registre de commerce." />
+            <ServerFileInput label="Mandat" value={documentUploads.mandate?.originalName ?? ""} onUpload={onUpload} metadata={{ module: "Clients", category: "Mandat propriétaire", linkedType: "owner", linkedId: values.id }} onUploaded={(upload) => setDocumentUploads((current) => ({ ...current, mandate: upload }))} fallbackText="Mandat signé ou projet de mandat." />
+            <ServerFileInput label="RIB" value={documentUploads.rib?.originalName ?? ""} onUpload={onUpload} metadata={{ module: "Clients", category: "RIB propriétaire", linkedType: "owner", linkedId: values.id }} onUploaded={(upload) => setDocumentUploads((current) => ({ ...current, rib: upload }))} fallbackText="Compte bancaire ou référence mobile money." />
+            <ServerFileInput label="Autre document" value={(documentUploads.other ?? []).map((upload) => upload.originalName).join(", ")} multiple onUpload={onUpload} metadata={{ module: "Clients", category: "Autre document propriétaire", linkedType: "owner", linkedId: values.id }} onUploaded={(uploads) => setDocumentUploads((current) => ({ ...current, other: uploads }))} fallbackText="Titre, procuration, pièce complémentaire." />
           </div>
         </div>
 
@@ -21375,13 +21521,14 @@ function ChargeCancellationModal({ charge, onConfirm, onClose }) {
   );
 }
 
-function ChargeProofModal({ charge, onSave, onClose }) {
+function ChargeProofModal({ charge, onUpload, onSave, onClose }) {
   const proofStatusKey = normalizeSearch(charge.proofStatus);
   const proofKey = normalizeSearch(charge.proof);
   const hasProof = Boolean(charge.proofStatus)
     && !["manquant", "supprime"].includes(proofStatusKey)
     && !(proofKey.includes("justificatif") && proofKey.includes("joindre"));
   const [fileName, setFileName] = useState(hasProof ? charge.proof : "");
+  const [uploadRecord, setUploadRecord] = useState(charge.proofUpload ?? null);
   const [reference, setReference] = useState(charge.paymentRef && charge.paymentRef !== "A completer" ? charge.paymentRef : "");
   const [comment, setComment] = useState(charge.proofComment ?? "");
   const [message, setMessage] = useState("");
@@ -21395,6 +21542,8 @@ function ChargeProofModal({ charge, onSave, onClose }) {
       charge,
       proof: {
         fileName,
+        url: uploadRecord?.url ?? charge.proofUrl ?? "",
+        uploadId: uploadRecord?.id ?? charge.proofUploadId ?? "",
         reference,
         comment,
         importedAt: "25/06/2026",
@@ -21427,7 +21576,18 @@ function ChargeProofModal({ charge, onSave, onClose }) {
         <div className="form-section">
           <h3>{hasProof ? "Remplacer le justificatif" : "Importer un justificatif"}</h3>
           <div className="form-grid compact-form">
-            <label>Importer PDF / image<input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(event) => setFileName(event.target.files?.[0]?.name ?? fileName)} /><small>{fileName || "Aucun fichier selectionne"}</small></label>
+            <ServerFileInput
+              label="Importer PDF / image"
+              value={fileName}
+              accept=".pdf,.jpg,.jpeg,.png,.webp"
+              onUpload={onUpload}
+              metadata={{ module: "Finance", category: "Justificatif charge", linkedType: "charge", linkedId: charge.id }}
+              onUploaded={(upload) => {
+                setUploadRecord(upload);
+                setFileName(upload?.originalName ?? fileName);
+              }}
+              fallbackText="Aucun fichier selectionne"
+            />
             <label>Reference facture ou recu<input value={reference} onChange={(event) => setReference(event.target.value)} /></label>
             <label className="full">Commentaire<textarea value={comment} onChange={(event) => setComment(event.target.value)} /></label>
           </div>
@@ -21594,7 +21754,7 @@ function ChargeHistoryModal({ charge, onClose }) {
   );
 }
 
-function ChargeFormModal({ title, context = null, propertiesList = [], maintenancesList = maintenances, chargesList = charges, onSave, onClose }) {
+function ChargeFormModal({ title, context = null, propertiesList = [], maintenancesList = maintenances, chargesList = charges, onUpload, onSave, onClose }) {
   const chargeCreationTypes = ["Nettoyage", "Réparation", "Plomberie", "Électricité", "Peinture", "Publicité", "Entretien", "Autre"];
   const modalChargeId = title.match(/CHG-\d{4}-\d{3}/)?.[0];
   const editedCharge = context?.charge ?? chargesList.find((charge) => charge.id === modalChargeId) ?? null;
@@ -21622,6 +21782,8 @@ function ChargeFormModal({ title, context = null, propertiesList = [], maintenan
     photoLabel: "",
     observation: editedCharge?.history?.slice(-1)?.[0] ?? "",
   });
+  const [proofUpload, setProofUpload] = useState(editedCharge?.proofUpload ?? null);
+  const [photoUpload, setPhotoUpload] = useState(editedCharge?.photoUpload ?? null);
 
   const selectedProperty = propertyOptions.find((property) => property.code === values.propertyCode) ?? initialProperty;
   const tenantLabel = selectedProperty?.tenant && !["Libre", "N/A", "Non applicable"].includes(selectedProperty.tenant) ? selectedProperty.tenant : "Non applicable";
@@ -21631,11 +21793,6 @@ function ChargeFormModal({ title, context = null, propertiesList = [], maintenan
   const update = (field) => (event) => {
     setMessage("");
     setValues((current) => ({ ...current, [field]: event.target.value }));
-  };
-
-  const updateFileLabel = (field) => (event) => {
-    const fileName = event.target.files?.[0]?.name ?? "";
-    setValues((current) => ({ ...current, [field]: fileName }));
   };
 
   const submit = (validate = false) => {
@@ -21669,6 +21826,13 @@ function ChargeFormModal({ title, context = null, propertiesList = [], maintenan
         status: values.status,
         proof: proofName,
         proofStatus: proofName === "Justificatif à joindre" ? "Manquant" : "Présent",
+        proofUrl: proofUpload?.url ?? editedCharge?.proofUrl ?? "",
+        proofUploadId: proofUpload?.id ?? editedCharge?.proofUploadId ?? "",
+        proofUpload,
+        photo: values.photoLabel,
+        photoUrl: photoUpload?.url ?? editedCharge?.photoUrl ?? "",
+        photoUploadId: photoUpload?.id ?? editedCharge?.photoUploadId ?? "",
+        photoUpload,
         period: getPeriodFromInputDate(values.date),
         agent: values.agent,
         paymentMode: "À déterminer",
@@ -21737,8 +21901,30 @@ function ChargeFormModal({ title, context = null, propertiesList = [], maintenan
         <div className="form-section">
           <h3>Justificatif</h3>
           <div className="form-grid compact-form">
-            <label>Fichier PDF<input type="file" accept=".pdf" onChange={updateFileLabel("proofLabel")} /><small>{values.proofLabel || "Aucun PDF joint"}</small></label>
-            <label>Photo<input type="file" accept="image/*" onChange={updateFileLabel("photoLabel")} /><small>{values.photoLabel || "Aucune photo jointe"}</small></label>
+            <ServerFileInput
+              label="Fichier PDF"
+              value={values.proofLabel}
+              accept=".pdf"
+              onUpload={onUpload}
+              metadata={{ module: "Finance", category: "Justificatif charge", linkedType: "charge", linkedId: values.id }}
+              onUploaded={(upload) => {
+                setProofUpload(upload);
+                setValues((current) => ({ ...current, proofLabel: upload?.originalName ?? current.proofLabel }));
+              }}
+              fallbackText="Aucun PDF joint"
+            />
+            <ServerFileInput
+              label="Photo"
+              value={values.photoLabel}
+              accept=".jpg,.jpeg,.png,.webp"
+              onUpload={onUpload}
+              metadata={{ module: "Finance", category: "Photo charge", linkedType: "charge", linkedId: values.id }}
+              onUploaded={(upload) => {
+                setPhotoUpload(upload);
+                setValues((current) => ({ ...current, photoLabel: upload?.originalName ?? current.photoLabel }));
+              }}
+              fallbackText="Aucune photo jointe"
+            />
             <label className="full">Référence facture ou reçu<input value={values.invoiceRef} onChange={update("invoiceRef")} placeholder="FAC-2026-055 ou reçu prestataire" /></label>
           </div>
         </div>
@@ -21754,7 +21940,7 @@ function ChargeFormModal({ title, context = null, propertiesList = [], maintenan
   );
 }
 
-function TenantFormModal({ tenant, property, propertiesList = [], onSave, onClose }) {
+function TenantFormModal({ tenant, property, propertiesList = [], onUpload, onSave, onClose }) {
   const propertyOptions = getActiveProperties(propertiesList);
   const linkedProperty = property
     ?? propertyOptions.find((item) => item.name === tenant.property)
@@ -21774,6 +21960,7 @@ function TenantFormModal({ tenant, property, propertiesList = [], onSave, onClos
     paymentStatus: tenant.paymentStatus,
     observations: tenant.observations ?? `Locataire rattaché au bien ${tenant.property}.`,
   });
+  const [documentUploads, setDocumentUploads] = useState(tenant.documentUploads ?? {});
   const canSave = values.name.trim() && values.phone.trim();
   const update = (key, value) => setValues((current) => ({ ...current, [key]: value }));
 
@@ -21794,6 +21981,7 @@ function TenantFormModal({ tenant, property, propertiesList = [], onSave, onClos
         contract: values.contract,
         paymentStatus: values.paymentStatus,
         observations: values.observations,
+        documentUploads,
       },
     });
   };
@@ -21839,10 +22027,10 @@ function TenantFormModal({ tenant, property, propertiesList = [], onSave, onClos
         <div className="form-section">
           <h3>Documents</h3>
           <div className="document-upload-grid owner-document-grid">
-            <label>Pièce d'identité<input type="file" /><small>Carte NINA, passeport ou autre pièce.</small></label>
-            <label>Contrat signé<input type="file" /><small>Document signé par les parties.</small></label>
-            <label>Reçus<input type="file" multiple /><small>Reçus ou justificatifs associés.</small></label>
-            <label>Autre document<input type="file" multiple /><small>Tout document utile au dossier.</small></label>
+            <ServerFileInput label="Pièce d'identité" value={documentUploads.identity?.originalName ?? ""} onUpload={onUpload} metadata={{ module: "Clients", category: "Pièce identité locataire", linkedType: "tenant", linkedId: values.id }} onUploaded={(upload) => setDocumentUploads((current) => ({ ...current, identity: upload }))} fallbackText="Carte NINA, passeport ou autre pièce." />
+            <ServerFileInput label="Contrat signé" value={documentUploads.signedContract?.originalName ?? ""} onUpload={onUpload} metadata={{ module: "Clients", category: "Contrat signé locataire", linkedType: "tenant", linkedId: values.id }} onUploaded={(upload) => setDocumentUploads((current) => ({ ...current, signedContract: upload }))} fallbackText="Document signé par les parties." />
+            <ServerFileInput label="Reçus" value={(documentUploads.receipts ?? []).map((upload) => upload.originalName).join(", ")} multiple onUpload={onUpload} metadata={{ module: "Clients", category: "Reçus locataire", linkedType: "tenant", linkedId: values.id }} onUploaded={(uploads) => setDocumentUploads((current) => ({ ...current, receipts: uploads }))} fallbackText="Reçus ou justificatifs associés." />
+            <ServerFileInput label="Autre document" value={(documentUploads.other ?? []).map((upload) => upload.originalName).join(", ")} multiple onUpload={onUpload} metadata={{ module: "Clients", category: "Autre document locataire", linkedType: "tenant", linkedId: values.id }} onUploaded={(uploads) => setDocumentUploads((current) => ({ ...current, other: uploads }))} fallbackText="Tout document utile au dossier." />
           </div>
         </div>
 
@@ -21855,7 +22043,7 @@ function TenantFormModal({ tenant, property, propertiesList = [], onSave, onClos
   );
 }
 
-function NewTenantFormModal({ sequence = 1, propertiesList = [], onSave, onClose }) {
+function NewTenantFormModal({ sequence = 1, propertiesList = [], onUpload, onSave, onClose }) {
   const propertyOptions = getActiveProperties(propertiesList);
   const firstProperty = propertyOptions[0] ?? makeEmptyProperty();
   const suggestedId = makeDocumentNumber("LOC", sequence);
@@ -21879,6 +22067,7 @@ function NewTenantFormModal({ sequence = 1, propertiesList = [], onSave, onClose
     existingContract: "",
     observations: "Nouveau dossier locataire créé depuis Clients > Locataires.",
   });
+  const [documentUploads, setDocumentUploads] = useState({});
 
   const selectedProperty = propertyOptions.find((property) => property.code === values.propertyCode) ?? firstProperty;
   const canSave = values.name.trim() && values.phone.trim() && selectedProperty?.code;
@@ -21943,6 +22132,7 @@ function NewTenantFormModal({ sequence = 1, propertiesList = [], onSave, onClose
         agent: values.agent,
         observations: values.observations,
         documents: ["Pièce d'identité", "Contrat existant", "Autres documents"],
+        documentUploads,
       },
     });
   };
@@ -21999,10 +22189,10 @@ function NewTenantFormModal({ sequence = 1, propertiesList = [], onSave, onClose
         <div className="form-section">
           <h3>Documents</h3>
           <div className="document-upload-grid owner-document-grid">
-            <label>Pièce d'identité<input type="file" /><small>Carte NINA, passeport ou document d'identification.</small></label>
-            <label>Contrat existant<input type="file" /><small>À joindre si le contrat est déjà signé.</small></label>
-            <label>Justificatif caution<input type="file" /><small>Reçu, preuve de virement ou bordereau.</small></label>
-            <label>Autres documents<input type="file" multiple /><small>Tout document utile au dossier locataire.</small></label>
+            <ServerFileInput label="Pièce d'identité" value={documentUploads.identity?.originalName ?? ""} onUpload={onUpload} metadata={{ module: "Clients", category: "Pièce identité locataire", linkedType: "tenant", linkedId: values.id }} onUploaded={(upload) => setDocumentUploads((current) => ({ ...current, identity: upload }))} fallbackText="Carte NINA, passeport ou document d'identification." />
+            <ServerFileInput label="Contrat existant" value={documentUploads.contract?.originalName ?? ""} onUpload={onUpload} metadata={{ module: "Clients", category: "Contrat existant locataire", linkedType: "tenant", linkedId: values.id }} onUploaded={(upload) => setDocumentUploads((current) => ({ ...current, contract: upload }))} fallbackText="À joindre si le contrat est déjà signé." />
+            <ServerFileInput label="Justificatif caution" value={documentUploads.depositProof?.originalName ?? ""} onUpload={onUpload} metadata={{ module: "Clients", category: "Justificatif caution", linkedType: "tenant", linkedId: values.id }} onUploaded={(upload) => setDocumentUploads((current) => ({ ...current, depositProof: upload }))} fallbackText="Reçu, preuve de virement ou bordereau." />
+            <ServerFileInput label="Autres documents" value={(documentUploads.other ?? []).map((upload) => upload.originalName).join(", ")} multiple onUpload={onUpload} metadata={{ module: "Clients", category: "Autres documents locataire", linkedType: "tenant", linkedId: values.id }} onUploaded={(uploads) => setDocumentUploads((current) => ({ ...current, other: uploads }))} fallbackText="Tout document utile au dossier locataire." />
           </div>
         </div>
 
@@ -22111,16 +22301,13 @@ function PaymentHistoryModal({ payment, onClose }) {
   );
 }
 
-function PaymentProofModal({ payment, onSave, onClose }) {
+function PaymentProofModal({ payment, onUpload, onSave, onClose }) {
   const existingProof = payment.proof;
   const [fileName, setFileName] = useState(existingProof?.fileName ?? "");
+  const [uploadRecord, setUploadRecord] = useState(existingProof?.upload ?? null);
   const [reference, setReference] = useState(existingProof?.reference ?? payment.paymentRef ?? "");
   const [comment, setComment] = useState(existingProof?.comment ?? "");
   const [message, setMessage] = useState("");
-  const updateFile = (event) => {
-    setMessage("");
-    setFileName(event.target.files?.[0]?.name ?? fileName);
-  };
   const submit = (actionLabel = existingProof ? "Justificatif remplacé" : "Justificatif ajouté") => {
     if (!fileName.trim()) {
       setMessage("Importez un PDF ou une image.");
@@ -22133,6 +22320,9 @@ function PaymentProofModal({ payment, onSave, onClose }) {
         reference,
         comment,
         actionLabel,
+        url: uploadRecord?.url ?? existingProof?.url ?? "",
+        uploadId: uploadRecord?.id ?? existingProof?.uploadId ?? "",
+        upload: uploadRecord ?? existingProof?.upload ?? null,
         type: fileName.toLowerCase().endsWith(".pdf") ? "PDF" : "Image",
         importedAt: "24/06/2026",
       },
@@ -22165,7 +22355,19 @@ function PaymentProofModal({ payment, onSave, onClose }) {
         <div className="form-section">
           <h3>{existingProof ? "Remplacer le justificatif" : "Importer un justificatif"}</h3>
           <div className="form-grid compact-form">
-            <label>Importer PDF / image<input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={updateFile} /><small>{fileName || "Aucun fichier sélectionné"}</small></label>
+            <ServerFileInput
+              label="Importer PDF / image"
+              value={fileName}
+              accept=".pdf,.jpg,.jpeg,.png,.webp"
+              onUpload={onUpload}
+              metadata={{ module: "Finance", category: "Justificatif paiement", linkedType: "payment", linkedId: payment.reference }}
+              onUploaded={(upload) => {
+                setMessage("");
+                setUploadRecord(upload);
+                setFileName(upload?.originalName ?? fileName);
+              }}
+              fallbackText="Aucun fichier selectionne"
+            />
             <label>Référence<input value={reference} onChange={(event) => setReference(event.target.value)} /></label>
             <label className="full">Commentaire<textarea value={comment} onChange={(event) => setComment(event.target.value)} /></label>
           </div>
@@ -23044,7 +23246,7 @@ function MissingDocumentModal({ request, onSave, onClose }) {
   );
 }
 
-function PropertyDocumentImportModal({ context = null, propertiesList = [], contractsList = contracts, chargesList = charges, maintenancesList = maintenances, sequence = 1, onImport, onClose }) {
+function PropertyDocumentImportModal({ context = null, propertiesList = [], contractsList = contracts, chargesList = charges, maintenancesList = maintenances, sequence = 1, onUpload, onImport, onClose }) {
   const documentTypes = ["Titre foncier", "Mandat", "Contrat signé", "Facture", "Reçu", "Photo", "Justificatif", "Rapport d’entretien", "Autre"];
   const importStatuses = ["Actif", "Archivé", "Brouillon"];
   const propertyOptions = propertiesList.filter((property) => !property.archived);
@@ -23054,6 +23256,7 @@ function PropertyDocumentImportModal({ context = null, propertiesList = [], cont
     makeEmptyProperty({ name: "" });
   const [message, setMessage] = useState("");
   const [fileName, setFileName] = useState("");
+  const [uploadRecord, setUploadRecord] = useState(null);
   const [values, setValues] = useState({
     documentType: "Titre foncier",
     propertyCode: initialProperty.code,
@@ -23094,10 +23297,6 @@ function PropertyDocumentImportModal({ context = null, propertiesList = [], cont
     }));
   };
 
-  const updateFile = (event) => {
-    setFileName(event.target.files?.[0]?.name ?? "");
-  };
-
   const submit = (open = false) => {
     if (!values.name.trim()) {
       setMessage("Renseignez le nom du document.");
@@ -23128,6 +23327,9 @@ function PropertyDocumentImportModal({ context = null, propertiesList = [], cont
         propertyCode: selectedProperty.code,
         documentType: values.documentType,
         fileName: fileName || `${title.replace(/\s+/g, "-").toLowerCase()}.pdf`,
+        fileUrl: uploadRecord?.url ?? "",
+        uploadId: uploadRecord?.id ?? "",
+        upload: uploadRecord,
         acceptedFormats: "PDF, JPG, PNG, DOCX",
         maxSize: "10 Mo",
         contract: values.contract,
@@ -23174,11 +23376,19 @@ function PropertyDocumentImportModal({ context = null, propertiesList = [], cont
         <div className="form-section" data-demo="modal-document-import-file">
           <h3>Fichier</h3>
           <div className="document-upload-grid">
-            <label className="full">
-              Zone de dépôt
-              <input type="file" accept=".pdf,.jpg,.jpeg,.png,.docx" onChange={updateFile} />
-              <small>{fileName || "Glisser-déposer ou choisir un fichier · PDF, JPG, PNG, DOCX · taille maximale 10 Mo"}</small>
-            </label>
+            <ServerFileInput
+              className="full"
+              label="Zone de dépôt"
+              value={fileName}
+              accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+              onUpload={onUpload}
+              metadata={{ module: "Biens", category: values.documentType, linkedType: "property", linkedId: selectedProperty.code }}
+              onUploaded={(upload) => {
+                setUploadRecord(upload);
+                setFileName(upload?.originalName ?? fileName);
+              }}
+              fallbackText="Glisser-déposer ou choisir un fichier · PDF, JPG, PNG, DOCX · taille maximale 10 Mo"
+            />
           </div>
         </div>
 
@@ -23863,7 +24073,7 @@ function PaymentRegistrationModal({ context, paymentsList = paymentRecords, rent
   );
 }
 
-function UrgentMaintenanceModal({ context, propertiesList = [], onSave, onClose }) {
+function UrgentMaintenanceModal({ context, propertiesList = [], onUpload, onSave, onClose }) {
   const propertyOptions = getActiveProperties(propertiesList);
   const baseProperty = context?.property
     ?? getPropertyByName(context?.maintenance?.property, propertyOptions)
@@ -23881,6 +24091,7 @@ function UrgentMaintenanceModal({ context, propertiesList = [], onSave, onClose 
     cost: baseMaintenance.cost ?? "95 000 FCFA",
     payer: baseMaintenance.payer ?? "Propriétaire",
     proof: "",
+    proofUpload: null,
   });
   const selectedProperty = getPropertyByName(values.property, propertyOptions) ?? baseProperty;
   const interventionTypes = ["Plomberie", "Électricité", "Nettoyage", "Réparation", "Autre"];
@@ -23913,6 +24124,9 @@ function UrgentMaintenanceModal({ context, propertiesList = [], onSave, onClose 
         priority: values.priority,
         provider: values.provider || "Prestataire non confirmé",
         proof: values.proof || undefined,
+        proofUrl: values.proofUpload?.url ?? "",
+        proofUploadId: values.proofUpload?.id ?? "",
+        proofUpload: values.proofUpload,
         source: "Dashboard - alerte maintenance urgente",
       },
       createCharge,
@@ -23966,7 +24180,15 @@ function UrgentMaintenanceModal({ context, propertiesList = [], onSave, onClose 
         <div className="form-section">
           <h3>Justificatif / photo</h3>
           <div className="document-upload-grid urgent-upload-grid">
-            <label>Fichier joint<input type="file" onChange={(event) => setValues((current) => ({ ...current, proof: event.target.files?.[0]?.name ?? "" }))} /><small>{values.proof || "Aucun fichier sélectionné"}</small></label>
+            <ServerFileInput
+              label="Fichier joint"
+              value={values.proof}
+              accept=".pdf,.jpg,.jpeg,.png,.webp"
+              onUpload={onUpload}
+              metadata={{ module: "Finance", category: "Intervention urgente", linkedType: "maintenance", linkedId: values.property }}
+              onUploaded={(upload) => setValues((current) => ({ ...current, proof: upload?.originalName ?? "", proofUpload: upload }))}
+              fallbackText="Aucun fichier sélectionné"
+            />
           </div>
         </div>
 
@@ -24016,7 +24238,7 @@ function MaintenanceResponsibleModal({ maintenance, onSave, onClose }) {
   );
 }
 
-function MaintenanceCostModal({ maintenance, onSave, onClose }) {
+function MaintenanceCostModal({ maintenance, onUpload, onSave, onClose }) {
   const payers = ["Agence", "Propriétaire", "Locataire", "À déterminer"];
   const [values, setValues] = useState({
     estimatedCost: maintenance.cost ?? "",
@@ -24024,6 +24246,7 @@ function MaintenanceCostModal({ maintenance, onSave, onClose }) {
     payer: maintenance.payer ?? "Propriétaire",
     createCharge: "Oui",
     proof: maintenance.proof ?? "",
+    proofUpload: maintenance.proofUpload ?? null,
     observation: maintenance.costObservation ?? "Coût ajouté après devis ou intervention.",
   });
   const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
@@ -24045,7 +24268,15 @@ function MaintenanceCostModal({ maintenance, onSave, onClose }) {
           <label>Coût réel<MoneyInput value={values.realCost} onChange={(value) => update("realCost")({ target: { value } })} placeholder="À confirmer" /></label>
           <label>Prise en charge<select value={values.payer} onChange={update("payer")}>{payers.map((payer) => <option key={payer}>{payer}</option>)}</select></label>
           <label>Créer charge liée<select value={values.createCharge} onChange={update("createCharge")}><option>Oui</option><option>Non</option></select></label>
-          <label>Justificatif<input type="file" onChange={(event) => setValues((current) => ({ ...current, proof: event.target.files?.[0]?.name ?? current.proof }))} /><small>{values.proof || "Aucun fichier sélectionné"}</small></label>
+          <ServerFileInput
+            label="Justificatif"
+            value={values.proof}
+            accept=".pdf,.jpg,.jpeg,.png,.webp"
+            onUpload={onUpload}
+            metadata={{ module: "Finance", category: "Coût entretien", linkedType: "maintenance", linkedId: getMaintenanceKey(maintenance) }}
+            onUploaded={(upload) => setValues((current) => ({ ...current, proof: upload?.originalName ?? current.proof, proofUpload: upload }))}
+            fallbackText="Aucun fichier sélectionné"
+          />
           <label className="full">Observation<textarea value={values.observation} onChange={update("observation")} /></label>
         </div>
         <div className="action-row compact-row">
@@ -24057,9 +24288,10 @@ function MaintenanceCostModal({ maintenance, onSave, onClose }) {
   );
 }
 
-function MaintenanceProofModal({ maintenance, onSave, onClose }) {
+function MaintenanceProofModal({ maintenance, onUpload, onSave, onClose }) {
   const hasProof = Boolean(maintenance.proof);
   const [fileName, setFileName] = useState(maintenance.proof ?? "");
+  const [uploadRecord, setUploadRecord] = useState(maintenance.proofUpload ?? null);
   const [reference, setReference] = useState(maintenance.proofReference ?? "");
   const [comment, setComment] = useState(maintenance.proofComment ?? "");
   const [message, setMessage] = useState("");
@@ -24068,7 +24300,17 @@ function MaintenanceProofModal({ maintenance, onSave, onClose }) {
       setMessage("Importez un justificatif.");
       return;
     }
-    onSave({ maintenance, proof: { fileName, reference, comment } });
+    onSave({
+      maintenance,
+      proof: {
+        fileName,
+        reference,
+        comment,
+        url: uploadRecord?.url ?? maintenance.proofUrl ?? "",
+        uploadId: uploadRecord?.id ?? maintenance.proofUploadId ?? "",
+        upload: uploadRecord ?? maintenance.proofUpload ?? null,
+      },
+    });
     setMessage("Justificatif enregistré.");
   };
 
@@ -24094,7 +24336,18 @@ function MaintenanceProofModal({ maintenance, onSave, onClose }) {
           <div className="notice">Aucun justificatif n'est encore rattaché à cet entretien.</div>
         )}
         <div className="form-grid compact-form">
-          <label>Importer PDF / image<input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(event) => setFileName(event.target.files?.[0]?.name ?? fileName)} /><small>{fileName || "Aucun fichier sélectionné"}</small></label>
+          <ServerFileInput
+            label="Importer PDF / image"
+            value={fileName}
+            accept=".pdf,.jpg,.jpeg,.png,.webp"
+            onUpload={onUpload}
+            metadata={{ module: "Finance", category: "Justificatif entretien", linkedType: "maintenance", linkedId: getMaintenanceKey(maintenance) }}
+            onUploaded={(upload) => {
+              setUploadRecord(upload);
+              setFileName(upload?.originalName ?? fileName);
+            }}
+            fallbackText="Aucun fichier sélectionné"
+          />
           <label>Référence<input value={reference} onChange={(event) => setReference(event.target.value)} /></label>
           <label className="full">Commentaire<textarea value={comment} onChange={(event) => setComment(event.target.value)} /></label>
         </div>
@@ -24111,10 +24364,12 @@ function MaintenanceProofModal({ maintenance, onSave, onClose }) {
   );
 }
 
-function MaintenancePhotosModal({ maintenance, onSave, onClose }) {
+function MaintenancePhotosModal({ maintenance, onUpload, onSave, onClose }) {
   const [values, setValues] = useState({
     beforePhotos: maintenance.beforePhotos ?? "",
     afterPhotos: maintenance.afterPhotos ?? "",
+    beforePhotoUploads: maintenance.beforePhotoUploads ?? [],
+    afterPhotoUploads: maintenance.afterPhotoUploads ?? [],
     comment: maintenance.photosComment ?? "Photos ajoutées au dossier d'entretien.",
   });
 
@@ -24133,13 +24388,39 @@ function MaintenancePhotosModal({ maintenance, onSave, onClose }) {
         <div className="form-section">
           <h3>Photos avant</h3>
           <div className="document-upload-grid">
-            <label>Ajouter photos avant<input type="file" accept=".jpg,.jpeg,.png" multiple onChange={(event) => setValues((current) => ({ ...current, beforePhotos: `${event.target.files?.length ?? 0} photo(s) avant` }))} /><small>{values.beforePhotos || "Aucune photo avant"}</small></label>
+            <ServerFileInput
+              label="Ajouter photos avant"
+              value={values.beforePhotos}
+              accept=".jpg,.jpeg,.png,.webp"
+              multiple
+              onUpload={onUpload}
+              metadata={{ module: "Finance", category: "Photos avant entretien", linkedType: "maintenance", linkedId: getMaintenanceKey(maintenance) }}
+              onUploaded={(uploads) => setValues((current) => ({
+                ...current,
+                beforePhotos: `${uploads.length} photo(s) avant`,
+                beforePhotoUploads: uploads,
+              }))}
+              fallbackText="Aucune photo avant"
+            />
           </div>
         </div>
         <div className="form-section">
           <h3>Photos après</h3>
           <div className="document-upload-grid">
-            <label>Ajouter photos après<input type="file" accept=".jpg,.jpeg,.png" multiple onChange={(event) => setValues((current) => ({ ...current, afterPhotos: `${event.target.files?.length ?? 0} photo(s) après` }))} /><small>{values.afterPhotos || "Aucune photo après"}</small></label>
+            <ServerFileInput
+              label="Ajouter photos après"
+              value={values.afterPhotos}
+              accept=".jpg,.jpeg,.png,.webp"
+              multiple
+              onUpload={onUpload}
+              metadata={{ module: "Finance", category: "Photos après entretien", linkedType: "maintenance", linkedId: getMaintenanceKey(maintenance) }}
+              onUploaded={(uploads) => setValues((current) => ({
+                ...current,
+                afterPhotos: `${uploads.length} photo(s) après`,
+                afterPhotoUploads: uploads,
+              }))}
+              fallbackText="Aucune photo après"
+            />
           </div>
         </div>
         <div className="form-grid compact-form">
@@ -24148,7 +24429,7 @@ function MaintenancePhotosModal({ maintenance, onSave, onClose }) {
         <div className="action-row compact-row">
           <Button onClick={onClose}>Fermer</Button>
           <Button onClick={() => downloadGeneratedPdf({ label: "Photos entretien" }, values, `EKIMMO_PhotosEntretien_${getMaintenanceKey(maintenance)}.pdf`)}><Download size={17} /> Télécharger</Button>
-          {(values.beforePhotos || values.afterPhotos) && <Button onClick={() => setValues((current) => ({ ...current, beforePhotos: "", afterPhotos: "" }))}><Trash2 size={17} /> Supprimer</Button>}
+          {(values.beforePhotos || values.afterPhotos) && <Button onClick={() => setValues((current) => ({ ...current, beforePhotos: "", afterPhotos: "", beforePhotoUploads: [], afterPhotoUploads: [] }))}><Trash2 size={17} /> Supprimer</Button>}
           <Button variant="primary" onClick={() => onSave({ maintenance, values })}><Upload size={17} /> Enregistrer photos</Button>
         </div>
       </section>
@@ -24195,13 +24476,14 @@ function MaintenanceValidationModal({ maintenance, onSave, onClose }) {
   );
 }
 
-function MaintenanceCompletionModal({ maintenance, onSave, onClose }) {
+function MaintenanceCompletionModal({ maintenance, onUpload, onSave, onClose }) {
   const [values, setValues] = useState({
     completedDate: "2026-06-25",
     workDone: maintenance.workDone ?? "Intervention réalisée et zone contrôlée.",
     realCost: maintenance.realCost ?? maintenance.cost,
     observation: maintenance.note ?? "",
     afterPhotos: maintenance.afterPhotos ?? "",
+    afterPhotoUploads: maintenance.afterPhotoUploads ?? [],
     createReport: "Oui",
   });
   const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
@@ -24221,7 +24503,20 @@ function MaintenanceCompletionModal({ maintenance, onSave, onClose }) {
         <div className="form-grid compact-form">
           <label>Date de réalisation<input type="date" value={values.completedDate} onChange={update("completedDate")} /></label>
           <label>Coût réel<MoneyInput value={values.realCost} onChange={(value) => update("realCost")({ target: { value } })} /></label>
-          <label>Photos après<input type="file" accept=".jpg,.jpeg,.png" multiple onChange={(event) => setValues((current) => ({ ...current, afterPhotos: `${event.target.files?.length ?? 0} photo(s) après` }))} /><small>{values.afterPhotos || "Aucune photo après"}</small></label>
+          <ServerFileInput
+            label="Photos après"
+            value={values.afterPhotos}
+            accept=".jpg,.jpeg,.png,.webp"
+            multiple
+            onUpload={onUpload}
+            metadata={{ module: "Finance", category: "Photos après clôture", linkedType: "maintenance", linkedId: getMaintenanceKey(maintenance) }}
+            onUploaded={(uploads) => setValues((current) => ({
+              ...current,
+              afterPhotos: `${uploads.length} photo(s) après`,
+              afterPhotoUploads: uploads,
+            }))}
+            fallbackText="Aucune photo après"
+          />
           <label>Créer rapport<select value={values.createReport} onChange={update("createReport")}><option>Oui</option><option>Non</option></select></label>
           <label className="full">Travail effectué<textarea value={values.workDone} onChange={update("workDone")} /></label>
           <label className="full">Observation<textarea value={values.observation} onChange={update("observation")} /></label>
@@ -24367,7 +24662,7 @@ function MaintenanceCancelModal({ maintenance, onSave, onClose }) {
   );
 }
 
-function MaintenanceFormModal({ context, propertiesList = [], onSave, onClose }) {
+function MaintenanceFormModal({ context, propertiesList = [], onUpload, onSave, onClose }) {
   const propertyOptions = getActiveProperties(propertiesList);
   const baseProperty = context?.property
     ?? getPropertyByName(context?.maintenance?.property, propertyOptions)
@@ -24390,8 +24685,11 @@ function MaintenanceFormModal({ context, propertiesList = [], onSave, onClose })
   const [status, setStatus] = useState(baseMaintenance?.status ?? "Planifié");
   const [createCharge, setCreateCharge] = useState("Oui");
   const [proofName, setProofName] = useState(baseMaintenance?.proof ?? "");
+  const [proofUpload, setProofUpload] = useState(baseMaintenance?.proofUpload ?? null);
   const [beforePhotos, setBeforePhotos] = useState(baseMaintenance?.beforePhotos ?? "");
+  const [beforePhotoUploads, setBeforePhotoUploads] = useState(baseMaintenance?.beforePhotoUploads ?? []);
   const [afterPhotos, setAfterPhotos] = useState(baseMaintenance?.afterPhotos ?? "");
+  const [afterPhotoUploads, setAfterPhotoUploads] = useState(baseMaintenance?.afterPhotoUploads ?? []);
   const maintenanceTypes = ["Nettoyage", "Plomberie", "Électricité", "Peinture", "Réparation", "Inspection", "Autre"];
   const priorities = ["Normale", "Urgente", "Critique"];
   const managers = ["Mariam Traoré", "Aïssata Diarra", "Issa Maïga", "Cheick Camara"];
@@ -24422,8 +24720,13 @@ function MaintenanceFormModal({ context, propertiesList = [], onSave, onClose })
       priority,
       provider: provider || "Prestataire non confirmé",
       proof: proofName || undefined,
+      proofUrl: proofUpload?.url ?? baseMaintenance?.proofUrl ?? "",
+      proofUploadId: proofUpload?.id ?? baseMaintenance?.proofUploadId ?? "",
+      proofUpload,
       beforePhotos: beforePhotos || undefined,
+      beforePhotoUploads,
       afterPhotos: afterPhotos || undefined,
+      afterPhotoUploads,
     };
 
     onSave({ maintenance, createCharge: forceCharge || createCharge === "Oui" });
@@ -24469,9 +24772,44 @@ function MaintenanceFormModal({ context, propertiesList = [], onSave, onClose })
         <div className="form-section">
           <h3>Documents</h3>
           <div className="document-upload-grid">
-            <label>Justificatif<input type="file" onChange={(event) => setProofName(event.target.files?.[0]?.name ?? "")} /><small>{proofName || "Aucun fichier sélectionné"}</small></label>
-            <label>Photos avant<input type="file" multiple onChange={(event) => setBeforePhotos(`${event.target.files?.length ?? 0} photo(s) avant`)} /><small>{beforePhotos || "Aucune photo sélectionnée"}</small></label>
-            <label>Photos après<input type="file" multiple onChange={(event) => setAfterPhotos(`${event.target.files?.length ?? 0} photo(s) après`)} /><small>{afterPhotos || "Aucune photo sélectionnée"}</small></label>
+            <ServerFileInput
+              label="Justificatif"
+              value={proofName}
+              accept=".pdf,.jpg,.jpeg,.png,.webp"
+              onUpload={onUpload}
+              metadata={{ module: "Finance", category: "Justificatif entretien", linkedType: "maintenance", linkedId: baseMaintenance?.reference ?? propertyName }}
+              onUploaded={(upload) => {
+                setProofUpload(upload);
+                setProofName(upload?.originalName ?? "");
+              }}
+              fallbackText="Aucun fichier sélectionné"
+            />
+            <ServerFileInput
+              label="Photos avant"
+              value={beforePhotos}
+              accept=".jpg,.jpeg,.png,.webp"
+              multiple
+              onUpload={onUpload}
+              metadata={{ module: "Finance", category: "Photos avant entretien", linkedType: "maintenance", linkedId: baseMaintenance?.reference ?? propertyName }}
+              onUploaded={(uploads) => {
+                setBeforePhotoUploads(uploads);
+                setBeforePhotos(`${uploads.length} photo(s) avant`);
+              }}
+              fallbackText="Aucune photo sélectionnée"
+            />
+            <ServerFileInput
+              label="Photos après"
+              value={afterPhotos}
+              accept=".jpg,.jpeg,.png,.webp"
+              multiple
+              onUpload={onUpload}
+              metadata={{ module: "Finance", category: "Photos après entretien", linkedType: "maintenance", linkedId: baseMaintenance?.reference ?? propertyName }}
+              onUploaded={(uploads) => {
+                setAfterPhotoUploads(uploads);
+                setAfterPhotos(`${uploads.length} photo(s) après`);
+              }}
+              fallbackText="Aucune photo sélectionnée"
+            />
           </div>
         </div>
 
@@ -24790,7 +25128,7 @@ function getSignedContractFileName(contract = {}) {
   return contract.signedFileName || contract.signedDocument || `Contrat signé ${contract.number}.pdf`;
 }
 
-function ContractDocumentModal({ contract, action, onImport, onSignedAction, onClose }) {
+function ContractDocumentModal({ contract, action, onUpload, onImport, onSignedAction, onClose }) {
   const [workingContract, setWorkingContract] = useState(contract);
   const [mode, setMode] = useState(hasSignedContractDocument(contract) ? "view" : "import");
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -24802,6 +25140,7 @@ function ContractDocumentModal({ contract, action, onImport, onSignedAction, onC
     importedBy: "Aïssata Diarra",
     signers: `${contract.owner}, ${contract.client}, E.K immo`,
     observation: "Contrat signé par les parties et archivé dans le dossier contractuel.",
+    upload: null,
   });
 
   useEffect(() => {
@@ -24817,15 +25156,6 @@ function ContractDocumentModal({ contract, action, onImport, onSignedAction, onC
   const hasDocument = hasSignedContractDocument(workingContract);
   const fileName = getSignedContractFileName(workingContract);
   const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
-  const updateFile = (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setValues((current) => ({
-      ...current,
-      fileName: file.name,
-      fileType: file.type?.includes("image") ? "Image" : "PDF",
-    }));
-  };
   const importDocument = () => {
     const nextContract = onImport?.({ contract: workingContract, values, mode: hasDocument ? "replace" : "import" }) ?? workingContract;
     setWorkingContract(nextContract);
@@ -24855,7 +25185,22 @@ function ContractDocumentModal({ contract, action, onImport, onSignedAction, onC
             <div className="form-section">
               <h3>Import du document signé</h3>
               <div className="form-grid signed-document-form">
-                <label>Importer fichier PDF ou image<input type="file" accept="application/pdf,image/*" onChange={updateFile} /></label>
+                <ServerFileInput
+                  label="Importer fichier PDF ou image"
+                  value={values.fileName}
+                  accept=".pdf,.jpg,.jpeg,.png,.webp"
+                  onUpload={onUpload}
+                  metadata={{ module: "Contrats", category: "Contrat signé", linkedType: "contract", linkedId: workingContract.number }}
+                  onUploaded={(upload) => {
+                    setValues((current) => ({
+                      ...current,
+                      fileName: upload?.originalName ?? current.fileName,
+                      fileType: upload?.mimeType?.includes("image") ? "Image" : "PDF",
+                      upload,
+                    }));
+                  }}
+                  fallbackText="Aucun contrat signé joint"
+                />
                 <label>Nom du fichier<input value={values.fileName} onChange={update("fileName")} placeholder={`Contrat signé ${workingContract.number}.pdf`} /></label>
                 <label>Date de signature<input type="date" value={toInputDate(values.signatureDate)} onChange={(event) => setValues((current) => ({ ...current, signatureDate: fromInputDate(event.target.value), importDate: fromInputDate(event.target.value) }))} /></label>
                 <label>Signataires<input value={values.signers} onChange={update("signers")} /></label>
@@ -25314,6 +25659,7 @@ function PropertyFormModal({
   ownersList = owners,
   tenantsList = tenants,
   ownerPrefill = "",
+  onUpload,
   onSave,
   onClose,
 }) {
@@ -25370,6 +25716,8 @@ function PropertyFormModal({
   const [pendingDraft, setPendingDraft] = useState(false);
   const [imagePreview, setImagePreview] = useState(property?.image ?? "");
   const [photoFileName, setPhotoFileName] = useState("");
+  const [photoUpload, setPhotoUpload] = useState(property?.mainPhotoUpload ?? null);
+  const [documentUploads, setDocumentUploads] = useState(property?.documentUploads ?? {});
 
   const sensitiveOptions = {
     status: ["Disponible", "Loué", "Réservé", "Gestion multi-lots", "Entretien seul", "Vendu", "En travaux", "Indisponible"],
@@ -25399,8 +25747,7 @@ function PropertyFormModal({
     setFormValues((current) => ({ ...current, [key]: event.target.value }));
   };
 
-  const updateMainPhoto = (event) => {
-    const file = event.target.files?.[0];
+  const updateMainPhotoPreview = (file) => {
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
@@ -25461,7 +25808,9 @@ function PropertyFormModal({
       baths: parseNumber(formValues.baths) || formValues.baths,
       condition: formValues.condition,
       tags: tags.length ? tags : ["À compléter"],
-      image: imagePreview || property?.image || selectedImage,
+      image: photoUpload?.url || imagePreview || property?.image || selectedImage,
+      mainPhotoUpload: photoUpload,
+      documentUploads,
       parentCode: propertyNature === "Appartement rattaché" ? formValues.parentCode : undefined,
       parentName: parent?.name,
       block: propertyNature === "Appartement rattaché" ? formValues.block : undefined,
@@ -25588,7 +25937,21 @@ function PropertyFormModal({
             <label>État général<select value={formValues.condition} onChange={updateValue("condition")}><option>Bon</option><option>À rafraîchir</option><option>En travaux</option><option>À rénover</option></select></label>
             <label>Équipements<input value={formValues.tags} onChange={updateValue("tags")} /></label>
             <label className="full">Observations<textarea value={formValues.observations} onChange={updateValue("observations")} /></label>
-            <label className="full">Photo principale du bien<input type="file" accept="image/*" onChange={updateMainPhoto} /><small>{photoFileName || "Aucune photo sélectionnée"}</small></label>
+            <ServerFileInput
+              className="full"
+              label="Photo principale du bien"
+              value={photoFileName}
+              accept=".jpg,.jpeg,.png,.webp"
+              onUpload={onUpload}
+              onFilesSelected={updateMainPhotoPreview}
+              metadata={{ module: "Biens", category: "Photo principale", linkedType: "property", linkedId: formValues.code || property?.code || nextCode }}
+              onUploaded={(upload) => {
+                setPhotoUpload(upload);
+                setImagePreview(upload?.url || imagePreview);
+                setPhotoFileName(upload?.originalName || photoFileName);
+              }}
+              fallbackText="Aucune photo sélectionnée"
+            />
             {(imagePreview || property?.image) && (
               <div className="property-photo-preview full">
                 <img src={imagePreview || property?.image} alt="" />
@@ -25598,9 +25961,31 @@ function PropertyFormModal({
                 </span>
               </div>
             )}
-            <label>Titre foncier<input type="file" /></label>
-            <label>Mandat<input type="file" /></label>
-            <label>Autres documents<input type="file" multiple /></label>
+            <ServerFileInput
+              label="Titre foncier"
+              value={documentUploads.titreFoncier?.originalName ?? ""}
+              accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+              onUpload={onUpload}
+              metadata={{ module: "Biens", category: "Titre foncier", linkedType: "property", linkedId: formValues.code }}
+              onUploaded={(upload) => setDocumentUploads((current) => ({ ...current, titreFoncier: upload }))}
+            />
+            <ServerFileInput
+              label="Mandat"
+              value={documentUploads.mandat?.originalName ?? ""}
+              accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+              onUpload={onUpload}
+              metadata={{ module: "Biens", category: "Mandat", linkedType: "property", linkedId: formValues.code }}
+              onUploaded={(upload) => setDocumentUploads((current) => ({ ...current, mandat: upload }))}
+            />
+            <ServerFileInput
+              label="Autres documents"
+              value={(documentUploads.autres ?? []).map((upload) => upload.originalName).join(", ")}
+              accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+              multiple
+              onUpload={onUpload}
+              metadata={{ module: "Biens", category: "Autres documents", linkedType: "property", linkedId: formValues.code }}
+              onUploaded={(uploads) => setDocumentUploads((current) => ({ ...current, autres: uploads }))}
+            />
           </div>
         </div>
         {confirmSensitiveChange && (

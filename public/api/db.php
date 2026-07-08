@@ -136,6 +136,30 @@ function ensure_schema(PDO $pdo): void
     ");
 
     $pdo->exec("
+        CREATE TABLE IF NOT EXISTS ekimmo_uploads (
+            id VARCHAR(120) NOT NULL PRIMARY KEY,
+            user_id VARCHAR(80) NULL,
+            module VARCHAR(80) NOT NULL DEFAULT 'Docs',
+            category VARCHAR(120) NOT NULL DEFAULT '',
+            linked_type VARCHAR(80) NOT NULL DEFAULT '',
+            linked_id VARCHAR(160) NOT NULL DEFAULT '',
+            original_name VARCHAR(255) NOT NULL,
+            stored_name VARCHAR(255) NOT NULL,
+            relative_path VARCHAR(255) NOT NULL,
+            public_url VARCHAR(255) NOT NULL,
+            mime_type VARCHAR(120) NOT NULL DEFAULT '',
+            file_size BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            status VARCHAR(40) NOT NULL DEFAULT 'Actif',
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_uploads_user (user_id),
+            INDEX idx_uploads_module (module),
+            INDEX idx_uploads_linked (linked_type, linked_id),
+            INDEX idx_uploads_status (status),
+            INDEX idx_uploads_created (created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+
+    $pdo->exec("
         CREATE TABLE IF NOT EXISTS ekimmo_admin_settings (
             setting_key VARCHAR(120) NOT NULL PRIMARY KEY,
             payload LONGTEXT NOT NULL,
