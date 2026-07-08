@@ -198,6 +198,15 @@ function persist_state(PDO $pdo, array $data, int $clientRevision, array $user):
             $currentData = empty_state();
         }
 
+        if ($clientRevision > 0 && $clientRevision < $currentRevision) {
+            $pdo->commit();
+            return [
+                'data' => $currentData,
+                'revision' => $currentRevision,
+                'merged' => true,
+            ];
+        }
+
         if (($user['role'] ?? '') === 'Administrateur' && !($clientRevision > 0 && $clientRevision < $currentRevision)) {
             $merged = merge_values(empty_state(), $allowedData);
         } else {
