@@ -4247,6 +4247,7 @@ const AUTH_ENDPOINT = "/api/auth.php";
 const PERSISTENCE_ENDPOINT = "/api/state.php";
 const DOCUMENT_ENDPOINT = "/api/documents.php";
 const UPLOAD_ENDPOINT = "/api/uploads.php";
+const BACKUP_ENDPOINT = "/api/backups.php";
 const PERSISTENCE_SAVE_DELAY = 900;
 const PERSISTED_STATE_KEYS = [
   "createdProperties",
@@ -4441,6 +4442,38 @@ async function uploadRemoteFile(file, metadata = {}, csrfToken = "") {
   return payload;
 }
 
+async function postBackupAction(action, body = {}, csrfToken = "") {
+  const response = await fetch(BACKUP_ENDPOINT, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+    },
+    credentials: "include",
+    body: JSON.stringify({ action, ...body }),
+  });
+
+  if (action === "create_backup" && response.ok) {
+    const blob = await response.blob();
+    const disposition = response.headers.get("Content-Disposition") || "";
+    const match = disposition.match(/filename="?([^"]+)"?/i);
+    return {
+      ok: true,
+      blob,
+      filename: match?.[1] || `EKIMMO_Backup_${new Date().toISOString().slice(0, 10)}.json`,
+    };
+  }
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.ok === false) {
+    const error = new Error(payload.message || "Action de sauvegarde indisponible.");
+    error.code = payload.code || `http_${response.status}`;
+    throw error;
+  }
+  return payload;
+}
+
 async function readRemoteState() {
   const response = await fetch(PERSISTENCE_ENDPOINT, {
     method: "GET",
@@ -4581,6 +4614,7 @@ function App() {
   const [userOverrides, setUserOverrides] = useState({});
   const [userHistories, setUserHistories] = useState({});
   const [userActionContext, setUserActionContext] = useState(null);
+  const [backupValidation, setBackupValidation] = useState(null);
   const [reportType, setReportType] = useState(reports[0][0]);
   const [persistenceRevision, setPersistenceRevision] = useState(0);
   const [persistenceStatus, setPersistenceStatus] = useState("loading");
@@ -6365,6 +6399,53 @@ function App() {
   const handleAdminTemplateArchive = async ({ template, values }) => {
     const payload = await postAuthAction("archive_template", { template, values }, csrfToken);
     applyAdminResponse(payload);
+    return payload;
+  };
+
+  const handleBackupCreate = async () => {
+    const payload = await postBackupAction("create_backup", {}, csrfToken);
+    if (payload.blob) {
+      downloadBlob(payload.blob, payload.filename);
+    }
+    setBackupValidation({
+      type: "success",
+      message: `Sauvegarde téléchargée : ${payload.filename}`,
+      summary: null,
+      backup: null,
+    });
+    return payload;
+  };
+
+  const handleBackupValidate = async (file) => {
+    const raw = await file.text();
+    let backup = null;
+    try {
+      backup = JSON.parse(raw);
+    } catch {
+      throw new Error("Fichier JSON invalide.");
+    }
+    const payload = await postBackupAction("validate_backup", { backup }, csrfToken);
+    setBackupValidation({
+      type: "success",
+      message: "Fichier vérifié. La restauration peut être lancée avec la phrase de confirmation.",
+      fileName: file.name,
+      generatedAt: payload.generatedAt,
+      generatedBy: payload.generatedBy,
+      summary: payload.summary,
+      backup,
+    });
+    return payload;
+  };
+
+  const handleBackupRestore = async ({ backup, confirmation }) => {
+    const payload = await postBackupAction("restore_backup", { backup, confirmation }, csrfToken);
+    setBackupValidation({
+      type: "success",
+      message: payload.message || "Base restaurée. Rechargement de l'application...",
+      summary: payload.restored,
+      backup: null,
+    });
+    window.setTimeout(() => window.location.reload(), 1200);
     return payload;
   };
 
@@ -9184,6 +9265,10 @@ function App() {
             onRoleAction={handleRoleAdminAction}
             onSaveSettings={handleAdminSettingsSave}
             onArchiveTemplate={handleAdminTemplateArchive}
+            backupValidation={backupValidation}
+            onCreateBackup={handleBackupCreate}
+            onValidateBackup={handleBackupValidate}
+            onRestoreBackup={handleBackupRestore}
           />
         )}
       </main>
@@ -19258,8 +19343,12 @@ function AdminPage({
   onRoleAction,
   onSaveSettings,
   onArchiveTemplate,
+  backupValidation,
+  onCreateBackup,
+  onValidateBackup,
+  onRestoreBackup,
 }) {
-  const tabs = ["Utilisateurs", "Rôles & permissions", "Paramètres", "Modèles documents", "Historique"];
+  const tabs = ["Utilisateurs", "Rôles & permissions", "Paramètres", "Sauvegardes", "Modèles documents", "Historique"];
   return (
     <>
       <PageIntro
@@ -19283,9 +19372,166 @@ function AdminPage({
         />
       )}
       {activeTab === "Paramètres" && <SettingsAdmin settings={adminData?.settings} onSave={onSaveSettings} />}
+      {activeTab === "Sauvegardes" && (
+        <BackupsAdmin
+          validation={backupValidation}
+          onCreateBackup={onCreateBackup}
+          onValidateBackup={onValidateBackup}
+          onRestoreBackup={onRestoreBackup}
+        />
+      )}
       {activeTab === "Modèles documents" && <TemplatesAdmin onAction={onAction} archives={adminData?.templateArchives} onArchiveTemplate={onArchiveTemplate} />}
       {activeTab === "Historique" && <HistoryAdmin auditRows={adminData?.audit} usersList={usersList} />}
     </>
+  );
+}
+
+function BackupsAdmin({ validation, onCreateBackup, onValidateBackup, onRestoreBackup }) {
+  const fileInputRef = useRef(null);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [confirmation, setConfirmation] = useState("");
+  const [busy, setBusy] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const summaryRows = validation?.summary
+    ? Object.entries(validation.summary).map(([table, count]) => [table, String(count)])
+    : [];
+  const canRestore = Boolean(validation?.backup) && confirmation.trim() === "RESTAURER EKIMMO";
+
+  const runBackup = async () => {
+    setBusy("export");
+    setFeedback("");
+    try {
+      await onCreateBackup?.();
+      setFeedback("Sauvegarde téléchargée.");
+    } catch (error) {
+      setFeedback(error.message || "Impossible de créer la sauvegarde.");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const validateFile = async () => {
+    if (!selectedFile) {
+      setFeedback("Sélectionnez un fichier de sauvegarde.");
+      return;
+    }
+    setBusy("validate");
+    setFeedback("");
+    try {
+      await onValidateBackup?.(selectedFile);
+      setConfirmation("");
+      setFeedback("Fichier vérifié.");
+    } catch (error) {
+      setFeedback(error.message || "Fichier de sauvegarde invalide.");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const restoreBackup = async () => {
+    if (!canRestore) {
+      setFeedback("Vérifiez le fichier puis saisissez la phrase de confirmation exacte.");
+      return;
+    }
+    setBusy("restore");
+    setFeedback("");
+    try {
+      await onRestoreBackup?.({ backup: validation.backup, confirmation });
+      setFeedback("Restauration terminée. Rechargement en cours...");
+    } catch (error) {
+      setFeedback(error.message || "Restauration impossible.");
+      setBusy("");
+    }
+  };
+
+  return (
+    <section className="backup-admin-grid">
+      <Panel title="Sauvegarde de la base">
+        <div className="backup-intro">
+          <div className="round-icon"><Archive size={22} /></div>
+          <div>
+            <h3>Exporter les données E.K immo</h3>
+            <p>Le fichier contient l’état de l’application, les utilisateurs, les rôles, les paramètres, les documents générés et les métadonnées d’uploads.</p>
+          </div>
+        </div>
+        <DetailMetrics
+          items={[
+            ["Format", "JSON restaurable"],
+            ["Accès", "Administrateur"],
+            ["Stockage", "Téléchargement local"],
+          ]}
+        />
+        <div className="action-row compact-row">
+          <Button variant="primary" disabled={busy === "export"} onClick={runBackup}>
+            <Download size={17} /> {busy === "export" ? "Préparation..." : "Télécharger une sauvegarde"}
+          </Button>
+        </div>
+      </Panel>
+
+      <Panel title="Restaurer une sauvegarde">
+        <div className="form-grid compact-form">
+          <label className="full">
+            Fichier de sauvegarde
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/json,.json"
+              onChange={(event) => {
+                setSelectedFile(event.target.files?.[0] ?? null);
+                setFeedback("");
+              }}
+            />
+          </label>
+        </div>
+        <div className="action-row compact-row">
+          <Button disabled={!selectedFile || busy === "validate"} onClick={validateFile}>
+            <CheckCircle2 size={17} /> {busy === "validate" ? "Vérification..." : "Vérifier le fichier"}
+          </Button>
+        </div>
+        {summaryRows.length > 0 && (
+          <Panel title="Contenu restaurable" className="nested-panel">
+            <DataTable columns={["Table", "Lignes"]} rows={summaryRows} />
+            <p className="backup-meta">
+              Générée le {validation.generatedAt || "date non disponible"}
+              {validation.generatedBy?.name ? ` par ${validation.generatedBy.name}` : ""}.
+            </p>
+          </Panel>
+        )}
+        <div className="form-grid compact-form">
+          <label className="full">
+            Phrase de confirmation
+            <input
+              value={confirmation}
+              onChange={(event) => setConfirmation(event.target.value)}
+              placeholder="RESTAURER EKIMMO"
+            />
+          </label>
+        </div>
+        <div className="backup-warning">
+          <AlertTriangle size={18} />
+          <p>La restauration remplace les données applicatives actuelles par celles du fichier vérifié. Gardez toujours une sauvegarde récente avant de restaurer.</p>
+        </div>
+        <div className="action-row compact-row">
+          <Button variant="primary" disabled={!canRestore || busy === "restore"} onClick={restoreBackup}>
+            <RefreshCw size={17} /> {busy === "restore" ? "Restauration..." : "Restaurer la base"}
+          </Button>
+        </div>
+      </Panel>
+
+      <Panel title="Sauvegardes Hostinger">
+        <div className="simple-list">
+          <p><span>Base MySQL</span><strong>Vérifier les sauvegardes automatiques depuis hPanel.</strong></p>
+          <p><span>Fichiers uploadés</span><strong>Inclure le dossier uploads dans les sauvegardes hébergeur.</strong></p>
+          <p><span>Avant données client</span><strong>Exporter une sauvegarde applicative et confirmer qu’une sauvegarde hPanel existe.</strong></p>
+        </div>
+      </Panel>
+
+      {(feedback || validation?.message) && (
+        <p className={(feedback || validation?.message || "").includes("Impossible") || (feedback || "").includes("invalide") ? "form-alert" : "form-success"}>
+          {feedback || validation?.message}
+        </p>
+      )}
+    </section>
   );
 }
 

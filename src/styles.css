@@ -2402,6 +2402,7 @@ a {
 .document-layout,
 .payment-layout,
 .reports-layout,
+.backup-admin-grid,
 .settings-grid {
   display: grid;
   gap: 28px;
@@ -6381,6 +6382,53 @@ td:last-child {
   grid-template-columns: minmax(0, 1fr) 420px;
 }
 
+.backup-admin-grid {
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.35fr);
+  align-items: start;
+}
+
+.backup-admin-grid > .panel:last-of-type {
+  grid-column: 1 / -1;
+}
+
+.backup-intro {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.backup-intro h3 {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+}
+
+.backup-intro p,
+.backup-meta {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.backup-warning {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(201, 162, 39, 0.4);
+  border-radius: 10px;
+  background: #fff9e8;
+  color: var(--navy);
+}
+
+.backup-warning p {
+  margin: 0;
+  line-height: 1.4;
+}
+
 .toggle-list p {
   display: flex;
   justify-content: space-between;
@@ -7751,6 +7799,7 @@ td:last-child {
   .document-workspace,
   .payment-layout,
   .reports-layout,
+  .backup-admin-grid,
   .settings-grid {
     grid-template-columns: 1fr;
   }
