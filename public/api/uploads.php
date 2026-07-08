@@ -59,11 +59,11 @@ if ($method === 'DELETE') {
         json_response(['ok' => false, 'code' => 'forbidden', 'message' => 'Suppression du fichier non autorisée.'], 403);
     }
 
-    remove_uploaded_file_from_disk($upload);
+    $fileRemoved = remove_uploaded_file_from_disk($upload);
     $statement = $pdo->prepare('UPDATE ekimmo_uploads SET status = "Supprimé" WHERE id = :id');
     $statement->execute(['id' => $id]);
     audit_admin($pdo, $user, 'delete_upload', $id, 'Fichier marqué comme supprimé.');
-    json_response(['ok' => true, 'csrfToken' => csrf_token()]);
+    json_response(['ok' => true, 'fileRemoved' => $fileRemoved, 'csrfToken' => csrf_token()]);
 }
 
 if ($method !== 'POST') {
@@ -281,21 +281,27 @@ function find_upload(PDO $pdo, string $id): ?array
     return is_array($row) ? $row : null;
 }
 
-function remove_uploaded_file_from_disk(array $upload): void
+function remove_uploaded_file_from_disk(array $upload): bool
 {
     $relativePath = (string) ($upload['relative_path'] ?? '');
     if ($relativePath === '' || str_contains($relativePath, '..')) {
-        return;
+        return false;
     }
-    $baseDir = realpath(dirname(__DIR__) . DIRECTORY_SEPARATOR . 'uploads');
-    if ($baseDir === false) {
-        return;
+    $publicRoot = realpath(dirname(__DIR__));
+    if ($publicRoot === false) {
+        return false;
     }
-    $targetPath = dirname(__DIR__) . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativePath);
+    $normalizedRelative = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relativePath);
+    $targetPath = $publicRoot . DIRECTORY_SEPARATOR . $normalizedRelative;
     $realTarget = realpath($targetPath);
-    if ($realTarget !== false && str_starts_with($realTarget, $baseDir) && is_file($realTarget)) {
-        @unlink($realTarget);
+    $uploadsPrefix = $publicRoot . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR;
+    if ($realTarget !== false && str_starts_with($realTarget, $uploadsPrefix) && is_file($realTarget)) {
+        return @unlink($realTarget);
     }
+    if (is_file($targetPath) && str_starts_with($targetPath, $uploadsPrefix)) {
+        return @unlink($targetPath);
+    }
+    return false;
 }
 
 function upload_error_message(int $error): string
