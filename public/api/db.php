@@ -185,6 +185,170 @@ function ensure_schema(PDO $pdo): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
 
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS ekimmo_business_sync (
+            state_id VARCHAR(80) NOT NULL PRIMARY KEY,
+            revision INT UNSIGNED NOT NULL DEFAULT 0,
+            synced_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS ekimmo_properties (
+            state_id VARCHAR(80) NOT NULL,
+            code VARCHAR(120) NOT NULL,
+            name VARCHAR(220) NOT NULL DEFAULT '',
+            property_type VARCHAR(120) NOT NULL DEFAULT '',
+            status VARCHAR(80) NOT NULL DEFAULT '',
+            owner_name VARCHAR(180) NOT NULL DEFAULT '',
+            tenant_name VARCHAR(180) NOT NULL DEFAULT '',
+            district VARCHAR(180) NOT NULL DEFAULT '',
+            address TEXT NULL,
+            financial_mode VARCHAR(140) NOT NULL DEFAULT '',
+            rent_amount BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            sale_amount BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            deposit_amount BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            archived TINYINT(1) NOT NULL DEFAULT 0,
+            payload_json LONGTEXT NOT NULL,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (state_id, code),
+            INDEX idx_properties_status (status),
+            INDEX idx_properties_owner (owner_name),
+            INDEX idx_properties_tenant (tenant_name),
+            INDEX idx_properties_archived (archived)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS ekimmo_clients (
+            state_id VARCHAR(80) NOT NULL,
+            client_id VARCHAR(140) NOT NULL,
+            client_type VARCHAR(40) NOT NULL,
+            name VARCHAR(220) NOT NULL DEFAULT '',
+            phone VARCHAR(80) NOT NULL DEFAULT '',
+            email VARCHAR(190) NOT NULL DEFAULT '',
+            status VARCHAR(80) NOT NULL DEFAULT '',
+            linked_property VARCHAR(220) NOT NULL DEFAULT '',
+            payload_json LONGTEXT NOT NULL,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (state_id, client_id),
+            INDEX idx_clients_type (client_type),
+            INDEX idx_clients_name (name),
+            INDEX idx_clients_status (status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS ekimmo_contracts (
+            state_id VARCHAR(80) NOT NULL,
+            contract_id VARCHAR(140) NOT NULL,
+            contract_number VARCHAR(140) NOT NULL DEFAULT '',
+            contract_type VARCHAR(120) NOT NULL DEFAULT '',
+            status VARCHAR(80) NOT NULL DEFAULT '',
+            property_name VARCHAR(220) NOT NULL DEFAULT '',
+            owner_name VARCHAR(180) NOT NULL DEFAULT '',
+            client_name VARCHAR(180) NOT NULL DEFAULT '',
+            start_date VARCHAR(40) NOT NULL DEFAULT '',
+            end_date VARCHAR(40) NOT NULL DEFAULT '',
+            amount BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            deposit_amount BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            commission_rule VARCHAR(180) NOT NULL DEFAULT '',
+            payload_json LONGTEXT NOT NULL,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (state_id, contract_id),
+            INDEX idx_contracts_number (contract_number),
+            INDEX idx_contracts_status (status),
+            INDEX idx_contracts_property (property_name),
+            INDEX idx_contracts_client (client_name)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS ekimmo_payments (
+            state_id VARCHAR(80) NOT NULL,
+            payment_id VARCHAR(140) NOT NULL,
+            reference VARCHAR(140) NOT NULL DEFAULT '',
+            period_label VARCHAR(120) NOT NULL DEFAULT '',
+            tenant_name VARCHAR(180) NOT NULL DEFAULT '',
+            property_name VARCHAR(220) NOT NULL DEFAULT '',
+            owner_name VARCHAR(180) NOT NULL DEFAULT '',
+            expected_amount BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            paid_amount BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            balance_amount BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            status VARCHAR(80) NOT NULL DEFAULT '',
+            payment_date VARCHAR(40) NOT NULL DEFAULT '',
+            payload_json LONGTEXT NOT NULL,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (state_id, payment_id),
+            INDEX idx_payments_reference (reference),
+            INDEX idx_payments_status (status),
+            INDEX idx_payments_property (property_name),
+            INDEX idx_payments_tenant (tenant_name)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS ekimmo_charges (
+            state_id VARCHAR(80) NOT NULL,
+            charge_id VARCHAR(140) NOT NULL,
+            reference VARCHAR(140) NOT NULL DEFAULT '',
+            charge_type VARCHAR(120) NOT NULL DEFAULT '',
+            status VARCHAR(80) NOT NULL DEFAULT '',
+            property_name VARCHAR(220) NOT NULL DEFAULT '',
+            owner_name VARCHAR(180) NOT NULL DEFAULT '',
+            tenant_name VARCHAR(180) NOT NULL DEFAULT '',
+            amount BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            payer VARCHAR(120) NOT NULL DEFAULT '',
+            charge_date VARCHAR(40) NOT NULL DEFAULT '',
+            payload_json LONGTEXT NOT NULL,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (state_id, charge_id),
+            INDEX idx_charges_status (status),
+            INDEX idx_charges_property (property_name),
+            INDEX idx_charges_owner (owner_name)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS ekimmo_documents (
+            state_id VARCHAR(80) NOT NULL,
+            document_id VARCHAR(160) NOT NULL,
+            document_type VARCHAR(120) NOT NULL DEFAULT '',
+            category VARCHAR(140) NOT NULL DEFAULT '',
+            title VARCHAR(240) NOT NULL DEFAULT '',
+            reference VARCHAR(160) NOT NULL DEFAULT '',
+            linked_type VARCHAR(80) NOT NULL DEFAULT '',
+            linked_id VARCHAR(180) NOT NULL DEFAULT '',
+            status VARCHAR(80) NOT NULL DEFAULT '',
+            file_name VARCHAR(255) NOT NULL DEFAULT '',
+            file_url VARCHAR(255) NOT NULL DEFAULT '',
+            payload_json LONGTEXT NOT NULL,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (state_id, document_id),
+            INDEX idx_documents_category (category),
+            INDEX idx_documents_linked (linked_type, linked_id),
+            INDEX idx_documents_status (status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS ekimmo_histories (
+            state_id VARCHAR(80) NOT NULL,
+            history_id VARCHAR(180) NOT NULL,
+            entity_type VARCHAR(80) NOT NULL DEFAULT '',
+            entity_id VARCHAR(180) NOT NULL DEFAULT '',
+            title VARCHAR(220) NOT NULL DEFAULT '',
+            detail TEXT NULL,
+            event_date VARCHAR(80) NOT NULL DEFAULT '',
+            user_name VARCHAR(180) NOT NULL DEFAULT '',
+            payload_json LONGTEXT NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (state_id, history_id),
+            INDEX idx_histories_entity (entity_type, entity_id),
+            INDEX idx_histories_date (event_date)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+
     seed_default_users($pdo);
     seed_default_role_permissions($pdo);
     seed_default_settings($pdo);

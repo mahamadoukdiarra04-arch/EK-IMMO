@@ -21,6 +21,14 @@ function backup_tables(): array
         'ekimmo_document_exports',
         'ekimmo_uploads',
         'ekimmo_template_archives',
+        'ekimmo_business_sync',
+        'ekimmo_properties',
+        'ekimmo_clients',
+        'ekimmo_contracts',
+        'ekimmo_payments',
+        'ekimmo_charges',
+        'ekimmo_documents',
+        'ekimmo_histories',
         'ekimmo_admin_audit',
     ];
 }
@@ -35,6 +43,14 @@ function restorable_tables(): array
         'ekimmo_document_exports',
         'ekimmo_uploads',
         'ekimmo_template_archives',
+        'ekimmo_business_sync',
+        'ekimmo_properties',
+        'ekimmo_clients',
+        'ekimmo_contracts',
+        'ekimmo_payments',
+        'ekimmo_charges',
+        'ekimmo_documents',
+        'ekimmo_histories',
     ];
 }
 

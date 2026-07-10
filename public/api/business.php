@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/auth_lib.php';
 require_once __DIR__ . '/business_lib.php';
+require_once __DIR__ . '/business_store.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
@@ -33,10 +34,15 @@ if ($row) {
 }
 
 $canReadFinance = user_can_access_state_module($pdo, $user, 'Finance', 'read');
+ek_sync_business_state_if_needed($pdo, $data, $revision);
 
 json_response([
     'ok' => true,
     'revision' => $revision,
     'business' => ek_business_payload($data, $user, $canReadFinance),
+    'storage' => [
+        'mode' => 'relational_projection',
+        'counts' => ek_business_store_counts($pdo),
+    ],
     'csrfToken' => csrf_token(),
 ]);
