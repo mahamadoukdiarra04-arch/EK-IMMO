@@ -673,7 +673,7 @@ const guidedDemoSteps = [
     target: "client-primary-action",
     title: "Planifier une visite",
     body: "Ce bouton ouvre la planification : prospect, bien, adresse, disponibilité, date, heure, agent, lieu de rendez-vous et rappel.",
-    task: "Cliquez sur Planifier visite. Exemple : Bintou Dembélé, Villa Koulouba, jeudi 10h, agent Mariam Traoré.",
+    task: "Cliquez sur Planifier visite. Exemple : Bintou Dembélé, Villa Koulouba, jeudi 10h, agent Makan Sissoko.",
     waitFor: "save:visit",
     success: "Visite ajoutée au planning, à la fiche prospect et à la fiche bien.",
   },
@@ -1102,7 +1102,7 @@ const modalDemoGuidance = {
       target: "modal-maintenance-info",
       title: "Informations de l'entretien",
       body: "L'entretien décrit le besoin technique, la priorité, la date prévue, le responsable et le prestataire.",
-      task: "Exemple : plomberie urgente, fuite salle d'eau, responsable Mariam Traoré, prestataire Plomberie Mali Services.",
+      task: "Exemple : plomberie urgente, fuite salle d'eau, responsable Makan Sissoko, prestataire Plomberie Mali Services.",
     },
     {
       key: "cost",
@@ -2159,7 +2159,7 @@ const prospects = [
     need: "Villa 4 chambres",
     district: "Sotuba / Titibougou",
     budget: "1 500 000 FCFA",
-    agent: "Mariam Traoré",
+    agent: "Makan Sissoko",
     status: "Nouveau",
     next: "Appel de qualification",
   },
@@ -2169,7 +2169,7 @@ const prospects = [
     need: "Bureau 200 m²",
     district: "ACI 2000",
     budget: "2 000 000 FCFA",
-    agent: "Issa Maïga",
+    agent: "Aboubacar Sidiki Diallo",
     status: "Contacté",
     next: "Envoi de 3 propositions",
   },
@@ -2179,7 +2179,7 @@ const prospects = [
     need: "Appartement T3",
     district: "Hamdallaye",
     budget: "700 000 FCFA",
-    agent: "Mariam Traoré",
+    agent: "Makan Sissoko",
     status: "Visite prévue",
     next: "Visite jeudi 10h",
   },
@@ -2189,7 +2189,7 @@ const prospects = [
     need: "Maison familiale",
     district: "Badalabougou",
     budget: "950 000 FCFA",
-    agent: "Cheick Camara",
+    agent: "Niaro Admin",
     status: "Intéressé",
     next: "Négociation caution",
   },
@@ -2199,7 +2199,7 @@ const prospects = [
     need: "Bureau sécurisé",
     district: "ACI 2000",
     budget: "2 400 000 FCFA",
-    agent: "Issa Maïga",
+    agent: "Aboubacar Sidiki Diallo",
     status: "Conclu",
     next: "Préparer contrat",
   },
@@ -2209,7 +2209,7 @@ const prospects = [
     need: "Studio meublé",
     district: "Badalabougou",
     budget: "300 000 FCFA",
-    agent: "Cheick Camara",
+    agent: "Niaro Admin",
     status: "Perdu",
     next: "Budget insuffisant",
   },
@@ -2221,7 +2221,7 @@ const visits = [
     property: "Résidence ACI Baobab",
     date: "21/06/2026",
     time: "10:00",
-    agent: "Mariam Traoré",
+    agent: "Makan Sissoko",
     status: "Prévue",
     feedback: "Souhaite voir parking",
     next: "Confirmer la présence",
@@ -2231,7 +2231,7 @@ const visits = [
     property: "Villa Sotuba Jardin",
     date: "21/06/2026",
     time: "11:30",
-    agent: "Mariam Traoré",
+    agent: "Makan Sissoko",
     status: "Prévue",
     feedback: "Première visite, recherche villa familiale",
     next: "Envoyer itinéraire WhatsApp",
@@ -2241,7 +2241,7 @@ const visits = [
     property: "Plateau Office Center",
     date: "21/06/2026",
     time: "15:30",
-    agent: "Issa Maïga",
+    agent: "Aboubacar Sidiki Diallo",
     status: "Prévue",
     feedback: "Direction générale attendue sur site",
     next: "Confirmer badges d'accès",
@@ -2251,7 +2251,7 @@ const visits = [
     property: "Villa Sotuba Jardin",
     date: "21/06/2026",
     time: "17:00",
-    agent: "Cheick Camara",
+    agent: "Niaro Admin",
     status: "Prévue",
     feedback: "Souhaite comparer avec Badalabougou",
     next: "Préparer fiche caution",
@@ -2261,7 +2261,7 @@ const visits = [
     property: "Plateau Office Center",
     date: "29/05/2026",
     time: "15:30",
-    agent: "Issa Maïga",
+    agent: "Aboubacar Sidiki Diallo",
     status: "Reportée",
     feedback: "DG indisponible",
     next: "Proposer mardi",
@@ -2271,7 +2271,7 @@ const visits = [
     property: "Villa Sotuba Jardin",
     date: "27/05/2026",
     time: "17:00",
-    agent: "Cheick Camara",
+    agent: "Niaro Admin",
     status: "Client intéressé",
     feedback: "Accord de principe",
     next: "Envoyer fiche caution",
@@ -2292,7 +2292,7 @@ const contracts = [
     signedFileName: "Contrat signé CON-2026-014.pdf",
     signedAt: "01/01/2026",
     signedImportedAt: "02/01/2026",
-    signedImportedBy: "Aïssata Diarra",
+    signedImportedBy: "Niaro Admin",
   },
   {
     number: "CON-2026-023",
@@ -2307,7 +2307,7 @@ const contracts = [
     signedFileName: "Mandat signé CON-2026-023.pdf",
     signedAt: "15/03/2026",
     signedImportedAt: "16/03/2026",
-    signedImportedBy: "Aïssata Diarra",
+    signedImportedBy: "Niaro Admin",
   },
   {
     number: "CON-2026-041",
@@ -2322,7 +2322,7 @@ const contracts = [
     signedFileName: "Contrat signé CON-2026-041.pdf",
     signedAt: "01/04/2026",
     signedImportedAt: "01/04/2026",
-    signedImportedBy: "Mariam Traoré",
+    signedImportedBy: "Makan Sissoko",
   },
   {
     number: "CON-2026-044",
@@ -2337,7 +2337,7 @@ const contracts = [
     signedFileName: "Convention signée CON-2026-044.pdf",
     signedAt: "01/05/2026",
     signedImportedAt: "02/05/2026",
-    signedImportedBy: "Issa Maïga",
+    signedImportedBy: "Aboubacar Sidiki Diallo",
   },
   {
     number: "CON-2025-088",
@@ -2362,7 +2362,7 @@ const contracts = [
     signedFileName: "Convention signée CON-2025-091.pdf",
     signedAt: "01/06/2025",
     signedImportedAt: "03/06/2025",
-    signedImportedBy: "Cheick Camara",
+    signedImportedBy: "Niaro Admin",
   },
   {
     number: "CON-2024-112",
@@ -2607,14 +2607,14 @@ const charges = [
     proof: "Reçu artisan plomberie",
     proofStatus: "Présent",
     period: "Mai 2026",
-    agent: "Cheick Camara",
+    agent: "Niaro Admin",
     paymentMode: "Espèces",
     paymentRef: "ESP-CHG-051",
     linkedMaintenance: "Réparation fuite",
     impact: "À déduire du reversement propriétaire",
     ownerCollection: false,
-    createdBy: "Mariam Traoré",
-    modifiedBy: "Cheick Camara",
+    createdBy: "Makan Sissoko",
+    modifiedBy: "Niaro Admin",
     validatedBy: "À confirmer",
     validationDate: "À valider",
     history: ["Créée le 17/05/2026", "Justificatif ajouté le 18/05/2026", "En attente validation responsable"],
@@ -2634,15 +2634,15 @@ const charges = [
     proofStatus: "Présent",
     status: "Payée",
     period: "Mai 2026",
-    agent: "Aïssata Diarra",
+    agent: "Niaro Admin",
     paymentMode: "Mobile money",
     paymentRef: "OM-2026-052",
     linkedMaintenance: "Non lié",
     impact: "Supportée par l'agence",
     ownerCollection: false,
-    createdBy: "Aïssata Diarra",
-    modifiedBy: "Aïssata Diarra",
-    validatedBy: "Admin E.K immo",
+    createdBy: "Niaro Admin",
+    modifiedBy: "Niaro Admin",
+    validatedBy: "Niaro Admin",
     validationDate: "21/05/2026",
     history: ["Créée le 20/05/2026", "Validée le 21/05/2026", "Payée par agence"],
   },
@@ -2661,15 +2661,15 @@ const charges = [
     proofStatus: "Présent",
     status: "Refacturable",
     period: "Mai 2026",
-    agent: "Mariam Traoré",
+    agent: "Makan Sissoko",
     paymentMode: "Virement",
     paymentRef: "VIR-CHG-053",
     linkedMaintenance: "Maintenance climatisation",
     impact: "À refacturer au locataire",
     ownerCollection: false,
-    createdBy: "Mariam Traoré",
-    modifiedBy: "Mariam Traoré",
-    validatedBy: "Admin E.K immo",
+    createdBy: "Makan Sissoko",
+    modifiedBy: "Makan Sissoko",
+    validatedBy: "Niaro Admin",
     validationDate: "26/05/2026",
     history: ["Créée le 25/05/2026", "Rattachée au locataire", "À intégrer dans la prochaine facture"],
   },
@@ -2688,14 +2688,14 @@ const charges = [
     proofStatus: "Manquant",
     status: "À déduire",
     period: "Juin 2026",
-    agent: "Cheick Camara",
+    agent: "Niaro Admin",
     paymentMode: "Espèces",
     paymentRef: "À compléter",
     linkedMaintenance: "Non lié",
     impact: "À déduire du reversement propriétaire",
     ownerCollection: false,
-    createdBy: "Cheick Camara",
-    modifiedBy: "Cheick Camara",
+    createdBy: "Niaro Admin",
+    modifiedBy: "Niaro Admin",
     validatedBy: "À confirmer",
     validationDate: "À valider",
     history: ["Créée le 12/06/2026", "Justificatif demandé au prestataire"],
@@ -2715,15 +2715,15 @@ const charges = [
     proofStatus: "Présent",
     status: "Validée",
     period: "Juin 2026",
-    agent: "Aïssata Diarra",
+    agent: "Niaro Admin",
     paymentMode: "Carte agence",
     paymentRef: "PUB-ACI-055",
     linkedMaintenance: "Non lié",
     impact: "Supportée par l'agence",
     ownerCollection: false,
-    createdBy: "Aïssata Diarra",
-    modifiedBy: "Aïssata Diarra",
-    validatedBy: "Admin E.K immo",
+    createdBy: "Niaro Admin",
+    modifiedBy: "Niaro Admin",
+    validatedBy: "Niaro Admin",
     validationDate: "13/06/2026",
     history: ["Créée le 13/06/2026", "Validée le 13/06/2026"],
   },
@@ -2742,14 +2742,14 @@ const charges = [
     proofStatus: "Présent",
     status: "Brouillon",
     period: "Juin 2026",
-    agent: "Issa Maïga",
+    agent: "Aboubacar Sidiki Diallo",
     paymentMode: "Virement propriétaire",
     paymentRef: "MANDÉ-TRV-056",
     linkedMaintenance: "Peinture intérieure",
     impact: "Suivi interne sans impact sur encaissement agence",
     ownerCollection: true,
-    createdBy: "Issa Maïga",
-    modifiedBy: "Issa Maïga",
+    createdBy: "Aboubacar Sidiki Diallo",
+    modifiedBy: "Aboubacar Sidiki Diallo",
     validatedBy: "Non validée",
     validationDate: "À confirmer",
     history: ["Créée le 14/06/2026", "Bien en encaissement propriétaire", "À confirmer avec Foncière Mandé"],
@@ -2769,14 +2769,14 @@ const charges = [
     proofStatus: "Présent",
     status: "En attente",
     period: "Juin 2026",
-    agent: "Mariam Traoré",
+    agent: "Makan Sissoko",
     paymentMode: "Espèces",
     paymentRef: "ADM-057",
     linkedMaintenance: "Non lié",
     impact: "À refacturer au locataire",
     ownerCollection: false,
-    createdBy: "Mariam Traoré",
-    modifiedBy: "Mariam Traoré",
+    createdBy: "Makan Sissoko",
+    modifiedBy: "Makan Sissoko",
     validatedBy: "À confirmer",
     validationDate: "À valider",
     history: ["Créée le 15/06/2026", "Attente validation avant facturation locataire"],
@@ -2793,7 +2793,7 @@ const maintenances = [
     property: "Studio Badalabougou",
     type: "Réparation fuite",
     date: "30/05/2026",
-    manager: "Cheick Camara",
+    manager: "Niaro Admin",
     cost: "95 000 FCFA",
     payer: "Propriétaire",
     status: "Planifié",
@@ -2803,7 +2803,7 @@ const maintenances = [
     property: "Plateau Office Center",
     type: "Peinture intérieure",
     date: "03/06/2026",
-    manager: "Issa Maïga",
+    manager: "Aboubacar Sidiki Diallo",
     cost: "420 000 FCFA",
     payer: "Propriétaire",
     status: "En cours",
@@ -2813,7 +2813,7 @@ const maintenances = [
     property: "Villa Koulouba",
     type: "Entretien jardin",
     date: "05/06/2026",
-    manager: "Mariam Traoré",
+    manager: "Makan Sissoko",
     cost: "65 000 FCFA",
     payer: "Agence",
     status: "À prévoir",
@@ -2923,6 +2923,30 @@ const users = [
   },
 ];
 
+const defaultAgentNames = users.map((user) => user.name);
+const defaultOperatorName = users[1]?.name ?? users[0]?.name ?? "Utilisateur E.K immo";
+const defaultCommercialName = users[2]?.name ?? defaultOperatorName;
+const defaultManagerName = users[0]?.name ?? defaultOperatorName;
+
+function getActiveUserNames(usersList = users, currentUser = null) {
+  const names = (usersList.length ? usersList : users)
+    .filter((user) => (user.status ?? "Actif") === "Actif")
+    .map((user) => user.name)
+    .filter(Boolean);
+  const currentName = currentUser?.name;
+  const ordered = currentName ? [currentName, ...names.filter((name) => name !== currentName)] : names;
+  return ordered.length ? ordered : defaultAgentNames;
+}
+
+function getCurrentActorName(currentUser) {
+  return currentUser?.name || defaultManagerName;
+}
+
+function AgentOptions({ options = defaultAgentNames }) {
+  const safeOptions = options.length ? options : defaultAgentNames;
+  return safeOptions.map((name) => <option key={name}>{name}</option>);
+}
+
 const templates = [
   "Contrat de location",
   "Mandat de gestion",
@@ -2965,7 +2989,7 @@ function getDefaultUserHistory(user) {
       date: "25/05/2026 09:18",
       type: "Modification",
       detail: `Profil ${user?.status === "Suspendu" ? "suspendu" : "actif"} vérifié`,
-      by: "Admin E.K immo",
+      by: defaultManagerName,
     },
   ];
 }
@@ -3787,7 +3811,7 @@ function getPaymentReceiptValues(payment) {
     mobileMoney: isMobileMoney,
     objet: `Encaissement ${payment.period} - ${payment.property}`,
     lieu: "Bamako",
-    agent: "Aïssata Diarra",
+    agent: "Niaro Admin",
   };
 }
 
@@ -4775,6 +4799,8 @@ function App() {
     () => allUsers.find((user) => user.id === currentUserId) ?? serverUser ?? users.find((user) => user.id === currentUserId) ?? users[0],
     [allUsers, currentUserId, serverUser]
   );
+  const currentActorName = getCurrentActorName(currentUser);
+  const activeAgentOptions = useMemo(() => getActiveUserNames(allUsers, currentUser), [allUsers, currentUser]);
   const canUseDemoMode = currentUser?.role === "Administrateur";
   const currentAccess = useMemo(
     () => getRoleAccess(currentUser, serverPermissions),
@@ -5273,7 +5299,7 @@ function App() {
           priority: "Critique",
           description: "Fuite d'eau signalée dans le studio, intervention urgente à coordonner.",
           date: "21/06/2026",
-          manager: "Cheick Camara",
+          manager: currentActorName,
           provider: "Bamako Plomberie Services",
           cost: "95 000 FCFA",
           payer: "Propriétaire",
@@ -6205,7 +6231,7 @@ function App() {
       [key]: [
         {
           date: "25/06/2026 10:30",
-          by: currentUser?.name ?? "Admin E.K immo",
+          by: currentActorName,
           ...event,
         },
         ...(current[key] ?? getDefaultUserHistory(user)),
@@ -6241,7 +6267,7 @@ function App() {
           date: "25/06/2026 10:30",
           type: "Création",
           detail: sendInvitation ? "Utilisateur créé et invitation envoyée par email" : "Utilisateur créé avec mot de passe temporaire",
-          by: currentUser?.name ?? "Admin E.K immo",
+          by: currentActorName,
         },
         {
           date: "25/06/2026 10:30",
@@ -6253,7 +6279,7 @@ function App() {
           date: "25/06/2026 10:30",
           type: "Action réalisée",
           detail: sendInvitation ? "Invitation email préparée" : "Accès initial préparé",
-          by: "Aïssata Diarra",
+          by: currentActorName,
         },
       ],
     }));
@@ -6653,7 +6679,7 @@ function App() {
       balance: "0 FCFA",
       status: "Soldé",
       validationComment: values.comment,
-      validatedBy: "Aïssata Diarra",
+      validatedBy: currentActorName,
       validatedAt: "25/06/2026",
     }, `Validation : reversement complet confirmé. ${values.comment}`);
     closeReversalAction();
@@ -7519,7 +7545,7 @@ function App() {
       [key]: [
         {
           date: "21/06/2026",
-          user: "Aïssata Diarra",
+          user: currentActorName,
           ...entry,
         },
         ...(current[key] ?? []),
@@ -7777,7 +7803,7 @@ function App() {
       signedDocument: fileName,
       signedFileName: fileName,
       signedImportedAt: values.importDate || "21/06/2026",
-      signedImportedBy: values.importedBy || "Aïssata Diarra",
+      signedImportedBy: values.importedBy || currentActorName,
       signedSigners: values.signers,
       signedObservation: values.observation,
       signedDocumentType: values.fileType || "PDF",
@@ -8031,8 +8057,8 @@ function App() {
       [payment.reference]: [
         entry,
         ...(current[payment.reference] ?? payment.history ?? [
-          { action: "Paiement créé", user: "Aïssata Diarra", date: payment.date, detail: `${payment.paid} enregistré pour ${payment.period}.` },
-          ...(payment.receipt && payment.receipt !== "Non généré" ? [{ action: "Reçu généré", user: "Aïssata Diarra", date: payment.date, detail: payment.receipt }] : []),
+          { action: "Paiement créé", user: currentActorName, date: payment.date, detail: `${payment.paid} enregistré pour ${payment.period}.` },
+          ...(payment.receipt && payment.receipt !== "Non généré" ? [{ action: "Reçu généré", user: currentActorName, date: payment.date, detail: payment.receipt }] : []),
         ]),
       ],
     }));
@@ -8060,7 +8086,7 @@ function App() {
     });
     appendPaymentHistory(payment, {
       action: "Annulation",
-      user: "Aïssata Diarra",
+      user: currentActorName,
       date: "24/06/2026 10:35",
       detail: `Motif : ${values.reason}. Reçu ${values.keepReceipt === "Oui" ? "conservé en historique et annulé" : "retiré"}.`,
       oldValue: payment.status,
@@ -8092,7 +8118,7 @@ function App() {
       });
       appendPaymentHistory(payment, {
         action: "Justificatif supprimé",
-        user: "Aïssata Diarra",
+        user: currentActorName,
         date: "24/06/2026 10:42",
         detail: "Justificatif retiré du paiement.",
         oldValue: payment.proof?.fileName ?? "Justificatif",
@@ -8108,7 +8134,7 @@ function App() {
     }));
     appendPaymentHistory(payment, {
       action: proof.actionLabel ?? "Justificatif mis à jour",
-      user: "Aïssata Diarra",
+      user: currentActorName,
       date: "24/06/2026 10:42",
       detail: `${proof.fileName} · ${proof.reference}. ${proof.comment}`,
       oldValue: payment.proof?.fileName ?? "Aucun justificatif",
@@ -8173,7 +8199,7 @@ function App() {
 
     appendPaymentHistory(payment, {
       action: action === "archive-tenant" ? "Reçu archivé locataire" : action === "archive-property" ? "Reçu archivé bien" : "Reçu lié au paiement",
-      user: "Aïssata Diarra",
+      user: currentActorName,
       date: "24/06/2026 10:48",
       detail: receiptNumber,
     });
@@ -8202,7 +8228,7 @@ function App() {
       date: "24/06/2026 10:55",
       channel: "Promesse",
       comment: `${values.amount} promis le ${fromDateInputValue(values.promisedDate)} par ${values.paymentMode}. ${values.comment}`,
-      user: "Aïssata Diarra",
+      user: currentActorName,
       nextAction: values.nextReminder,
       status: isOverdue ? "Alerte date dépassée" : "Promesse de paiement",
     });
@@ -8217,7 +8243,7 @@ function App() {
       date: "24/06/2026 11:02",
       channel: "Statut",
       comment: values.status === "Litige" ? values.comment : `Statut changé en ${values.status}. ${values.comment}`,
-      user: "Aïssata Diarra",
+      user: currentActorName,
       nextAction: values.status === "Régularisé" ? "Clôturer le suivi" : "Suivi dossier",
       status: values.status,
     });
@@ -8232,7 +8258,7 @@ function App() {
       date: "24/06/2026 11:08",
       channel: "Validation",
       comment: "Impayé confirmé comme régularisé.",
-      user: "Aïssata Diarra",
+      user: currentActorName,
       nextAction: "Aucune",
       status: "Régularisé",
     });
@@ -8270,7 +8296,7 @@ function App() {
       date: "24/06/2026 11:12",
       channel: "Archive",
       comment: `État impayé ${reference} archivé.`,
-      user: "Aïssata Diarra",
+      user: currentActorName,
       nextAction: "Disponible dans Archives",
       status: "Archivé",
     });
@@ -8515,7 +8541,7 @@ function App() {
     updateMaintenanceRecord(maintenance, {
       status: "Validé",
       validationComment: values.comment,
-      validatedBy: "Aïssata Diarra",
+      validatedBy: currentActorName,
       validationDate: "25/06/2026",
       realCost: values.realCost || maintenance.realCost,
       payer: values.payer,
@@ -8605,7 +8631,7 @@ function App() {
       ...charge,
       status: validate ? "Validée" : charge.status,
       validationDate: validate ? "23/06/2026" : charge.validationDate,
-      validatedBy: validate ? "Admin E.K immo" : charge.validatedBy,
+      validatedBy: validate ? currentActorName : charge.validatedBy,
       history: [
         ...(charge.history ?? []),
         validate ? "Charge enregistrée et validée depuis la fiche bien" : "Charge enregistrée depuis la fiche bien",
@@ -8677,7 +8703,7 @@ function App() {
   const handleChargeValidation = ({ charge, values }) => {
     updateChargeRecord(charge, {
       status: "Validée",
-      validatedBy: "Aïssata Diarra",
+      validatedBy: currentActorName,
       validationDate: "25/06/2026",
       validationComment: values.comment,
       impact: getChargeImpactForPayer(charge.payer),
@@ -9204,6 +9230,7 @@ function App() {
             chargesList={allCharges}
             reversalsList={allReversals}
             propertiesList={activeProperties}
+            currentUserName={currentActorName}
           />
         )}
         {activePage === "Contrats" && (
@@ -9231,9 +9258,10 @@ function App() {
             onDetailReturn={handleContractDetailReturn}
             filterRequest={contractFilterRequest}
             onFilterRequestConsumed={() => setContractFilterRequest(null)}
+            currentUserName={currentActorName}
           />
         )}
-        {activePage === "Finance" && <FinancePage activeTab={financeTab} onTab={setFinanceTab} availableTabs={currentAccess.financeTabs} onAction={openAction} paymentsList={allPayments} paymentRequest={paymentDetailRequest} detailRequest={financeDetailRequest} onDetailRequestConsumed={() => setFinanceDetailRequest(null)} rentRowsList={allRentRows} commissionsList={allCommissions} chargesList={allCharges} maintenancesList={allMaintenances} reversalsList={allReversals} relancesList={tenantRelances} arrearsStatuses={arrearsStatusOverrides} arrearsPromises={arrearsPromises} arrearsHistories={arrearsHistories} propertiesList={activeProperties} ownersList={allOwners} />}
+        {activePage === "Finance" && <FinancePage activeTab={financeTab} onTab={setFinanceTab} availableTabs={currentAccess.financeTabs} onAction={openAction} paymentsList={allPayments} paymentRequest={paymentDetailRequest} detailRequest={financeDetailRequest} onDetailRequestConsumed={() => setFinanceDetailRequest(null)} rentRowsList={allRentRows} commissionsList={allCommissions} chargesList={allCharges} maintenancesList={allMaintenances} reversalsList={allReversals} relancesList={tenantRelances} arrearsStatuses={arrearsStatusOverrides} arrearsPromises={arrearsPromises} arrearsHistories={arrearsHistories} propertiesList={activeProperties} ownersList={allOwners} currentUserName={currentActorName} />}
         {activePage === "Rapports" && (
           <ReportsPage
             selected={reportType}
@@ -9250,6 +9278,8 @@ function App() {
             maintenancesList={allMaintenances}
             visitsList={allVisits}
             reversalsList={allReversals}
+            agentOptions={activeAgentOptions}
+            currentUserName={currentActorName}
           />
         )}
         {activePage === "Plus" && (
@@ -9304,6 +9334,8 @@ function App() {
           propertiesList={activeProperties}
           maintenancesList={allMaintenances}
           chargesList={allCharges}
+          agentOptions={activeAgentOptions}
+          currentUserName={currentActorName}
           onUpload={handleFileUpload}
           onSave={handleChargeSave}
           onClose={() => {
@@ -9375,6 +9407,7 @@ function App() {
       ) : modal === "Historique charge" ? (
         <ChargeHistoryModal
           charge={chargeActionContext?.charge ?? allCharges[0]}
+          currentUserName={currentActorName}
           onClose={() => {
             setChargeActionContext(null);
             setModal(null);
@@ -9388,6 +9421,8 @@ function App() {
           ownersList={allOwners}
           tenantsList={allTenants}
           ownerPrefill={propertyOwnerPrefill}
+          agentOptions={activeAgentOptions}
+          currentUserName={currentActorName}
           onUpload={handleFileUpload}
           onSave={handlePropertySave}
           onClose={() => {
@@ -9405,6 +9440,8 @@ function App() {
       ) : modal === "Nouveau prospect" ? (
         <ProspectFormModal
           sequence={prospects.length + createdProspects.length + 1}
+          agentOptions={activeAgentOptions}
+          currentUserName={currentActorName}
           onSave={handleProspectSave}
           onClose={() => setModal(null)}
         />
@@ -9430,6 +9467,8 @@ function App() {
       ) : modal === "Prochaine action prospect" ? (
         <ProspectNextActionModal
           prospect={prospectActionContext?.prospect ?? null}
+          agentOptions={activeAgentOptions}
+          currentUserName={currentActorName}
           onSave={handleProspectNextActionSave}
           onClose={() => {
             setProspectActionContext(null);
@@ -9443,6 +9482,8 @@ function App() {
           property={prospectActionContext?.property ?? selectedProperty}
           prospectsList={allProspects}
           propertiesList={activeProperties}
+          agentOptions={activeAgentOptions}
+          currentUserName={currentActorName}
           onSave={handleProspectVisitSave}
           onClose={() => {
             setProspectActionContext(null);
@@ -9465,6 +9506,7 @@ function App() {
       ) : modal === "Changer agent visite" ? (
         <VisitAgentModal
           visit={visitActionContext?.visit ?? allVisits[0]}
+          agentOptions={activeAgentOptions}
           onSave={handleVisitAgentSave}
           onClose={closeVisitModal}
         />
@@ -9489,6 +9531,7 @@ function App() {
       ) : modal === "Créer relance visite" ? (
         <VisitReminderModal
           visit={visitActionContext?.visit ?? allVisits[0]}
+          agentOptions={activeAgentOptions}
           onSave={handleVisitReminderSave}
           onClose={closeVisitModal}
         />
@@ -9637,6 +9680,8 @@ function App() {
         <NewTenantFormModal
           sequence={tenants.length + createdTenants.length + 1}
           propertiesList={activeProperties}
+          agentOptions={activeAgentOptions}
+          currentUserName={currentActorName}
           onUpload={handleFileUpload}
           onSave={handleNewTenantSave}
           onClose={() => setModal(null)}
@@ -9675,6 +9720,7 @@ function App() {
       ) : modal === "Historique paiement" ? (
         <PaymentHistoryModal
           payment={paymentActionContext?.payment ?? allPayments[0]}
+          currentUserName={currentActorName}
           onClose={() => {
             setPaymentActionContext(null);
             setModal(null);
@@ -9796,6 +9842,7 @@ function App() {
           relancesList={tenantRelances}
           promise={arrearsPromises[getArrearsKey(arrearsActionContext?.row ?? allRentRows[0])]}
           history={arrearsHistories[getArrearsKey(arrearsActionContext?.row ?? allRentRows[0])] ?? []}
+          currentUserName={currentActorName}
           onClose={() => {
             setArrearsActionContext(null);
             setModal(null);
@@ -9835,6 +9882,8 @@ function App() {
         <DashboardRentReminderModal
           rows={getDashboardOverdueRows(allRentRows)}
           relancesList={tenantRelances}
+          agentOptions={activeAgentOptions}
+          currentUserName={currentActorName}
           onSave={handleDashboardRelanceSave}
           onClose={() => setModal(null)}
         />
@@ -9893,7 +9942,7 @@ function App() {
       ) : modal === "Actions echeance contrat" ? (
         <ContractDueActionsModal contract={contractActionContext?.contract ?? allContracts[0]} onAction={openAction} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "Document signe contrat" ? (
-        <ContractDocumentModal contract={contractActionContext?.contract ?? allContracts[0]} action={contractActionContext?.documentAction} onUpload={handleFileUpload} onImport={handleContractSignedDocumentImport} onSignedAction={handleContractSignedDocumentAction} onClose={() => { setContractActionContext(null); setModal(null); }} />
+        <ContractDocumentModal contract={contractActionContext?.contract ?? allContracts[0]} action={contractActionContext?.documentAction} currentUserName={currentActorName} onUpload={handleFileUpload} onImport={handleContractSignedDocumentImport} onSignedAction={handleContractSignedDocumentAction} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "PDF contrat" ? (
         <ContractPdfModal contract={contractActionContext?.contract ?? allContracts[0]} propertiesList={propertiesWithArchiveState} ownersList={allOwners} tenantsList={allTenants} onPdfAction={handleContractPdfAction} onClose={() => { setContractActionContext(null); setModal(null); }} />
       ) : modal === "Imprimer contrat" ? (
@@ -9909,7 +9958,7 @@ function App() {
       ) : modal === "Enregistrer paiement" ? (
         <PaymentRegistrationModal context={paymentContext} paymentsList={allPayments} rentRowsList={allRentRows} propertiesList={activeProperties} tenantsList={allTenants} onSave={handlePaymentRegistration} onClose={() => setModal(null)} />
       ) : modal === "Responsable entretien" ? (
-        <MaintenanceResponsibleModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onSave={handleMaintenanceResponsibleSave} onClose={closeMaintenanceAction} />
+        <MaintenanceResponsibleModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} agentOptions={activeAgentOptions} onSave={handleMaintenanceResponsibleSave} onClose={closeMaintenanceAction} />
       ) : modal === "Cout entretien" ? (
         <MaintenanceCostModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onUpload={handleFileUpload} onSave={handleMaintenanceCostSave} onClose={closeMaintenanceAction} />
       ) : modal === "Justificatif entretien" ? (
@@ -9925,12 +9974,14 @@ function App() {
       ) : modal === "Annuler entretien" ? (
         <MaintenanceCancelModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onSave={handleMaintenanceCancelSave} onClose={closeMaintenanceAction} />
       ) : modal === "Ajouter entretien" ? (
-        <MaintenanceFormModal context={maintenanceContext} propertiesList={activeProperties} onUpload={handleFileUpload} onSave={handleMaintenanceSchedule} onClose={() => { setMaintenanceContext(null); setModal(null); }} />
+        <MaintenanceFormModal context={maintenanceContext} propertiesList={activeProperties} agentOptions={activeAgentOptions} currentUserName={currentActorName} onUpload={handleFileUpload} onSave={handleMaintenanceSchedule} onClose={() => { setMaintenanceContext(null); setModal(null); }} />
       ) : modal === "Intervention urgente" ? (
-        <UrgentMaintenanceModal context={maintenanceContext} propertiesList={activeProperties} onUpload={handleFileUpload} onSave={handleMaintenanceSchedule} onClose={() => setModal(null)} />
+        <UrgentMaintenanceModal context={maintenanceContext} propertiesList={activeProperties} agentOptions={activeAgentOptions} currentUserName={currentActorName} onUpload={handleFileUpload} onSave={handleMaintenanceSchedule} onClose={() => setModal(null)} />
       ) : modal === "Document manquant" ? (
         <MissingDocumentModal
           request={missingDocumentContext}
+          agentOptions={activeAgentOptions}
+          currentUserName={currentActorName}
           onSave={handleMissingDocumentRequest}
           onClose={() => {
             setMissingDocumentContext(null);
@@ -11031,7 +11082,7 @@ function PropertySummary({ property, propertiesList = [], onOpenProperty, visits
             <Info label="Commission" value={property.commission} />
             <Info label="Statut" value={property.status} />
             <Info label="Occupation actuelle" value={property.tenant} />
-            <Info label="Agent responsable" value="Aïssata Diarra" />
+            <Info label="Agent responsable" value={property.agent ?? "Non renseigné"} />
             <Info label="Surface" value={property.surface} />
             <Info label="Pièces" value={property.rooms} />
             <Info label="Chambres" value={property.bedrooms} />
@@ -11552,7 +11603,7 @@ function PropertyHistory({ property, historyItems = [] }) {
       <div className="timeline">
         {[
           ...customHistory,
-          ["Bien créé", "Dossier ouvert par Aïssata Diarra", "12/02/2026"],
+          ["Bien créé", `Dossier ouvert par ${property.agent ?? "E.K immo"}`, "12/02/2026"],
           ["Statut modifié", `Passage en statut ${property.status}`, "18/03/2026"],
           ["Document généré", "Mandat de gestion exporté en PDF", "20/03/2026"],
           ["Paiement enregistré", "Loyer mai rapproché avec reçu", "06/05/2026"],
@@ -11568,7 +11619,7 @@ function PropertyHistory({ property, historyItems = [] }) {
   );
 }
 
-function ClientsPage({ activeTab, onTab, availableTabs = ["Propriétaires", "Locataires", "Prospects", "Visites"], selectedOwner, onOwner, ownersList = owners, selectedTenant, onTenant, tenantsList = tenants, prospectsList = prospects, prospectProposals = {}, prospectActivities = {}, prospectConversions = {}, visitsList = visits, visitHistories = {}, detailRequest = null, filterRequest = null, onFilterRequestConsumed, tenantRelances = [], tenantReceiptArchives = [], missingDocumentRequests = [], onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, chargesList = charges, reversalsList = reversals, propertiesList = [] }) {
+function ClientsPage({ activeTab, onTab, availableTabs = ["Propriétaires", "Locataires", "Prospects", "Visites"], selectedOwner, onOwner, ownersList = owners, selectedTenant, onTenant, tenantsList = tenants, prospectsList = prospects, prospectProposals = {}, prospectActivities = {}, prospectConversions = {}, visitsList = visits, visitHistories = {}, detailRequest = null, filterRequest = null, onFilterRequestConsumed, tenantRelances = [], tenantReceiptArchives = [], missingDocumentRequests = [], onAction, contractsList = contracts, paymentsList = paymentRecords, rentRowsList = rentRows, chargesList = charges, reversalsList = reversals, propertiesList = [], currentUserName = defaultManagerName }) {
   const tabs = availableTabs.length ? availableTabs : ["Propriétaires", "Locataires", "Prospects", "Visites"];
   const effectiveTab = tabs.includes(activeTab) ? activeTab : tabs[0];
   const [detailView, setDetailView] = useState(null);
@@ -11717,7 +11768,8 @@ function ClientsPage({ activeTab, onTab, availableTabs = ["Propriétaires", "Loc
     visitsList: filteredVisits,
     rentRowsList,
     propertiesList,
-  }), [effectiveTab, clientFilters, clientSearch, filteredOwners, filteredProspects, filteredTenants, filteredVisits, propertiesList, rentRowsList]);
+    currentUserName,
+  }), [currentUserName, effectiveTab, clientFilters, clientSearch, filteredOwners, filteredProspects, filteredTenants, filteredVisits, propertiesList, rentRowsList]);
 
   const openDetail = (type, item) => {
     setSavedScroll(window.scrollY);
@@ -11955,14 +12007,14 @@ function ClientExportMenu({ payload, onClose }) {
   );
 }
 
-function buildClientExportPayload({ activeTab, filters, search, ownersList, tenantsList, prospectsList, visitsList, rentRowsList, propertiesList = [] }) {
+function buildClientExportPayload({ activeTab, filters, search, ownersList, tenantsList, prospectsList, visitsList, rentRowsList, propertiesList = [], currentUserName = defaultManagerName }) {
   const exportedAt = new Date();
   const basePayload = {
     activeTab,
     title: `Rapport clients - ${activeTab}`,
     exportedAt,
     exportedAtLabel: exportedAt.toLocaleString("fr-FR"),
-    user: "Aïssata Diarra",
+    user: currentUserName,
     filters: getClientExportFilters(activeTab, filters, search),
     filename: `ek-immo-${slugifyFilename(activeTab)}-${exportedAt.toISOString().slice(0, 10)}`,
   };
@@ -12955,7 +13007,7 @@ function VisitDateModal({ visit, report = false, onSave, onClose }) {
   );
 }
 
-function VisitAgentModal({ visit, onSave, onClose }) {
+function VisitAgentModal({ visit, agentOptions = defaultAgentNames, onSave, onClose }) {
   const [values, setValues] = useState({
     newAgent: visit.agent,
     reason: "Réaffectation selon disponibilité équipe.",
@@ -12971,7 +13023,7 @@ function VisitAgentModal({ visit, onSave, onClose }) {
         <div className="form-section">
           <div className="form-grid compact-form">
             <label>Agent actuel<input value={visit.agent} readOnly /></label>
-            <label>Nouvel agent<select value={values.newAgent} onChange={update("newAgent")}><option>Mariam Traoré</option><option>Aïssata Diarra</option><option>Issa Maïga</option><option>Cheick Camara</option></select></label>
+            <label>Nouvel agent<select value={values.newAgent} onChange={update("newAgent")}><AgentOptions options={agentOptions} /></select></label>
             <label className="full">Motif<textarea value={values.reason} onChange={update("reason")} /></label>
           </div>
         </div>
@@ -13087,7 +13139,7 @@ function VisitFeedbackModal({ visit, onSave, onClose }) {
   );
 }
 
-function VisitReminderModal({ visit, onSave, onClose }) {
+function VisitReminderModal({ visit, agentOptions = defaultAgentNames, onSave, onClose }) {
   const [values, setValues] = useState({
     channel: "WhatsApp",
     message: "Relancer le client après la visite et confirmer son intérêt.",
@@ -13106,7 +13158,7 @@ function VisitReminderModal({ visit, onSave, onClose }) {
           <div className="form-grid compact-form">
             <label>Canal<select value={values.channel} onChange={update("channel")}><option>Appel</option><option>WhatsApp</option><option>SMS</option><option>Email</option></select></label>
             <label>Date prochaine relance<input type="date" value={values.nextDate} onChange={update("nextDate")} /></label>
-            <label>Responsable<select value={values.responsible} onChange={update("responsible")}><option>Mariam Traoré</option><option>Aïssata Diarra</option><option>Issa Maïga</option><option>Cheick Camara</option></select></label>
+            <label>Responsable<select value={values.responsible} onChange={update("responsible")}><AgentOptions options={agentOptions} /></select></label>
             <label className="full">Message / commentaire<textarea value={values.message} onChange={update("message")} /></label>
           </div>
         </div>
@@ -13143,6 +13195,7 @@ function ContractsPage({
   onDetailReturn,
   filterRequest = null,
   onFilterRequestConsumed,
+  currentUserName = defaultManagerName,
 }) {
   const tabs = availableTabs.length ? availableTabs : ["Contrats", "Génération de document", "Archives"];
   const requestedTab = activeTab === "Factures & reçus" ? "Archives" : activeTab;
@@ -13186,6 +13239,7 @@ function ContractsPage({
           tenantsList={tenantsList}
           paymentsList={paymentsList}
           commissionsList={commissionsList}
+          currentUserName={currentUserName}
         />
       )}
       {effectiveTab === "Archives" && (
@@ -13517,17 +13571,18 @@ function getContractDeadlines(contract, financials, customDeadlines = []) {
 }
 
 function getContractTimeline(contract, property, timelineEntries = []) {
+  const contractAgent = contract.signedImportedBy ?? contract.generatedBy ?? property?.agent ?? defaultManagerName;
   const signatureEntry = hasSignedContractDocument(contract)
-    ? [{ date: contract.signedAt ?? contract.signedImportedAt ?? "18/06/2026", user: contract.signedImportedBy ?? "Aïssata Diarra", action: "Signature ajoutée", comment: "Document signé archivé" }]
+    ? [{ date: contract.signedAt ?? contract.signedImportedAt ?? "18/06/2026", user: contract.signedImportedBy ?? contractAgent, action: "Signature ajoutée", comment: "Document signé archivé" }]
     : [{ date: "21/06/2026", user: "Système", action: "Alerte document", comment: "Document signé manquant" }];
 
   return [
     ...timelineEntries,
     { date: contract.start, user: contract.owner, action: "Contrat créé", comment: `${contract.number} lié à ${contract.property}` },
-    { date: contract.start, user: "Aïssata Diarra", action: "Génération PDF", comment: "Modèle E.K immo alimenté et prêt à archiver" },
+    { date: contract.start, user: contractAgent, action: "Génération PDF", comment: "Modèle E.K immo alimenté et prêt à archiver" },
     ...signatureEntry,
     { date: contract.end, user: "Système", action: "Alerte envoyée", comment: getContractDueLabel(contract) },
-    { date: "20/06/2026", user: "Aïssata Diarra", action: "Dernière vérification", comment: `${property?.status ?? "Actif"} · fiche bien liée` },
+    { date: "20/06/2026", user: contractAgent, action: "Dernière vérification", comment: `${property?.status ?? "Actif"} · fiche bien liée` },
   ];
 }
 function getContractFinancials(contract, propertiesList = [], tenantsList = []) {
@@ -13613,6 +13668,7 @@ function DocumentGeneration({
   tenantsList = [],
   paymentsList = [],
   commissionsList = [],
+  currentUserName = defaultManagerName,
 }) {
   const neutralProperty = {
     code: "",
@@ -13654,6 +13710,7 @@ function DocumentGeneration({
     property: firstProperty,
     owner: firstOwner,
     tenant: firstTenant,
+    currentUserName,
   } : {
     invoice: { number: "", type: "Facture", client: "", property: "", amount: "0 FCFA", date: "" },
     payment: { reference: "", receipt: "", tenant: "", property: "", paid: "0 FCFA", balance: "0 FCFA", date: "" },
@@ -13661,6 +13718,7 @@ function DocumentGeneration({
     property: neutralProperty,
     owner: neutralOwner,
     tenant: neutralTenant,
+    currentUserName,
   });
   const draftTitle = documentDraft?.data?.draftStatus === "Brouillon"
     ? `Reprendre le brouillon - ${documentDraft.data.draftReference}`
@@ -13914,7 +13972,7 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
       date: "14/06/2026",
       status: "Brouillon",
       module: "Docs",
-      owner: "Mariam Traoré",
+      owner: "Makan Sissoko",
       templateKey: "bail",
       documentType: "Contrat de bail",
     },
@@ -13927,7 +13985,7 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
       date: "13/06/2026",
       status: "Brouillon",
       module: "Biens",
-      owner: "Cheick Camara",
+      owner: "Niaro Admin",
       templateKey: "bail",
       documentType: "Mandat",
     },
@@ -13940,7 +13998,7 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
       date: "29/05/2026",
       status: "Brouillon",
       module: "Rapports",
-      owner: "Aïssata Diarra",
+      owner: "Niaro Admin",
       templateKey: "facture",
       documentType: "Rapport",
     },
@@ -13967,7 +14025,7 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
       date: "05/05/2026",
       status: "Archivé",
       module: "Clients",
-      owner: "Mariam Traoré",
+      owner: "Makan Sissoko",
     },
     {
       id: "provider-office",
@@ -13978,7 +14036,7 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
       date: "14/06/2026",
       status: "Brouillon",
       module: "Biens",
-      owner: "Issa Maïga",
+      owner: "Aboubacar Sidiki Diallo",
     },
   ] : [];
 
@@ -13992,7 +14050,7 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
       date: "31/05/2026",
       status: "Archivé",
       module: "Rapports",
-      owner: "Aïssata Diarra",
+      owner: "Niaro Admin",
     },
     {
       id: "report-property-quarter",
@@ -14003,7 +14061,7 @@ function getArchiveRecords(contractsList = contracts, paymentsList = paymentReco
       date: "15/06/2026",
       status: "Généré",
       module: "Rapports",
-      owner: "Admin E.K immo",
+      owner: "Niaro Admin",
     },
   ] : [];
 
@@ -16806,6 +16864,7 @@ function getDocumentDefaults(key, data = {}) {
   const specialConditions = data.specialConditions || draftText;
   const amountNumber = draftAmount || String(invoice.amount ?? "0 FCFA").replace(" FCFA", "");
   const hasFilledDocumentData = property.name !== "Bien à renseigner" && invoice.client !== "Client à renseigner";
+  const documentAgent = data.currentUserName ?? property.agent ?? defaultOperatorName;
 
   if (key === "recu") {
     return {
@@ -16822,7 +16881,7 @@ function getDocumentDefaults(key, data = {}) {
       mobileMoney: ["Orange Money", "Moov Money"].includes(payment.mode),
       objet: draftText || `Encaissement ${payment.period} - ${invoice.property}`,
       lieu: "Bamako",
-      agent: "Aïssata Diarra",
+      agent: documentAgent,
     };
   }
 
@@ -16909,7 +16968,7 @@ function getDocumentDefaults(key, data = {}) {
       adresse: property.address ?? property.district,
       bailleur: owner.name,
       locataire: tenant.name,
-      agent: "Aïssata Diarra",
+      agent: documentAgent,
       activite: isCommercial ? "Activité commerciale autorisée au bail" : "",
       entryDate: "24/06/2026",
       exitDate: "",
@@ -17037,7 +17096,7 @@ function InvoiceActions({ invoice, onAction }) {
   );
 }
 
-function FinancePage({ activeTab, onTab, availableTabs = ["Loyers", "Paiements", "Impayés", "Commissions", "Charges", "Entretiens", "Reversements"], onAction, paymentsList = paymentRecords, paymentRequest = null, detailRequest = null, onDetailRequestConsumed, rentRowsList = rentRows, commissionsList = commissions, chargesList = charges, maintenancesList = maintenances, reversalsList = reversals, relancesList = [], arrearsStatuses = {}, arrearsPromises = {}, arrearsHistories = {}, propertiesList = [], ownersList = [] }) {
+function FinancePage({ activeTab, onTab, availableTabs = ["Loyers", "Paiements", "Impayés", "Commissions", "Charges", "Entretiens", "Reversements"], onAction, paymentsList = paymentRecords, paymentRequest = null, detailRequest = null, onDetailRequestConsumed, rentRowsList = rentRows, commissionsList = commissions, chargesList = charges, maintenancesList = maintenances, reversalsList = reversals, relancesList = [], arrearsStatuses = {}, arrearsPromises = {}, arrearsHistories = {}, propertiesList = [], ownersList = [], currentUserName = defaultManagerName }) {
   const tabs = availableTabs.length ? availableTabs : ["Loyers", "Paiements", "Impayés", "Commissions", "Charges", "Entretiens", "Reversements"];
   const effectiveTab = tabs.includes(activeTab) ? activeTab : "Loyers";
   const agencyRentRows = rentRowsList.filter((row) => isAgencyCollectedProperty(row.property, propertiesList));
@@ -17093,7 +17152,7 @@ function FinancePage({ activeTab, onTab, availableTabs = ["Loyers", "Paiements",
       {effectiveTab === "Paiements" && <PaymentForm onAction={onAction} paymentsList={paymentsList} rentRowsList={rentRowsList} paymentRequest={paymentRequest} propertiesList={propertiesList} ownersList={ownersList} />}
       {effectiveTab === "Impayés" && <ArrearsView onAction={onAction} rentRowsList={rentRowsList} propertiesList={propertiesList} relancesList={relancesList} arrearsStatuses={arrearsStatuses} arrearsPromises={arrearsPromises} arrearsHistories={arrearsHistories} />}
       {effectiveTab === "Commissions" && <CommissionsView onAction={onAction} commissionsList={commissionsList} />}
-      {effectiveTab === "Charges" && <ChargesView onAction={onAction} chargesList={chargesList} propertiesList={propertiesList} detailRequest={detailRequest?.type === "charge" ? detailRequest : null} onDetailRequestConsumed={onDetailRequestConsumed} />}
+      {effectiveTab === "Charges" && <ChargesView onAction={onAction} chargesList={chargesList} propertiesList={propertiesList} detailRequest={detailRequest?.type === "charge" ? detailRequest : null} onDetailRequestConsumed={onDetailRequestConsumed} currentUserName={currentUserName} />}
       {effectiveTab === "Entretiens" && <MaintenancesView onAction={onAction} maintenancesList={maintenancesList} propertiesList={propertiesList} detailRequest={detailRequest?.type === "maintenance" ? detailRequest : null} onDetailRequestConsumed={onDetailRequestConsumed} />}
       {effectiveTab === "Reversements" && <ReversalsView onAction={onAction} reversalsList={reversalsList} detailRequest={detailRequest?.type === "reversal" ? detailRequest : null} onDetailRequestConsumed={onDetailRequestConsumed} />}
     </>
@@ -17614,7 +17673,7 @@ function getChargeImpactLabel(charge) {
   return "Suivi interne uniquement";
 }
 
-function buildChargeExportPayload(chargesList, filters) {
+function buildChargeExportPayload(chargesList, filters, currentUserName = defaultManagerName) {
   const totalCharges = chargesList.reduce((sum, charge) => sum + parseFCFA(charge.amount), 0);
   const agencyCharges = chargesList.filter((charge) => charge.payer === "Agence").reduce((sum, charge) => sum + parseFCFA(charge.amount), 0);
   const ownerCharges = chargesList.filter((charge) => charge.payer === "Propriétaire").reduce((sum, charge) => sum + parseFCFA(charge.amount), 0);
@@ -17639,7 +17698,7 @@ function buildChargeExportPayload(chargesList, filters) {
     title: "État des charges",
     filename: `EKIMMO_Charges_${new Date().toISOString().slice(0, 10)}`,
     exportedAtLabel: "25/06/2026",
-    user: "Aïssata Diarra",
+    user: currentUserName,
     filters: filterList.length ? filterList : ["Aucun filtre spécifique"],
     columns: ["Date", "Type", "Description", "Bien", "Propriétaire", "Locataire", "Montant", "Prise en charge", "Statut", "Justificatif"],
     rows,
@@ -17786,7 +17845,7 @@ function buildChargeReportHtml(payload, mode) {
 </html>`;
 }
 
-function ChargesView({ onAction, chargesList = charges, propertiesList = [], detailRequest = null, onDetailRequestConsumed }) {
+function ChargesView({ onAction, chargesList = charges, propertiesList = [], detailRequest = null, onDetailRequestConsumed, currentUserName = defaultManagerName }) {
   const [selected, setSelected] = useState(chargesList[0] ?? null);
   const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
 
@@ -17867,7 +17926,7 @@ function ChargesView({ onAction, chargesList = charges, propertiesList = [], det
     amountRange,
     agent,
     quickFilter,
-  }), [agent, amountRange, filteredCharges, owner, payer, period, property, query, quickFilter, status, tenant, type]);
+  }, currentUserName), [agent, amountRange, currentUserName, filteredCharges, owner, payer, period, property, query, quickFilter, status, tenant, type]);
 
   const openCharge = (charge) => {
     setSelected(charge);
@@ -19032,7 +19091,7 @@ function filterReportRows(rows, filters) {
   });
 }
 
-function buildReportExportPayload({ selected, rows, filters }) {
+function buildReportExportPayload({ selected, rows, filters, currentUserName = defaultManagerName }) {
   const exportedAt = new Date();
   const filterLabels = [
     `Période : ${filters.period}`,
@@ -19047,7 +19106,7 @@ function buildReportExportPayload({ selected, rows, filters }) {
   return {
     title: selected || "Rapport E.K immo",
     exportedAtLabel: exportedAt.toLocaleString("fr-FR"),
-    user: "Aïssata Diarra",
+    user: currentUserName,
     filters: filterLabels.length ? filterLabels : ["Aucun filtre spécifique"],
     columns: ["Dossier", "Propriétaire / contact", "Client / lien", "Montant / info", "Statut"],
     rows: rows.map((row) => row.cells),
@@ -19180,6 +19239,8 @@ function ReportsPage({
   maintenancesList = maintenances,
   visitsList = visits,
   reversalsList = reversals,
+  agentOptions = defaultAgentNames,
+  currentUserName = defaultManagerName,
 }) {
   const [filters, setFilters] = useState({
     period: "Mai 2026",
@@ -19219,7 +19280,7 @@ function ReportsPage({
     reversalsList,
   }), [chargesList, commissionsList, contractsList, effectiveSelected, maintenancesList, ownersList, paymentsList, propertiesList, rentRowsList, reversalsList, tenantsList, visitsList]);
   const filteredRows = useMemo(() => filterReportRows(reportRows, filters), [filters, reportRows]);
-  const exportPayload = useMemo(() => buildReportExportPayload({ selected: effectiveSelected, rows: filteredRows, filters }), [effectiveSelected, filteredRows, filters]);
+  const exportPayload = useMemo(() => buildReportExportPayload({ selected: effectiveSelected, rows: filteredRows, filters, currentUserName }), [currentUserName, effectiveSelected, filteredRows, filters]);
   const updateFilter = (field) => (event) => setFilters((current) => ({ ...current, [field]: event.target.value }));
   const exportActions = {
     PDF: () => openReportPrintView(exportPayload, "pdf"),
@@ -19296,7 +19357,7 @@ function ReportsPage({
             <label>Bien<select value={filters.property} onChange={updateFilter("property")}><option>Tous les biens</option>{propertiesList.map((property) => <option key={property.code}>{property.name}</option>)}</select></label>
             <label>Propriétaire<select value={filters.owner} onChange={updateFilter("owner")}><option>Tous les propriétaires</option>{ownersList.map((owner) => <option key={owner.id}>{owner.name}</option>)}</select></label>
             <label>Locataire<select value={filters.tenant} onChange={updateFilter("tenant")}><option>Tous les locataires</option>{tenantsList.map((tenant) => <option key={tenant.id}>{tenant.name}</option>)}</select></label>
-            <label>Agent<select value={filters.agent} onChange={updateFilter("agent")}><option>Tous les agents</option><option>Mariam Traoré</option><option>Aïssata Diarra</option><option>Issa Maïga</option><option>Cheick Camara</option></select></label>
+            <label>Agent<select value={filters.agent} onChange={updateFilter("agent")}><option>Tous les agents</option><AgentOptions options={agentOptions} /></select></label>
             <label>Statut<select value={filters.status} onChange={updateFilter("status")}><option>Tous statuts</option><option>Actif</option><option>À valider</option><option>Archivé</option><option>Impayé</option><option>Payé</option><option>Partiel</option><option>Suivi</option></select></label>
             <label>Type d'opération<select value={filters.operation} onChange={updateFilter("operation")}><option>Toutes opérations</option><option>Bien</option><option>Loyer</option><option>Charge</option><option>Entretien</option><option>Contrat</option><option>Reversement</option></select></label>
             <label>Format<select value={filters.format} onChange={updateFilter("format")}><option>PDF</option><option>Excel</option><option>Impression</option></select></label>
@@ -20107,9 +20168,9 @@ function HistoryAdmin({ auditRows = [], usersList = [] }) {
       item.detail,
     ])
     : [
-      ["Aïssata Diarra", "Enregistrement de paiement", "Finance", "28/05/2026", "07:52", "Solde 400 000 FCFA", "Paiement 450 000 FCFA"],
-      ["Issa Maïga", "Génération de document", "Contrats", "27/05/2026", "18:22", "Brouillon", "Contrat généré"],
-      ["Mariam Traoré", "Modification", "Biens", "27/05/2026", "15:40", "Réservé", "Loué"],
+      ["Niaro Admin", "Enregistrement de paiement", "Finance", "28/05/2026", "07:52", "Solde 400 000 FCFA", "Paiement 450 000 FCFA"],
+      ["Aboubacar Sidiki Diallo", "Génération de document", "Contrats", "27/05/2026", "18:22", "Brouillon", "Contrat généré"],
+      ["Makan Sissoko", "Modification", "Biens", "27/05/2026", "15:40", "Réservé", "Loué"],
       [usersList[0]?.name ?? "Admin", "Annulation de reçu", "Finance", "18/05/2026", "12:01", "Reçu généré", "Reçu annulé"],
     ];
   return (
@@ -21138,7 +21199,7 @@ function DocumentActions() {
   );
 }
 
-function ProspectFormModal({ sequence = prospects.length + 1, onSave, onClose }) {
+function ProspectFormModal({ sequence = prospects.length + 1, agentOptions = defaultAgentNames, currentUserName = defaultCommercialName, onSave, onClose }) {
   const generatedId = useMemo(() => `PROS-2026-${String(sequence).padStart(3, "0")}`, [sequence]);
   const [values, setValues] = useState({
     id: generatedId,
@@ -21153,7 +21214,7 @@ function ProspectFormModal({ sequence = prospects.length + 1, onSave, onClose })
     budget: "750 000 FCFA",
     delay: "30 jours",
     requirements: "Séjour lumineux, parking sécurisé, proximité école.",
-    agent: "Mariam Traoré",
+    agent: currentUserName,
     status: "Nouveau",
     next: "Appel de qualification",
     comment: "Prospect à qualifier puis orienter vers les biens disponibles.",
@@ -21265,10 +21326,7 @@ function ProspectFormModal({ sequence = prospects.length + 1, onSave, onClose })
           <div className="form-grid">
             <label>Agent responsable
               <select value={values.agent} onChange={update("agent")}>
-                <option>Mariam Traoré</option>
-                <option>Aïssata Diarra</option>
-                <option>Issa Maïga</option>
-                <option>Cheick Camara</option>
+                <AgentOptions options={agentOptions} />
               </select>
             </label>
             <label>Statut initial
@@ -21468,11 +21526,11 @@ function ProspectNeedModal({ prospect, onSave, onClose }) {
   );
 }
 
-function ProspectNextActionModal({ prospect, onSave, onClose }) {
+function ProspectNextActionModal({ prospect, agentOptions = defaultAgentNames, currentUserName = defaultCommercialName, onSave, onClose }) {
   const [values, setValues] = useState({
     type: "Appel",
     date: "22/06/2026",
-    responsible: prospect.agent ?? "Mariam Traoré",
+    responsible: prospect.agent ?? currentUserName,
     comment: prospect.next ?? "Relancer le prospect sur les biens proposés.",
   });
   const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
@@ -21494,7 +21552,7 @@ function ProspectNextActionModal({ prospect, onSave, onClose }) {
           <div className="form-grid">
             <label>Type d'action<select value={values.type} onChange={update("type")}><option>Appel</option><option>WhatsApp</option><option>Visite</option><option>Envoi proposition</option><option>Relance</option></select></label>
             <label>Date prévue<input type="date" value={values.date} onChange={update("date")} /></label>
-            <label>Responsable<select value={values.responsible} onChange={update("responsible")}><option>Mariam Traoré</option><option>Aïssata Diarra</option><option>Issa Maïga</option><option>Cheick Camara</option></select></label>
+            <label>Responsable<select value={values.responsible} onChange={update("responsible")}><AgentOptions options={agentOptions} /></select></label>
             <label className="full">Commentaire<textarea value={values.comment} onChange={update("comment")} /></label>
           </div>
         </div>
@@ -21507,7 +21565,7 @@ function ProspectNextActionModal({ prospect, onSave, onClose }) {
   );
 }
 
-function ProspectVisitModal({ prospect, proposal, property, prospectsList = prospects, propertiesList = [], onSave, onClose }) {
+function ProspectVisitModal({ prospect, proposal, property, prospectsList = prospects, propertiesList = [], agentOptions = defaultAgentNames, currentUserName = defaultCommercialName, onSave, onClose }) {
   const prospectOptions = prospectsList.length ? prospectsList : [];
   const initialProspect = prospect ?? prospectOptions[0] ?? null;
   const propertyOptions = propertiesList.filter((item) => !item.archived);
@@ -21526,7 +21584,7 @@ function ProspectVisitModal({ prospect, proposal, property, prospectsList = pros
     property: proposedProperty?.name ?? "",
     date: "2026-06-20",
     time: "10:00",
-    agent: initialProspect?.agent ?? "Mariam Traoré",
+    agent: initialProspect?.agent ?? currentUserName,
     meetingPlace: "Agence E.K immo - Niamakoro",
     priority: "Normale",
     internalComment: "Confirmer la disponibilité du client avant déplacement.",
@@ -21603,7 +21661,7 @@ function ProspectVisitModal({ prospect, proposal, property, prospectsList = pros
           <div className="form-grid">
             <label>Date<input type="date" value={visit.date} onChange={update("date")} /></label>
             <label>Heure<input type="time" value={visit.time} onChange={update("time")} /></label>
-            <label>Agent responsable<select value={visit.agent} onChange={update("agent")}><option>Mariam Traoré</option><option>Aïssata Diarra</option><option>Issa Maïga</option><option>Cheick Camara</option></select></label>
+            <label>Agent responsable<select value={visit.agent} onChange={update("agent")}><AgentOptions options={agentOptions} /></select></label>
             <label>Lieu de rendez-vous<input value={visit.meetingPlace} onChange={update("meetingPlace")} /></label>
             <label>Priorité<select value={visit.priority} onChange={update("priority")}><option>Normale</option><option>Urgente</option><option>Critique</option></select></label>
             <label className="full">Commentaire interne<textarea value={visit.internalComment} onChange={update("internalComment")} /></label>
@@ -22147,13 +22205,13 @@ function ChargeMaintenanceModal({ charge, maintenancesList = maintenances, onLin
   );
 }
 
-function ChargeHistoryModal({ charge, onClose }) {
+function ChargeHistoryModal({ charge, currentUserName = defaultOperatorName, onClose }) {
   const entries = [
-    { date: charge.date, user: charge.createdBy ?? "Aissata Diarra", action: "Creation", comment: charge.description },
-    { date: "24/06/2026", user: charge.modifiedBy ?? "Aissata Diarra", action: "Modification", comment: "Mise a jour des informations de suivi." },
+    { date: charge.date, user: charge.createdBy ?? currentUserName, action: "Creation", comment: charge.description },
+    { date: "24/06/2026", user: charge.modifiedBy ?? currentUserName, action: "Modification", comment: "Mise a jour des informations de suivi." },
     ...(charge.validatedBy && charge.validationDate ? [{ date: charge.validationDate, user: charge.validatedBy, action: "Validation", comment: charge.validationComment ?? "Charge validee." }] : []),
-    ...(charge.proofStatus && charge.proofStatus !== "Manquant" ? [{ date: "25/06/2026", user: "Aissata Diarra", action: "Justificatif ajoute", comment: charge.proof }] : []),
-    ...(charge.history ?? []).map((item) => ({ date: "25/06/2026", user: "Aissata Diarra", action: item.split(" : ")[0] || "Suivi", comment: item })),
+    ...(charge.proofStatus && charge.proofStatus !== "Manquant" ? [{ date: "25/06/2026", user: charge.modifiedBy ?? currentUserName, action: "Justificatif ajoute", comment: charge.proof }] : []),
+    ...(charge.history ?? []).map((item) => ({ date: "25/06/2026", user: charge.modifiedBy ?? currentUserName, action: item.split(" : ")[0] || "Suivi", comment: item })),
   ];
 
   return (
@@ -22180,7 +22238,7 @@ function ChargeHistoryModal({ charge, onClose }) {
   );
 }
 
-function ChargeFormModal({ title, context = null, propertiesList = [], maintenancesList = maintenances, chargesList = charges, onUpload, onSave, onClose }) {
+function ChargeFormModal({ title, context = null, propertiesList = [], maintenancesList = maintenances, chargesList = charges, agentOptions = defaultAgentNames, currentUserName = defaultOperatorName, onUpload, onSave, onClose }) {
   const chargeCreationTypes = ["Nettoyage", "Réparation", "Plomberie", "Électricité", "Peinture", "Publicité", "Entretien", "Autre"];
   const modalChargeId = title.match(/CHG-\d{4}-\d{3}/)?.[0];
   const editedCharge = context?.charge ?? chargesList.find((charge) => charge.id === modalChargeId) ?? null;
@@ -22201,7 +22259,7 @@ function ChargeFormModal({ title, context = null, propertiesList = [], maintenan
     status: editedCharge?.status && ["Brouillon", "À valider", "Validée", "Payée"].includes(editedCharge.status) ? editedCharge.status : "À valider",
     propertyCode: initialProperty.code,
     linkedMaintenance: editedCharge?.linkedMaintenance ?? "Non lié",
-    agent: editedCharge?.agent ?? "Aïssata Diarra",
+    agent: editedCharge?.agent ?? currentUserName,
     payer: editedCharge?.payer && chargePayers.includes(editedCharge.payer) ? editedCharge.payer : "Propriétaire",
     invoiceRef: editedCharge?.paymentRef && editedCharge.paymentRef !== "À compléter" ? editedCharge.paymentRef : "",
     proofLabel: editedCharge?.proof ?? "",
@@ -22268,7 +22326,7 @@ function ChargeFormModal({ title, context = null, propertiesList = [], maintenan
         ownerCollection: values.payer === "Suivi interne uniquement" && isMaintenanceOnlyProperty(selectedProperty),
         createdBy: values.agent,
         modifiedBy: values.agent,
-        validatedBy: validate ? "Admin E.K immo" : "À confirmer",
+        validatedBy: validate ? currentUserName : "À confirmer",
         validationDate: validate ? "23/06/2026" : "À valider",
         history: [
           editedCharge ? `Modifiée le ${fromDateInputValue(values.date)}` : `Créée le ${fromDateInputValue(values.date)}`,
@@ -22311,7 +22369,7 @@ function ChargeFormModal({ title, context = null, propertiesList = [], maintenan
             <label>Propriétaire<input value={selectedProperty.owner} readOnly /></label>
             <label>Locataire<input value={tenantLabel} readOnly /></label>
             <label>Entretien lié<select value={values.linkedMaintenance} onChange={update("linkedMaintenance")}><option>Non lié</option>{relatedMaintenances.map((maintenance) => <option key={`${maintenance.reference ?? maintenance.type}-${maintenance.date}`} value={maintenance.type}>{maintenance.type} · {maintenance.date}</option>)}</select></label>
-            <label>Agent responsable<select value={values.agent} onChange={update("agent")}><option>Aïssata Diarra</option><option>Mariam Traoré</option><option>Issa Maïga</option><option>Cheick Camara</option></select></label>
+            <label>Agent responsable<select value={values.agent} onChange={update("agent")}><AgentOptions options={agentOptions} /></select></label>
           </div>
         </div>
 
@@ -22469,7 +22527,7 @@ function TenantFormModal({ tenant, property, propertiesList = [], onUpload, onSa
   );
 }
 
-function NewTenantFormModal({ sequence = 1, propertiesList = [], onUpload, onSave, onClose }) {
+function NewTenantFormModal({ sequence = 1, propertiesList = [], agentOptions = defaultAgentNames, currentUserName = defaultOperatorName, onUpload, onSave, onClose }) {
   const propertyOptions = getActiveProperties(propertiesList);
   const firstProperty = propertyOptions[0] ?? makeEmptyProperty();
   const suggestedId = makeDocumentNumber("LOC", sequence);
@@ -22484,7 +22542,7 @@ function NewTenantFormModal({ sequence = 1, propertiesList = [], onUpload, onSav
     identity: "",
     propertyCode: firstProperty.code ?? "",
     entryDate: "2026-06-22",
-    agent: "Aïssata Diarra",
+    agent: currentUserName,
     rent: firstProperty.price ?? "",
     deposit: firstProperty.deposit ?? "",
     periodicity: "Mensuelle",
@@ -22594,7 +22652,7 @@ function NewTenantFormModal({ sequence = 1, propertiesList = [], onUpload, onSav
             <label>Bien occupé<select value={values.propertyCode} onChange={updateProperty}>{propertyOptions.map((property) => <option key={property.code} value={property.code}>{property.name}</option>)}{!propertyOptions.length && <option value="">Aucun bien disponible</option>}</select></label>
             <label>Propriétaire<input value={selectedProperty.owner} readOnly /></label>
             <label>Date d'entrée<input type="date" value={values.entryDate} onChange={update("entryDate")} /></label>
-            <label>Agent responsable<select value={values.agent} onChange={update("agent")}><option>Aïssata Diarra</option><option>Mariam Traoré</option><option>Issa Maïga</option><option>Cheick Camara</option></select></label>
+            <label>Agent responsable<select value={values.agent} onChange={update("agent")}><AgentOptions options={agentOptions} /></select></label>
           </div>
         </div>
         {!propertyOptions.length && <p className="empty-state-inline">Ajoutez d'abord un bien avant de créer un locataire rattaché.</p>}
@@ -22680,10 +22738,10 @@ function PaymentCancelModal({ payment, onConfirm, onClose }) {
   );
 }
 
-function getPaymentHistoryEntries(payment) {
+function getPaymentHistoryEntries(payment, currentUserName = defaultOperatorName) {
   const baseEntries = [
-    { action: "Paiement créé", user: "Aïssata Diarra", date: payment.date, detail: `${payment.paid} enregistré pour ${payment.period}.`, oldValue: "-", newValue: payment.status },
-    ...(payment.receipt && payment.receipt !== "Non généré" ? [{ action: "Reçu généré", user: "Aïssata Diarra", date: payment.date, detail: payment.receipt, oldValue: "Aucun reçu", newValue: payment.receipt }] : []),
+    { action: "Paiement créé", user: currentUserName, date: payment.date, detail: `${payment.paid} enregistré pour ${payment.period}.`, oldValue: "-", newValue: payment.status },
+    ...(payment.receipt && payment.receipt !== "Non généré" ? [{ action: "Reçu généré", user: currentUserName, date: payment.date, detail: payment.receipt, oldValue: "Aucun reçu", newValue: payment.receipt }] : []),
   ];
   const customEntries = Array.isArray(payment.history) ? payment.history : [];
   return [...customEntries, ...baseEntries].map((entry, index) => (
@@ -22693,8 +22751,8 @@ function getPaymentHistoryEntries(payment) {
   ));
 }
 
-function PaymentHistoryModal({ payment, onClose }) {
-  const entries = getPaymentHistoryEntries(payment);
+function PaymentHistoryModal({ payment, currentUserName = defaultOperatorName, onClose }) {
+  const entries = getPaymentHistoryEntries(payment, currentUserName);
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
@@ -23086,7 +23144,7 @@ function ArrearsRegularizedModal({ row, onConfirm, onClose }) {
   );
 }
 
-function ArrearsHistoryModal({ row, relancesList = [], promise, history = [], onClose }) {
+function ArrearsHistoryModal({ row, relancesList = [], promise, history = [], currentUserName = defaultOperatorName, onClose }) {
   const linkedRelances = getLinkedRentRelances(row, relancesList);
   const rows = [
     ...history,
@@ -23094,7 +23152,7 @@ function ArrearsHistoryModal({ row, relancesList = [], promise, history = [], on
       date: relance.date,
       channel: relance.channel,
       comment: relance.comment,
-      user: "Aïssata Diarra",
+      user: currentUserName,
       nextAction: relance.nextDate,
       status: relance.status ?? "Relancé",
     })),
@@ -23102,7 +23160,7 @@ function ArrearsHistoryModal({ row, relancesList = [], promise, history = [], on
       date: "24/06/2026",
       channel: "Promesse",
       comment: `${promise.amount} promis le ${fromDateInputValue(promise.promisedDate)}.`,
-      user: "Aïssata Diarra",
+      user: currentUserName,
       nextAction: promise.nextReminder,
       status: promise.status,
     }] : []),
@@ -23122,7 +23180,7 @@ function ArrearsHistoryModal({ row, relancesList = [], promise, history = [], on
         </div>
         <DataTable
           columns={["Date", "Canal", "Commentaire", "Utilisateur", "Prochaine action", "Statut"]}
-          rows={(rows.length ? rows : [{ date: "24/05/2026", channel: "SMS + appel", comment: "Solde en attente de règlement.", user: "Aïssata Diarra", nextAction: "Lettre de relance", status: "En retard" }]).map((item) => [
+          rows={(rows.length ? rows : [{ date: "24/05/2026", channel: "SMS + appel", comment: "Solde en attente de règlement.", user: currentUserName, nextAction: "Lettre de relance", status: "En retard" }]).map((item) => [
             item.date,
             item.channel,
             item.comment,
@@ -23617,7 +23675,7 @@ function TenantReceiptModal({ tenant, property, payment, paymentsList = paymentR
   );
 }
 
-function MissingDocumentModal({ request, onSave, onClose }) {
+function MissingDocumentModal({ request, agentOptions = defaultAgentNames, currentUserName = defaultOperatorName, onSave, onClose }) {
   const fallbackRequest = request ?? {
     id: "DOCREQ-DEMO",
     dossier: "LOC-2026-018",
@@ -23632,7 +23690,7 @@ function MissingDocumentModal({ request, onSave, onClose }) {
     channel: "WhatsApp",
     comment: `Demander ${fallbackRequest.document.toLowerCase()} pour compléter le dossier ${fallbackRequest.dossier}.`,
     dueDate: "2026-06-28",
-    responsible: "Aïssata Diarra",
+    responsible: currentUserName,
   });
   const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
   const submit = (importNow = false) => onSave({ request: fallbackRequest, values, importNow });
@@ -23674,7 +23732,7 @@ function MissingDocumentModal({ request, onSave, onClose }) {
           <div className="form-grid compact-form">
             <label>Canal de demande<select value={values.channel} onChange={update("channel")}><option>Appel</option><option>WhatsApp</option><option>Email</option><option>Physique</option></select></label>
             <label>Date limite<input type="date" value={values.dueDate} onChange={update("dueDate")} /></label>
-            <label>Responsable de suivi<select value={values.responsible} onChange={update("responsible")}><option>Aïssata Diarra</option><option>Mariam Traoré</option><option>Issa Maïga</option><option>Cheick Camara</option></select></label>
+            <label>Responsable de suivi<select value={values.responsible} onChange={update("responsible")}><AgentOptions options={agentOptions} /></select></label>
             <label className="full">Commentaire<textarea value={values.comment} onChange={update("comment")} /></label>
           </div>
         </div>
@@ -23917,13 +23975,13 @@ function ArchivePreviewModal({ record, onClose, onAction }) {
   );
 }
 
-function DashboardRentReminderModal({ rows = [], relancesList = [], onSave, onClose }) {
+function DashboardRentReminderModal({ rows = [], relancesList = [], agentOptions = defaultAgentNames, currentUserName = defaultOperatorName, onSave, onClose }) {
   const [selectedKeys, setSelectedKeys] = useState(() => rows.map((row) => `${row.tenant}-${row.property}-${row.period}`));
   const [values, setValues] = useState({
     channel: "WhatsApp",
     comment: "Bonjour, votre loyer présente un retard. Merci de régulariser ou de confirmer une date de paiement.",
     nextDate: "2026-06-24",
-    responsible: "Aïssata Diarra",
+    responsible: currentUserName,
   });
   const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
   const toggleRow = (key) => {
@@ -23989,7 +24047,7 @@ function DashboardRentReminderModal({ rows = [], relancesList = [], onSave, onCl
           <div className="form-grid compact-form">
             <label>Canal<select value={values.channel} onChange={update("channel")}><option>Appel</option><option>WhatsApp</option><option>SMS</option><option>Email</option><option>Visite</option></select></label>
             <label>Date de prochaine relance<input type="date" value={values.nextDate} onChange={update("nextDate")} /></label>
-            <label>Responsable de suivi<select value={values.responsible} onChange={update("responsible")}><option>Aïssata Diarra</option><option>Mariam Traoré</option><option>Issa Maïga</option><option>Cheick Camara</option></select></label>
+            <label>Responsable de suivi<select value={values.responsible} onChange={update("responsible")}><AgentOptions options={agentOptions} /></select></label>
             <label className="full">Message / commentaire<textarea value={values.comment} onChange={update("comment")} /></label>
           </div>
         </div>
@@ -24533,7 +24591,7 @@ function PaymentRegistrationModal({ context, paymentsList = paymentRecords, rent
   );
 }
 
-function UrgentMaintenanceModal({ context, propertiesList = [], onUpload, onSave, onClose }) {
+function UrgentMaintenanceModal({ context, propertiesList = [], agentOptions = defaultAgentNames, currentUserName = defaultOperatorName, onUpload, onSave, onClose }) {
   const propertyOptions = getActiveProperties(propertiesList);
   const baseProperty = context?.property
     ?? getPropertyByName(context?.maintenance?.property, propertyOptions)
@@ -24545,7 +24603,7 @@ function UrgentMaintenanceModal({ context, propertiesList = [], onUpload, onSave
     type: baseMaintenance.type ?? "Plomberie",
     description: baseMaintenance.description ?? baseMaintenance.note ?? "Fuite d'eau signalée. Intervention urgente à coordonner avec le prestataire.",
     priority: baseMaintenance.priority ?? "Critique",
-    manager: baseMaintenance.manager ?? "Cheick Camara",
+    manager: baseMaintenance.manager ?? currentUserName,
     provider: baseMaintenance.provider ?? baseProperty.serviceProvider?.company ?? "",
     date: baseMaintenance.date ?? "21/06/2026",
     cost: baseMaintenance.cost ?? "95 000 FCFA",
@@ -24556,7 +24614,6 @@ function UrgentMaintenanceModal({ context, propertiesList = [], onUpload, onSave
   const selectedProperty = getPropertyByName(values.property, propertyOptions) ?? baseProperty;
   const interventionTypes = ["Plomberie", "Électricité", "Nettoyage", "Réparation", "Autre"];
   const priorities = ["Normale", "Urgente", "Critique"];
-  const managers = ["Mariam Traoré", "Aïssata Diarra", "Issa Maïga", "Cheick Camara"];
   const payers = ["Agence", "Propriétaire", "Locataire", "À déterminer"];
   const canSave = Boolean(selectedProperty.code || baseMaintenance.property);
   const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
@@ -24621,7 +24678,7 @@ function UrgentMaintenanceModal({ context, propertiesList = [], onUpload, onSave
             <label>Type d'intervention<select value={values.type} onChange={update("type")}>{interventionTypes.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label>Priorité<select value={values.priority} onChange={update("priority")}>{priorities.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label>Date prévue<input value={values.date} onChange={update("date")} placeholder="JJ/MM/AAAA" /></label>
-            <label>Responsable interne<select value={values.manager} onChange={update("manager")}>{managers.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <label>Responsable interne<select value={values.manager} onChange={update("manager")}><AgentOptions options={agentOptions} /></select></label>
             <label>Prestataire<input value={values.provider} onChange={update("provider")} placeholder="Prestataire non confirmé" /></label>
             <label className="full">Description du problème<textarea value={values.description} onChange={update("description")} /></label>
           </div>
@@ -24662,8 +24719,8 @@ function UrgentMaintenanceModal({ context, propertiesList = [], onUpload, onSave
   );
 }
 
-function MaintenanceResponsibleModal({ maintenance, onSave, onClose }) {
-  const managers = ["Mariam Traoré", "Aïssata Diarra", "Issa Maïga", "Cheick Camara"];
+function MaintenanceResponsibleModal({ maintenance, agentOptions = defaultAgentNames, onSave, onClose }) {
+  const managers = agentOptions.length ? agentOptions : defaultAgentNames;
   const [values, setValues] = useState({
     manager: maintenance.manager ?? managers[0],
     reason: "Réaffectation pour disponibilité terrain.",
@@ -24685,7 +24742,7 @@ function MaintenanceResponsibleModal({ maintenance, onSave, onClose }) {
         </div>
         <div className="form-grid compact-form">
           <label>Responsable actuel<input value={maintenance.manager} readOnly /></label>
-          <label>Nouveau responsable<select value={values.manager} onChange={update("manager")}>{managers.map((manager) => <option key={manager}>{manager}</option>)}</select></label>
+          <label>Nouveau responsable<select value={values.manager} onChange={update("manager")}><AgentOptions options={managers} /></select></label>
           <label>Notifier<select value={values.notify} onChange={update("notify")}><option>Oui</option><option>Non</option></select></label>
           <label className="full">Motif<textarea value={values.reason} onChange={update("reason")} /></label>
         </div>
@@ -25122,7 +25179,7 @@ function MaintenanceCancelModal({ maintenance, onSave, onClose }) {
   );
 }
 
-function MaintenanceFormModal({ context, propertiesList = [], onUpload, onSave, onClose }) {
+function MaintenanceFormModal({ context, propertiesList = [], agentOptions = defaultAgentNames, currentUserName = defaultOperatorName, onUpload, onSave, onClose }) {
   const propertyOptions = getActiveProperties(propertiesList);
   const baseProperty = context?.property
     ?? getPropertyByName(context?.maintenance?.property, propertyOptions)
@@ -25137,7 +25194,7 @@ function MaintenanceFormModal({ context, propertiesList = [], onUpload, onSave, 
   const [description, setDescription] = useState(baseMaintenance?.note ?? "Décrire le besoin, la zone concernée et le résultat attendu.");
   const [priority, setPriority] = useState(baseMaintenance?.priority ?? "Normale");
   const [date, setDate] = useState(baseMaintenance?.date ?? "22/06/2026");
-  const [manager, setManager] = useState(baseMaintenance?.manager ?? "Mariam Traoré");
+  const [manager, setManager] = useState(baseMaintenance?.manager ?? currentUserName);
   const [provider, setProvider] = useState(suggestedProvider);
   const [estimatedCost, setEstimatedCost] = useState(baseMaintenance?.cost ?? "95 000 FCFA");
   const [realCost, setRealCost] = useState(baseMaintenance?.realCost ?? "");
@@ -25152,7 +25209,6 @@ function MaintenanceFormModal({ context, propertiesList = [], onUpload, onSave, 
   const [afterPhotoUploads, setAfterPhotoUploads] = useState(baseMaintenance?.afterPhotoUploads ?? []);
   const maintenanceTypes = ["Nettoyage", "Plomberie", "Électricité", "Peinture", "Réparation", "Inspection", "Autre"];
   const priorities = ["Normale", "Urgente", "Critique"];
-  const managers = ["Mariam Traoré", "Aïssata Diarra", "Issa Maïga", "Cheick Camara"];
   const payers = ["Agence", "Propriétaire", "Locataire", "À déterminer"];
   const statuses = ["À prévoir", "Planifié", "En cours", "Validé", "Terminé", "Annulé"];
   const canSave = Boolean(selectedProperty.code || baseMaintenance?.property);
@@ -25212,7 +25268,7 @@ function MaintenanceFormModal({ context, propertiesList = [], onUpload, onSave, 
             <label>Type d'entretien<select value={type} onChange={(event) => setType(event.target.value)}>{maintenanceTypes.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label>Priorité<select value={priority} onChange={(event) => setPriority(event.target.value)}>{priorities.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label>Date prévue<input value={date} onChange={(event) => setDate(event.target.value)} /></label>
-            <label>Responsable interne<select value={manager} onChange={(event) => setManager(event.target.value)}>{managers.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <label>Responsable interne<select value={manager} onChange={(event) => setManager(event.target.value)}><AgentOptions options={agentOptions} /></select></label>
             <label>Prestataire, si connu<input value={provider} onChange={(event) => setProvider(event.target.value)} placeholder="À confirmer" /></label>
             <label>Statut<select value={status} onChange={(event) => setStatus(event.target.value)}>{statuses.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label className="full">Description du besoin<textarea value={description} onChange={(event) => setDescription(event.target.value)} /></label>
@@ -25588,7 +25644,7 @@ function getSignedContractFileName(contract = {}) {
   return contract.signedFileName || contract.signedDocument || `Contrat signé ${contract.number}.pdf`;
 }
 
-function ContractDocumentModal({ contract, action, onUpload, onImport, onSignedAction, onClose }) {
+function ContractDocumentModal({ contract, action, currentUserName = defaultManagerName, onUpload, onImport, onSignedAction, onClose }) {
   const [workingContract, setWorkingContract] = useState(contract);
   const [mode, setMode] = useState(hasSignedContractDocument(contract) ? "view" : "import");
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -25597,7 +25653,7 @@ function ContractDocumentModal({ contract, action, onUpload, onImport, onSignedA
     fileType: "PDF",
     signatureDate: "21/06/2026",
     importDate: "21/06/2026",
-    importedBy: "Aïssata Diarra",
+    importedBy: currentUserName,
     signers: `${contract.owner}, ${contract.client}, E.K immo`,
     observation: "Contrat signé par les parties et archivé dans le dossier contractuel.",
     upload: null,
@@ -25677,7 +25733,7 @@ function ContractDocumentModal({ contract, action, onUpload, onImport, onSignedA
             <div className="simple-list signed-contract-details">
               <p><span>Nom du fichier</span><strong>{fileName}</strong></p>
               <p><span>Date d’import</span><strong>{workingContract.signedImportedAt || workingContract.signedAt || "21/06/2026"}</strong></p>
-              <p><span>Importé par</span><strong>{workingContract.signedImportedBy || "Aïssata Diarra"}</strong></p>
+              <p><span>Importé par</span><strong>{workingContract.signedImportedBy || currentUserName}</strong></p>
               <p><span>Signataires</span><strong>{workingContract.signedSigners || `${workingContract.owner}, ${workingContract.client}, E.K immo`}</strong></p>
               {workingContract.signedObservation && <p><span>Observation</span><strong>{workingContract.signedObservation}</strong></p>}
             </div>
@@ -26119,6 +26175,8 @@ function PropertyFormModal({
   ownersList = owners,
   tenantsList = tenants,
   ownerPrefill = "",
+  agentOptions = defaultAgentNames,
+  currentUserName = defaultOperatorName,
   onUpload,
   onSave,
   onClose,
@@ -26159,7 +26217,7 @@ function PropertyFormModal({
     unitsCount: String(property?.structure?.blocks?.reduce((sum, block) => sum + block.units, 0) ?? 12),
     availableUnits: String(property?.structure?.blocks?.reduce((sum, block) => sum + block.available, 0) ?? 3),
     structureRef: property?.structureRef ?? "STR-KOR-2026",
-    agent: property?.agent ?? "Aïssata Diarra",
+    agent: property?.agent ?? currentUserName,
     rooms: String(property?.rooms ?? 4),
     bedrooms: String(property?.bedrooms ?? 3),
     baths: String(property?.baths ?? 2),
@@ -26371,7 +26429,7 @@ function PropertyFormModal({
           <div className="form-grid compact-form">
             <label>Propriétaire<select value={sensitiveValues.owner} onChange={(event) => updateSensitiveValue("owner", event.target.value)}>{withCurrentOption("owner").map((option) => <option key={option}>{option}</option>)}</select></label>
             <label>Locataire actuel<select value={sensitiveValues.tenant} onChange={(event) => updateSensitiveValue("tenant", event.target.value)}>{withCurrentOption("tenant").map((option) => <option key={option}>{option}</option>)}</select></label>
-            <label>Agent responsable<select value={formValues.agent} onChange={updateValue("agent")}><option>Aïssata Diarra</option><option>Mariam Traoré</option><option>Issa Maïga</option><option>Cheick Camara</option></select></label>
+            <label>Agent responsable<select value={formValues.agent} onChange={updateValue("agent")}><AgentOptions options={agentOptions} /></select></label>
             <label>Mode de gestion financière<select value={sensitiveValues.financialMode} onChange={(event) => updateSensitiveValue("financialMode", event.target.value)}>{withCurrentOption("financialMode").map((option) => <option key={option}>{option}</option>)}</select></label>
             <label className="check-line full">
               <input type="checkbox" checked={hasFocalPoint} onChange={(event) => setHasFocalPoint(event.target.checked)} />
@@ -26639,4 +26697,3 @@ function Footer() {
 }
 
 export default App;
-
