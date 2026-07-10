@@ -1908,7 +1908,7 @@ a {
   background: var(--surface-soft);
 }
 
-.form-grid .money-input {
+.money-input {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1920,7 +1920,7 @@ a {
   background: var(--surface-soft);
 }
 
-.form-grid .money-input input {
+.money-input input {
   min-height: auto;
   border: 0;
   padding: 0;
@@ -1928,14 +1928,14 @@ a {
   font-weight: 800;
 }
 
-.form-grid .money-input b {
+.money-input b {
   flex: 0 0 auto;
   color: var(--muted);
   font-size: 0.82rem;
   font-weight: 850;
 }
 
-.form-grid .money-input.readonly {
+.money-input.readonly {
   background: #f4f7fb;
 }
 
@@ -4268,6 +4268,11 @@ td:last-child {
 
 .digital-table .digital-field textarea {
   min-height: 76px;
+}
+
+.digital-table .money-input input {
+  border: 0;
+  background: transparent;
 }
 
 .invoice-table th:first-child {

@@ -2532,6 +2532,8 @@ const commissions = [
   {
     id: "COM-2026-051",
     operation: "Location Villa Koulouba",
+    commissionType: "Gestion récurrente",
+    trigger: "Paiement loyer",
     property: "Villa Koulouba",
     owner: "Mamadou Keita",
     client: "Awa Traoré",
@@ -2542,6 +2544,7 @@ const commissions = [
     rate: "5%",
     fixedAmount: "",
     calculationBase: "Loyer encaissé",
+    appliedOn: "Loyer encaissé",
     commission: "137 500 FCFA",
     ownerNet: "2 612 500 FCFA",
     status: "Intégrée",
@@ -2552,6 +2555,8 @@ const commissions = [
   {
     id: "COM-2026-077",
     operation: "Vente parcelle Titibougou",
+    commissionType: "Vente",
+    trigger: "Vente signée",
     property: "Parcelle Titibougou",
     owner: "Youssouf Konaté",
     client: "Boubacar Samaké",
@@ -2562,6 +2567,7 @@ const commissions = [
     rate: "3%",
     fixedAmount: "",
     calculationBase: "Prix de vente",
+    appliedOn: "Prix de vente",
     commission: "1 140 000 FCFA",
     ownerNet: "36 860 000 FCFA",
     status: "À associer",
@@ -2571,7 +2577,9 @@ const commissions = [
   },
   {
     id: "COM-2026-088",
-    operation: "Mandat résidence ACI",
+    operation: "Entrée locataire résidence ACI",
+    commissionType: "Entrée locataire",
+    trigger: "Nouveau locataire",
     property: "Résidence ACI Baobab",
     owner: "Sira Coulibaly",
     client: "Oumar Sidibé",
@@ -2581,7 +2589,8 @@ const commissions = [
     mode: "50% du loyer",
     rate: "50%",
     fixedAmount: "",
-    calculationBase: "Loyer encaissé partiel",
+    calculationBase: "Premier loyer",
+    appliedOn: "Premier loyer",
     commission: "425 000 FCFA",
     ownerNet: "425 000 FCFA",
     status: "Suivi",
@@ -3434,6 +3443,87 @@ function parseNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+const commissionTypes = ["Entrée locataire", "Gestion récurrente", "Vente", "Forfait", "Autre"];
+const commissionTriggers = ["Nouveau locataire", "Paiement loyer", "Vente signée", "Mandat signé", "Montant manuel"];
+const commissionBaseOptions = ["Loyer mensuel", "Loyer encaissé", "Premier loyer", "Prix de vente", "Caution", "Montant manuel"];
+const recurringCommissionBases = ["Loyer encaissé", "Loyer mensuel", "Montant manuel"];
+const entryCommissionBases = ["Premier loyer", "Loyer mensuel", "Caution", "Montant manuel"];
+
+function getPercentValue(value, fallback = "0%") {
+  const match = String(value ?? "").match(/(\d+(?:[.,]\d+)?)\s*%/);
+  if (!match) return fallback;
+  const normalized = Number(match[1].replace(",", "."));
+  return Number.isFinite(normalized) ? `${normalized}%` : fallback;
+}
+
+function getPercentNumber(value) {
+  return Number(getPercentValue(value, "0%").replace("%", "")) || 0;
+}
+
+function getPropertyEntryCommissionRate(property = {}) {
+  if (property.entryCommissionRate) return getPercentValue(property.entryCommissionRate, "50%");
+  const text = String(property.commission ?? "");
+  if (text.includes("50") || normalizeSearch(text).includes("mise en location")) return getPercentValue(text, "50%");
+  return "50%";
+}
+
+function getPropertyRecurringCommissionRate(property = {}) {
+  if (property.recurringCommissionRate) return getPercentValue(property.recurringCommissionRate, "5%");
+  const text = String(property.commission ?? "");
+  if (text.includes("%") && !text.includes("50")) return getPercentValue(text, "5%");
+  return "5%";
+}
+
+function buildPropertyCommissionSummary(values = {}) {
+  const entryRate = values.entryCommissionRate ?? "50%";
+  const entryBase = values.entryCommissionBase ?? "Premier loyer";
+  const recurringRate = values.recurringCommissionRate ?? "5%";
+  const recurringBase = values.recurringCommissionBase ?? "Loyer encaissé";
+  return `Entrée locataire : ${entryRate} sur ${entryBase} · Gestion récurrente : ${recurringRate} sur ${recurringBase}`;
+}
+
+function getCommissionTypeLabel(commission = {}) {
+  if (commission.commissionType) return commission.commissionType;
+  const text = normalizeSearch(`${commission.operation ?? ""} ${commission.calculationBase ?? ""}`);
+  if (text.includes("vente")) return "Vente";
+  if (text.includes("mandat") || text.includes("premier loyer") || text.includes("entree")) return "Entrée locataire";
+  return "Gestion récurrente";
+}
+
+function getCommissionBaseLabel(commission = {}) {
+  return commission.appliedOn || commission.calculationBase || "Montant encaissé";
+}
+
+function makeEntryCommissionRecord({ property, tenant, sequence = 1 }) {
+  const baseAmount = parseFCFA(tenant?.rent ?? property?.price);
+  const rate = getPropertyEntryCommissionRate(property);
+  const commissionAmount = Math.round(baseAmount * getPercentNumber(rate) / 100);
+  return {
+    __created: true,
+    id: makeDocumentNumber("COM", 800 + sequence),
+    operation: `Entrée locataire ${tenant?.name ?? ""}`.trim(),
+    commissionType: "Entrée locataire",
+    trigger: "Nouveau locataire",
+    property: property?.name ?? tenant?.property ?? "Bien à renseigner",
+    owner: property?.owner ?? tenant?.owner ?? "Propriétaire à renseigner",
+    client: tenant?.name ?? "Locataire à renseigner",
+    period: getPeriodFromInputDate(tenant?.entryDate ?? "2026-06-22"),
+    date: fromDateInputValue(tenant?.entryDate ?? "2026-06-22"),
+    collected: formatFCFA(baseAmount),
+    mode: "Pourcentage",
+    rate,
+    fixedAmount: "",
+    calculationBase: property?.entryCommissionBase ?? "Premier loyer",
+    appliedOn: property?.entryCommissionBase ?? "Premier loyer",
+    commission: formatFCFA(commissionAmount),
+    ownerNet: formatFCFA(Math.max(baseAmount - commissionAmount, 0)),
+    status: "À facturer",
+    contractNumber: tenant?.contract?.startsWith("CON") ? tenant.contract : "",
+    paymentReference: "",
+    integratedInOwnerStatement: false,
+  };
+}
+
 function uniqueValues(values) {
   return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
 }
@@ -3579,7 +3669,7 @@ function buildRentRowsFromProperties(propertiesList = [], tenantsList = [], base
 
 function getCommissionAmountForProperty(property, payment) {
   const paidAmount = parseFCFA(payment?.paid ?? payment?.amountNow);
-  const configuredAmount = getCommissionAmountFromRule(property?.commission, paidAmount);
+  const configuredAmount = Math.round(paidAmount * getPercentNumber(getPropertyRecurringCommissionRate(property)) / 100);
   if (configuredAmount > 0) return configuredAmount;
 
   return Math.round(paidAmount * 0.05);
@@ -3594,20 +3684,24 @@ function buildCommissionRecords(propertiesList = [], paymentsList = [], baseComm
       if (!isPropertyAgencyCollected(property)) return null;
       const paidAmount = parseFCFA(payment.paid);
       const commissionAmount = getCommissionAmountForProperty(property, payment);
+      const recurringRate = getPropertyRecurringCommissionRate(property);
 
       return {
         id: makeDocumentNumber("COM", 300 + index + 1),
         operation: `Encaissement ${payment.property}`,
+        commissionType: "Gestion récurrente",
+        trigger: "Paiement loyer",
         property: payment.property,
         owner: payment.owner,
         client: payment.tenant,
         period: payment.period,
         date: payment.date,
         collected: formatFCFA(paidAmount),
-        mode: property?.commission?.includes("%") ? "Pourcentage" : "Montant fixe",
-        rate: property?.commission ?? "5%",
-        fixedAmount: property?.commission?.includes("%") ? "" : property?.commission ?? "",
-        calculationBase: "Paiement encaissé",
+        mode: "Pourcentage",
+        rate: recurringRate,
+        fixedAmount: "",
+        calculationBase: property?.recurringCommissionBase ?? "Loyer encaissé",
+        appliedOn: property?.recurringCommissionBase ?? "Loyer encaissé",
         commission: formatFCFA(commissionAmount),
         ownerNet: formatFCFA(Math.max(paidAmount - commissionAmount, 0)),
         status: "Calculée",
@@ -3618,10 +3712,15 @@ function buildCommissionRecords(propertiesList = [], paymentsList = [], baseComm
     })
     .filter(Boolean);
 
-  return [...generatedCommissions, ...baseCommissions].map((commission) => ({
+  const mergedCommissions = [...generatedCommissions, ...baseCommissions].map((commission) => ({
     ...commission,
     ...(overrides[getCommissionKey(commission)] ?? {}),
   }));
+  const existingKeys = new Set(mergedCommissions.map(getCommissionKey));
+  const createdCommissions = Object.entries(overrides)
+    .filter(([key, commission]) => commission?.__created && !existingKeys.has(key))
+    .map(([, commission]) => commission);
+  return [...createdCommissions, ...mergedCommissions];
 }
 
 function buildReversalRecords(ownersList = [], paymentsList = [], chargesList = [], commissionsList = [], baseReversals = [], overrides = {}) {
@@ -4121,8 +4220,11 @@ function calculateOwnerReversal(ownerName, paymentsList = paymentRecords, charge
   const ownerCommissions = commissionsList.filter((commission) => commission.owner === ownerName);
   const collectedFromPayments = ownerPayments.reduce((sum, payment) => sum + parseFCFA(payment.paid), 0);
   const collected = collectedFromPayments || parseFCFA(ownerData?.rent);
+  const fallbackCommission = ownerData?.commissionRate
+    ? Math.round(collected * getPercentNumber(ownerData.commissionRate) / 100)
+    : getCommissionAmountFromRule(ownerData?.commission, collected);
   const commissions = ownerCommissions.reduce((sum, commission) => sum + parseFCFA(commission.commission), 0)
-    || getCommissionAmountFromRule(ownerData?.commission, collected)
+    || fallbackCommission
     || (collected > 0 ? Math.round(collected * 0.05) : 0);
   const chargesAmount = ownerCharges.reduce((sum, charge) => sum + parseFCFA(charge.amount ?? charge.charges), 0)
     || parseFCFA(ownerData?.charges);
@@ -6839,6 +6941,16 @@ function App() {
 
     setSelectedProperty(nextProperty);
 
+    const entryCommission = makeEntryCommissionRecord({
+      property: nextProperty,
+      tenant: savedTenant,
+      sequence: Object.keys(commissionOverrides).length + 1,
+    });
+    setCommissionOverrides((current) => ({
+      ...current,
+      [getCommissionKey(entryCommission)]: entryCommission,
+    }));
+
     if (createContract) {
       setModal("Créer contrat");
       return;
@@ -7461,6 +7573,17 @@ function App() {
       };
     });
 
+    const commissionProperty = { ...selectedProperty, ...propertyPatch };
+    const entryCommission = makeEntryCommissionRecord({
+      property: commissionProperty,
+      tenant: nextTenantProfile,
+      sequence: Object.keys(commissionOverrides).length + 1,
+    });
+    setCommissionOverrides((current) => ({
+      ...current,
+      [getCommissionKey(entryCommission)]: entryCommission,
+    }));
+
     if (nextTenantProfile.id && !tenants.some((tenant) => tenant.id === nextTenantProfile.id || tenant.name === nextTenantProfile.name)) {
       setCreatedTenants((current) => {
         if (current.some((tenant) => tenant.id === nextTenantProfile.id || tenant.name === nextTenantProfile.name)) return current;
@@ -7611,7 +7734,9 @@ function App() {
       nextDueDate: values.nextDueDate,
       amount: values.amount,
       deposit: values.deposit,
-      commission: values.commission,
+      commissionRate: values.commissionRate,
+      commissionBase: values.commissionBase,
+      commission: `${values.commissionRate} sur ${values.commissionBase}`,
       financialMode: values.financialMode,
       specialTerms: values.specialTerms,
       model: values.model,
@@ -7633,7 +7758,9 @@ function App() {
       end: values.newEnd,
       amount: values.newAmount || contract.amount,
       deposit: values.newDeposit || contract.deposit,
-      commission: values.newCommission || contract.commission,
+      commissionRate: values.newCommissionRate,
+      commissionBase: values.newCommissionBase,
+      commission: `${values.newCommissionRate} sur ${values.newCommissionBase}`,
       renewalModel: values.model,
       renewalTerms: values.terms,
       amendmentGenerated: values.generateAmendment,
@@ -8306,13 +8433,16 @@ function App() {
     const baseAmount = parseFCFA(values.calculationBaseAmount || commission.collected);
     const rateAmount = values.mode === "Montant fixe"
       ? parseFCFA(values.fixedAmount)
-      : Math.round(baseAmount * (parseFloat(String(values.rate).replace(",", ".")) || 0) / 100);
+      : Math.round(baseAmount * getPercentNumber(values.rate) / 100);
     const nextCommission = {
       ...commission,
+      commissionType: values.commissionType,
+      trigger: values.trigger,
       mode: values.mode,
       rate: values.rate,
       fixedAmount: values.fixedAmount,
       calculationBase: values.calculationBase,
+      appliedOn: values.appliedOn,
       collected: values.calculationBaseAmount || commission.collected,
       commission: formatFCFA(rateAmount || parseFCFA(commission.commission)),
       ownerNet: formatFCFA(Math.max(baseAmount - (rateAmount || parseFCFA(commission.commission)), 0)),
@@ -11194,8 +11324,12 @@ function PropertySummary({ property, propertiesList = [], onOpenProperty, visits
               <strong>{property.deposit}</strong>
             </p>
             <p>
-              <span>Commission agence</span>
-              <strong>{property.commission}</strong>
+              <span>Commission d'entrée</span>
+              <strong>{getPropertyEntryCommissionRate(property)} sur {property.entryCommissionBase ?? "Premier loyer"}</strong>
+            </p>
+            <p>
+              <span>Commission permanente</span>
+              <strong>{getPropertyRecurringCommissionRate(property)} sur {property.recurringCommissionBase ?? "Loyer encaissé"}</strong>
             </p>
             <p>
               <span>Prochaine révision</span>
@@ -13588,11 +13722,13 @@ function getContractTimeline(contract, property, timelineEntries = []) {
 function getContractFinancials(contract, propertiesList = [], tenantsList = []) {
   const property = propertiesList.find((item) => item.name === contract.property);
   const tenant = tenantsList.find((item) => item.name === contract.client);
+  const commissionRate = contract.commissionRate ?? property?.recurringCommissionRate;
+  const commissionBase = contract.commissionBase ?? property?.recurringCommissionBase ?? "Loyer encaissé";
 
   return {
     amount: tenant?.rent ?? (property ? `${property.price} ${property.period}` : "À définir"),
     deposit: tenant?.deposit ?? property?.deposit ?? "À définir",
-    commission: property?.commission ?? "À définir",
+    commission: commissionRate ? `${commissionRate} sur ${commissionBase}` : contract.commission ?? property?.commission ?? "À définir",
   };
 }
 
@@ -15662,6 +15798,13 @@ function EditableCell({ value, onChange, label, multiline = false, readOnly = fa
   );
 }
 
+function calculateCommissionLineAmount(amount, rate) {
+  const baseAmount = parseFCFA(amount);
+  const rateValue = getPercentNumber(rate);
+  if (!baseAmount || !rateValue) return "";
+  return formatFCFA(Math.round(baseAmount * rateValue / 100));
+}
+
 function DigitalInvoice({ values, onChange, readOnly = false }) {
   const rows = getInvoiceLines(values);
   const updateLine = (rowId, field, value) => {
@@ -15801,7 +15944,14 @@ function DigitalReceipt({ values, onChange }) {
 function DigitalCommissionStatement({ values, onChange }) {
   const rows = getCommissionLines(values);
   const updateLine = (rowId, field, value) => {
-    onChange("commissionLines", rows.map((row) => (row.id === rowId ? { ...row, [field]: value } : row)));
+    onChange("commissionLines", rows.map((row) => {
+      if (row.id !== rowId) return row;
+      const nextRow = { ...row, [field]: value };
+      if (field === "encaisse" || field === "taux") {
+        nextRow.commission = calculateCommissionLineAmount(nextRow.encaisse, nextRow.taux);
+      }
+      return nextRow;
+    }));
   };
   const addLine = () => {
     onChange("commissionLines", [
@@ -15845,9 +15995,24 @@ function DigitalCommissionStatement({ values, onChange }) {
               <tr key={row.id}>
                 <td><EditableCell label={`Locataire ${index + 1}`} value={row.locataire} onChange={(value) => updateLine(row.id, "locataire", value)} /></td>
                 <td><EditableCell label={`Période ${index + 1}`} value={row.periode} onChange={(value) => updateLine(row.id, "periode", value)} /></td>
-                <td><EditableCell label={`Montant ${index + 1}`} value={row.encaisse} onChange={(value) => updateLine(row.id, "encaisse", value)} /></td>
-                <td><EditableCell label={`Taux ${index + 1}`} value={row.taux} onChange={(value) => updateLine(row.id, "taux", value)} /></td>
-                <td><EditableCell label={`Commission ${index + 1}`} value={row.commission} onChange={(value) => updateLine(row.id, "commission", value)} /></td>
+                <td>
+                  <label className="digital-field hide-label">
+                    <span className="sr-only">{`Montant ${index + 1}`}</span>
+                    <MoneyInput value={row.encaisse} onChange={(value) => updateLine(row.id, "encaisse", value)} />
+                  </label>
+                </td>
+                <td>
+                  <label className="digital-field hide-label">
+                    <span className="sr-only">{`Taux ${index + 1}`}</span>
+                    <PercentInput value={row.taux} onChange={(value) => updateLine(row.id, "taux", value)} placeholder="10" />
+                  </label>
+                </td>
+                <td>
+                  <label className="digital-field hide-label">
+                    <span className="sr-only">{`Commission ${index + 1}`}</span>
+                    <MoneyInput value={row.commission} onChange={(value) => updateLine(row.id, "commission", value)} />
+                  </label>
+                </td>
                 <td className="row-action-cell">
                   <button type="button" onClick={() => removeLine(row.id)} disabled={rows.length === 1} aria-label={`Supprimer la ligne ${index + 1}`}>
                     <XCircle size={17} />
@@ -17272,6 +17437,8 @@ function CommissionsView({ onAction, commissionsList = commissions }) {
     collected: commissionsList.reduce((sum, commission) => sum + parseFCFA(commission.collected), 0),
     agency: commissionsList.reduce((sum, commission) => sum + parseFCFA(commission.commission), 0),
     ownerNet: commissionsList.reduce((sum, commission) => sum + parseFCFA(commission.ownerNet), 0),
+    entryCount: commissionsList.filter((commission) => getCommissionTypeLabel(commission) === "Entrée locataire").length,
+    recurringCount: commissionsList.filter((commission) => getCommissionTypeLabel(commission) === "Gestion récurrente").length,
   }), [commissionsList]);
 
   if (detailOpen && currentSelected) {
@@ -17289,22 +17456,26 @@ function CommissionsView({ onAction, commissionsList = commissions }) {
           <Info label="Total encaissé" value={formatFCFA(commissionTotals.collected)} />
           <Info label="Commission agence" value={formatFCFA(commissionTotals.agency)} />
           <Info label="Net propriétaires" value={formatFCFA(commissionTotals.ownerNet)} />
+          <Info label="Entrées locataires" value={String(commissionTotals.entryCount)} />
+          <Info label="Récurrentes" value={String(commissionTotals.recurringCount)} />
         </div>
         <Panel title="Commissions agence">
           {commissionsList.length ? (
             <DataTable
               rows={commissionsList.map((row) => [
                 row.operation,
+                getCommissionTypeLabel(row),
                 row.property,
                 row.owner,
+                getCommissionBaseLabel(row),
+                row.rate || row.fixedAmount || row.mode,
                 row.collected,
-                row.mode,
                 row.commission,
                 row.ownerNet,
                 <Badge label={row.status ?? "Généré"} />,
                 <Button compact onClick={() => openCommission(row)}><Eye size={16} /> Fiche</Button>,
               ])}
-              columns={["Opération", "Bien", "Propriétaire", "Montant encaissé", "Mode", "Commission", "Net propriétaire", "Statut", "Action"]}
+              columns={["Opération", "Type", "Bien", "Propriétaire", "Élément appliqué", "Taux / forfait", "Base", "Commission", "Net propriétaire", "Statut", "Action"]}
             />
           ) : (
             <div className="empty-state compact-empty">
@@ -17328,16 +17499,18 @@ function CommissionProfilePanel({ commission, onAction }) {
           ["Montant encaissé", commission.collected],
           ["Commission agence", commission.commission],
           ["Net propriétaire", commission.ownerNet],
-          ["Mode", commission.mode],
+          ["Type", getCommissionTypeLabel(commission)],
         ]}
       />
       <div className="simple-list">
-        <p><span>Type d'opération</span><strong>{commission.operation.includes("Vente") ? "Vente" : "Location / gestion"}</strong></p>
+        <p><span>Type de commission</span><strong>{getCommissionTypeLabel(commission)}</strong></p>
+        <p><span>Déclencheur</span><strong>{commission.trigger ?? "Paiement loyer"}</strong></p>
         <p><span>Bien concerné</span><strong>{commission.property}</strong></p>
         <p><span>Propriétaire</span><strong>{commission.owner}</strong></p>
         <p><span>Montant de base</span><strong>{commission.collected}</strong></p>
         <p><span>Mode de calcul</span><strong>{commission.mode}</strong></p>
-        <p><span>Taux ou montant fixe</span><strong>{commission.mode}</strong></p>
+        <p><span>Élément appliqué</span><strong>{getCommissionBaseLabel(commission)}</strong></p>
+        <p><span>Taux ou montant fixe</span><strong>{commission.rate || commission.fixedAmount || commission.mode}</strong></p>
         <p><span>Commission calculée</span><strong>{commission.commission}</strong></p>
         <p><span>Montant net à reverser</span><strong>{commission.ownerNet}</strong></p>
         <p><span>Date</span><strong>{commission.date}</strong></p>
@@ -17392,11 +17565,14 @@ function CommissionDetailModal({ commission, payment, contract, onClose }) {
         </div>
         <div className="simple-list">
           <p><span>Opération liée</span><strong>{commission.operation}</strong></p>
+          <p><span>Type de commission</span><strong>{getCommissionTypeLabel(commission)}</strong></p>
+          <p><span>Déclencheur</span><strong>{commission.trigger ?? "Paiement loyer"}</strong></p>
           <p><span>Bien</span><strong>{commission.property}</strong></p>
           <p><span>Propriétaire</span><strong>{commission.owner}</strong></p>
           <p><span>Locataire / client</span><strong>{commission.client}</strong></p>
           <p><span>Montant encaissé</span><strong>{commission.collected}</strong></p>
           <p><span>Mode de calcul</span><strong>{commission.mode}</strong></p>
+          <p><span>Élément appliqué</span><strong>{getCommissionBaseLabel(commission)}</strong></p>
           <p><span>Taux ou montant fixe</span><strong>{commission.rate || commission.fixedAmount || commission.mode}</strong></p>
           <p><span>Commission calculée</span><strong>{commission.commission}</strong></p>
           <p><span>Montant net propriétaire</span><strong>{commission.ownerNet}</strong></p>
@@ -17415,10 +17591,13 @@ function CommissionDetailModal({ commission, payment, contract, onClose }) {
 
 function CommissionEditModal({ commission, onSave, onClose }) {
   const [values, setValues] = useState({
+    commissionType: getCommissionTypeLabel(commission),
+    trigger: commission.trigger ?? (getCommissionTypeLabel(commission) === "Entrée locataire" ? "Nouveau locataire" : "Paiement loyer"),
     mode: commission.mode === "Pourcentage" || commission.mode?.includes("%") ? "Pourcentage" : "Montant fixe",
     rate: commission.rate ?? (String(commission.mode).includes("%") ? commission.mode : "5%"),
     fixedAmount: commission.fixedAmount ?? "",
     calculationBase: commission.calculationBase ?? "Loyer encaissé",
+    appliedOn: getCommissionBaseLabel(commission),
     calculationBaseAmount: commission.collected,
     comment: commission.modificationComment ?? "",
     reason: commission.modificationReason ?? "",
@@ -17442,7 +17621,7 @@ function CommissionEditModal({ commission, onSave, onClose }) {
   };
   const estimatedCommission = values.mode === "Montant fixe"
     ? normalizeChargeAmount(values.fixedAmount)
-    : formatFCFA(Math.round(parseFCFA(values.calculationBaseAmount) * (parseFloat(String(values.rate).replace(",", ".")) || 0) / 100));
+    : formatFCFA(Math.round(parseFCFA(values.calculationBaseAmount) * getPercentNumber(values.rate) / 100));
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
@@ -17457,8 +17636,11 @@ function CommissionEditModal({ commission, onSave, onClose }) {
           <Badge label={commission.integratedInOwnerStatement ? "Situation propriétaire intégrée" : "Non intégrée"} />
         </div>
         <div className="form-grid compact-form">
+          <label>Type de commission<select value={values.commissionType} onChange={update("commissionType")}>{commissionTypes.map((option) => <option key={option}>{option}</option>)}</select></label>
+          <label>Déclencheur<select value={values.trigger} onChange={update("trigger")}>{commissionTriggers.map((option) => <option key={option}>{option}</option>)}</select></label>
+          <label>Élément appliqué<select value={values.appliedOn} onChange={update("appliedOn")}>{commissionBaseOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
           <label>Mode de calcul<select value={values.mode} onChange={update("mode")}><option>Pourcentage</option><option>Montant fixe</option></select></label>
-          <label>Taux<input value={values.rate} onChange={update("rate")} placeholder="5%" /></label>
+          <label>Taux<PercentInput value={values.rate} onChange={(value) => update("rate")({ target: { value } })} placeholder="5" /></label>
           <label>Montant fixe<MoneyInput value={values.fixedAmount} onChange={(value) => update("fixedAmount")({ target: { value } })} placeholder="150 000" /></label>
           <label>Base de calcul<select value={values.calculationBase} onChange={update("calculationBase")}><option>Loyer encaissé</option><option>Prix de vente</option><option>Mandat de gestion</option><option>Montant manuel</option></select></label>
           <label>Montant de base<MoneyInput value={values.calculationBaseAmount} onChange={(value) => update("calculationBaseAmount")({ target: { value } })} /></label>
@@ -17514,12 +17696,15 @@ function CommissionExportModal({ commission, payment, contract, onArchive, onClo
   const [values, setValues] = useState({
     reference: commission.id,
     operation: commission.operation,
+    commissionType: getCommissionTypeLabel(commission),
+    trigger: commission.trigger ?? "Paiement loyer",
     property: commission.property,
     owner: commission.owner,
     client: commission.client,
     period: commission.period,
     collected: commission.collected,
     mode: commission.mode,
+    appliedOn: getCommissionBaseLabel(commission),
     rate: commission.rate || commission.mode,
     commission: commission.commission,
     ownerNet: commission.ownerNet,
@@ -17559,6 +17744,8 @@ function CommissionExportModal({ commission, payment, contract, onArchive, onClo
               <label>Référence<input value={values.reference} onChange={update("reference")} /></label>
               <label>Période<input value={values.period} onChange={update("period")} /></label>
               <label>Statut<input value={values.status} onChange={update("status")} /></label>
+              <label>Type<input value={values.commissionType} onChange={update("commissionType")} /></label>
+              <label>Élément appliqué<select value={values.appliedOn} onChange={update("appliedOn")}>{commissionBaseOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
               <label className="full">Observation<textarea value={values.observation} onChange={update("observation")} /></label>
             </div>
           </Panel>
@@ -17590,6 +17777,8 @@ function CommissionExportDocument({ values }) {
         <h3>Opération liée</h3>
         <div className="document-info-grid">
           <p><span>Opération</span><strong>{values.operation}</strong></p>
+          <p><span>Type de commission</span><strong>{values.commissionType}</strong></p>
+          <p><span>Déclencheur</span><strong>{values.trigger}</strong></p>
           <p><span>Bien</span><strong>{values.property}</strong></p>
           <p><span>Propriétaire</span><strong>{values.owner}</strong></p>
           <p><span>Locataire / client</span><strong>{values.client}</strong></p>
@@ -17600,8 +17789,8 @@ function CommissionExportDocument({ values }) {
       <section className="document-block">
         <h3>Calcul de commission</h3>
         <table className="document-table">
-          <thead><tr><th>Montant encaissé</th><th>Mode de calcul</th><th>Taux / fixe</th><th>Commission E.K immo</th><th>Net propriétaire</th></tr></thead>
-          <tbody><tr><td>{values.collected}</td><td>{values.mode}</td><td>{values.rate}</td><td>{values.commission}</td><td>{values.ownerNet}</td></tr></tbody>
+          <thead><tr><th>Élément appliqué</th><th>Montant de base</th><th>Mode de calcul</th><th>Taux / fixe</th><th>Commission E.K immo</th><th>Net propriétaire</th></tr></thead>
+          <tbody><tr><td>{values.appliedOn}</td><td>{values.collected}</td><td>{values.mode}</td><td>{values.rate}</td><td>{values.commission}</td><td>{values.ownerNet}</td></tr></tbody>
         </table>
       </section>
       <section className="document-block">
@@ -20964,6 +21153,29 @@ function MoneyInput({ value, onChange, readOnly = false, placeholder = "0", ...p
   );
 }
 
+function PercentInput({ value, onChange, readOnly = false, placeholder = "0", ...props }) {
+  const numericValue = String(value ?? "").replace("%", "").replace(",", ".").replace(/[^\d.]/g, "");
+
+  const handleChange = (event) => {
+    const raw = event.target.value.replace(",", ".").replace(/[^\d.]/g, "");
+    onChange(raw ? `${raw}%` : "");
+  };
+
+  return (
+    <span className={`money-input percent-input ${readOnly ? "readonly" : ""}`}>
+      <input
+        {...props}
+        inputMode="decimal"
+        value={numericValue}
+        onChange={handleChange}
+        readOnly={readOnly}
+        placeholder={placeholder}
+      />
+      <b>%</b>
+    </span>
+  );
+}
+
 function ServerFileInput({
   label,
   value = "",
@@ -21806,6 +22018,8 @@ function OwnerFormModal({ sequence = owners.length + 1, owner = null, mode = "cr
     address: owner?.address ?? "ACI 2000, Bamako",
     focalPoint: owner?.focalPoint ?? "",
     mandateType: owner?.mandateType ?? "Mandat de gestion locative",
+    commissionRate: getPercentValue(owner?.commissionRate ?? owner?.commission, "5%"),
+    commissionBase: owner?.commissionBase ?? "Loyer encaissé",
     commission: owner?.commission ?? "5% des loyers encaissés",
     reversementMode: owner?.reversementMode ?? "Virement bancaire",
     reversementPeriod: owner?.reversementPeriod ?? "Mensuel",
@@ -21841,7 +22055,9 @@ function OwnerFormModal({ sequence = owners.length + 1, owner = null, mode = "cr
       properties: owner?.properties ?? 0,
       rent: owner?.rent ?? "0 FCFA",
       charges: owner?.charges ?? "0 FCFA",
-      commission: values.commission,
+      commissionRate: values.commissionRate,
+      commissionBase: values.commissionBase,
+      commission: `${values.commissionRate} sur ${values.commissionBase}`,
       balance: owner?.balance ?? "0 FCFA",
       lastPayment: owner?.lastPayment ?? "N/A",
       status: owner?.status ?? "Actif",
@@ -21890,7 +22106,8 @@ function OwnerFormModal({ sequence = owners.length + 1, owner = null, mode = "cr
           <h3>Conditions de gestion</h3>
           <div className="form-grid compact-form">
             <label>Type de mandat<select value={values.mandateType} onChange={(event) => update("mandateType", event.target.value)}><option>Mandat de gestion locative</option><option>Mandat entretien seul</option><option>Mandat de mise en location</option><option>Mandat de vente</option><option>Mandat mixte</option></select></label>
-            <label>Commission agence<input value={values.commission} onChange={(event) => update("commission", event.target.value)} /></label>
+            <label>Commission permanente<PercentInput value={values.commissionRate} onChange={(value) => update("commissionRate", value)} /></label>
+            <label>Base commission<select value={values.commissionBase} onChange={(event) => update("commissionBase", event.target.value)}>{recurringCommissionBases.map((option) => <option key={option}>{option}</option>)}</select></label>
             <label>Mode de reversement<select value={values.reversementMode} onChange={(event) => update("reversementMode", event.target.value)}><option>Virement bancaire</option><option>Orange Money</option><option>Moov Money</option><option>Chèque</option><option>Espèces</option></select></label>
             <label>Périodicité de reversement<select value={values.reversementPeriod} onChange={(event) => update("reversementPeriod", event.target.value)}><option>Mensuel</option><option>Bimensuel</option><option>Trimestriel</option><option>À la demande</option></select></label>
             <label className="full">Observations<textarea value={values.observations} onChange={(event) => update("observations", event.target.value)} /></label>
@@ -22554,6 +22771,9 @@ function NewTenantFormModal({ sequence = 1, propertiesList = [], agentOptions = 
   const [documentUploads, setDocumentUploads] = useState({});
 
   const selectedProperty = propertyOptions.find((property) => property.code === values.propertyCode) ?? firstProperty;
+  const entryCommissionRate = getPropertyEntryCommissionRate(selectedProperty);
+  const entryCommissionBase = selectedProperty.entryCommissionBase ?? "Premier loyer";
+  const entryCommissionAmount = formatFCFA(Math.round(parseFCFA(values.rent || selectedProperty.price) * getPercentNumber(entryCommissionRate) / 100));
   const canSave = values.name.trim() && values.phone.trim() && selectedProperty?.code;
 
   const update = (field) => (event) => {
@@ -22666,6 +22886,8 @@ function NewTenantFormModal({ sequence = 1, propertiesList = [], agentOptions = 
             <label>Statut initial<select value={values.paymentStatus} onChange={update("paymentStatus")}><option>À jour</option><option>En attente</option><option>Brouillon</option></select></label>
             <label>Créer contrat maintenant ?<select value={values.createContractNow} onChange={update("createContractNow")}><option>Non</option><option>Oui</option></select></label>
             <label>Contrat existant, si disponible<input value={values.existingContract} onChange={update("existingContract")} placeholder="CON-2026-..." /></label>
+            <label>Commission d'entrée<PercentInput value={entryCommissionRate} readOnly /></label>
+            <label>Montant commission<input value={`${entryCommissionAmount} · ${entryCommissionBase}`} readOnly /></label>
             <label className="full">Observations<textarea value={values.observations} onChange={update("observations")} /></label>
           </div>
         </div>
@@ -25778,7 +26000,8 @@ function ContractEditModal({ contract, propertiesList = [], ownersList = [], ten
     nextDueDate: contract.nextDueDate ?? "05/07/2026",
     amount: contract.amount ?? financials.amount,
     deposit: contract.deposit ?? financials.deposit,
-    commission: contract.commission ?? financials.commission,
+    commissionRate: getPercentValue(contract.commissionRate ?? contract.commission ?? financials.commission, "5%"),
+    commissionBase: contract.commissionBase ?? "Loyer encaissé",
     financialMode: contract.financialMode ?? property.financialMode ?? "Encaissement par l'agence",
     specialTerms: contract.specialTerms ?? "Conditions standard E.K immo.",
     model: contract.model ?? "Contrat de bail E.K immo",
@@ -25793,7 +26016,8 @@ function ContractEditModal({ contract, propertiesList = [], ownersList = [], ten
     ["client", contract.client],
     ["amount", contract.amount ?? financials.amount],
     ["deposit", contract.deposit ?? financials.deposit],
-    ["commission", contract.commission ?? financials.commission],
+    ["commissionRate", getPercentValue(contract.commissionRate ?? contract.commission ?? financials.commission, "5%")],
+    ["commissionBase", contract.commissionBase ?? "Loyer encaissé"],
     ["financialMode", contract.financialMode ?? property.financialMode ?? "Encaissement par l'agence"],
     ["end", contract.end],
     ["status", contract.status],
@@ -25838,7 +26062,8 @@ function ContractEditModal({ contract, propertiesList = [], ownersList = [], ten
           <div className="form-grid compact-form">
             <label>Montant<MoneyInput value={values.amount} onChange={(value) => update("amount")({ target: { value } })} /></label>
             <label>Caution<MoneyInput value={values.deposit} onChange={(value) => update("deposit")({ target: { value } })} /></label>
-            <label>Commission<input value={values.commission} onChange={update("commission")} /></label>
+            <label>Commission permanente<PercentInput value={values.commissionRate} onChange={(value) => update("commissionRate")({ target: { value } })} /></label>
+            <label>Base commission<select value={values.commissionBase} onChange={update("commissionBase")}>{recurringCommissionBases.map((option) => <option key={option}>{option}</option>)}</select></label>
             <label>Mode financier<select value={values.financialMode} onChange={update("financialMode")}><option>Encaissement par l'agence</option><option>Encaissement direct propriétaire</option><option>Entretien seul</option></select></label>
             <label className="full">Conditions particulieres<textarea value={values.specialTerms} onChange={update("specialTerms")} /></label>
           </div>
@@ -25881,7 +26106,8 @@ function ContractRenewalModal({ contract, onSave, onClose }) {
     newEnd: "30/06/2027",
     newAmount: contract.amount ?? financials.amount,
     newDeposit: contract.deposit ?? financials.deposit,
-    newCommission: contract.commission ?? financials.commission,
+    newCommissionRate: getPercentValue(contract.commissionRate ?? contract.commission ?? financials.commission, "5%"),
+    newCommissionBase: contract.commissionBase ?? "Loyer encaissé",
     terms: "Renouvellement aux conditions actuelles, avec révision possible à la date anniversaire.",
     model: "Avenant de renouvellement E.K immo",
     generateAmendment: "Oui",
@@ -25922,7 +26148,8 @@ function ContractRenewalModal({ contract, onSave, onClose }) {
             <label>Nouvelle date de fin<input value={values.newEnd} onChange={update("newEnd")} /></label>
             <label>Nouveau loyer<MoneyInput value={values.newAmount} onChange={(value) => update("newAmount")({ target: { value } })} /></label>
             <label>Nouvelle caution<MoneyInput value={values.newDeposit} onChange={(value) => update("newDeposit")({ target: { value } })} /></label>
-            <label>Commission agence<input value={values.newCommission} onChange={update("newCommission")} /></label>
+            <label>Commission permanente<PercentInput value={values.newCommissionRate} onChange={(value) => update("newCommissionRate")({ target: { value } })} /></label>
+            <label>Base commission<select value={values.newCommissionBase} onChange={update("newCommissionBase")}>{recurringCommissionBases.map((option) => <option key={option}>{option}</option>)}</select></label>
             <label>Générer avenant ?<select value={values.generateAmendment} onChange={update("generateAmendment")}><option>Oui</option><option>Non</option></select></label>
             <label className="full">Conditions particulières<textarea value={values.terms} onChange={update("terms")} /></label>
           </div>
@@ -26194,7 +26421,11 @@ function PropertyFormModal({
     owner: isEditMode ? (property?.owner ?? ownerName) : ownerName,
     tenant: tenantName,
     financialMode: property?.financialMode ?? "Encaissement par l'agence",
-    commission: property?.commission ?? "50% du loyer",
+    commission: property?.commission ?? buildPropertyCommissionSummary(property),
+    entryCommissionRate: getPropertyEntryCommissionRate(property),
+    entryCommissionBase: property?.entryCommissionBase ?? "Premier loyer",
+    recurringCommissionRate: getPropertyRecurringCommissionRate(property),
+    recurringCommissionBase: property?.recurringCommissionBase ?? "Loyer encaissé",
     deposit: property?.deposit ?? "1 700 000 FCFA",
   }), [isEditMode, ownerName, property, tenantName]);
 
@@ -26250,6 +26481,10 @@ function PropertyFormModal({
     tenant: "locataire",
     financialMode: "mode financier",
     commission: "commission",
+    entryCommissionRate: "commission d'entrée",
+    entryCommissionBase: "base commission d'entrée",
+    recurringCommissionRate: "commission permanente",
+    recurringCommissionBase: "base commission permanente",
     deposit: "caution",
   };
   const changedSensitiveFields = Object.entries(sensitiveValues)
@@ -26315,7 +26550,11 @@ function PropertyFormModal({
       salePrice: formValues.salePrice.trim(),
       period: property?.period ?? "/mois",
       deposit: sensitiveValues.deposit.trim(),
-      commission: sensitiveValues.commission.trim(),
+      commission: buildPropertyCommissionSummary(sensitiveValues),
+      entryCommissionRate: sensitiveValues.entryCommissionRate,
+      entryCommissionBase: sensitiveValues.entryCommissionBase,
+      recurringCommissionRate: sensitiveValues.recurringCommissionRate,
+      recurringCommissionBase: sensitiveValues.recurringCommissionBase,
       owner: sensitiveValues.owner,
       tenant: sensitiveValues.tenant,
       financialMode: sensitiveValues.financialMode,
@@ -26392,7 +26631,10 @@ function PropertyFormModal({
             <label>Prix de location<MoneyInput value={sensitiveValues.rent} onChange={(value) => updateSensitiveValue("rent", value)} /></label>
             <label>Prix de vente<MoneyInput value={formValues.salePrice} onChange={(value) => updateValue("salePrice")({ target: { value } })} placeholder="Si applicable" /></label>
             <label>Montant de caution<MoneyInput value={sensitiveValues.deposit} onChange={(value) => updateSensitiveValue("deposit", value)} /></label>
-            <label>Commission applicable<input value={sensitiveValues.commission} onChange={(event) => updateSensitiveValue("commission", event.target.value)} /></label>
+            <label>Commission d'entrée<PercentInput value={sensitiveValues.entryCommissionRate} onChange={(value) => updateSensitiveValue("entryCommissionRate", value)} /></label>
+            <label>Base d'entrée<select value={sensitiveValues.entryCommissionBase} onChange={(event) => updateSensitiveValue("entryCommissionBase", event.target.value)}>{entryCommissionBases.map((option) => <option key={option}>{option}</option>)}</select></label>
+            <label>Commission permanente<PercentInput value={sensitiveValues.recurringCommissionRate} onChange={(value) => updateSensitiveValue("recurringCommissionRate", value)} /></label>
+            <label>Base permanente<select value={sensitiveValues.recurringCommissionBase} onChange={(event) => updateSensitiveValue("recurringCommissionBase", event.target.value)}>{recurringCommissionBases.map((option) => <option key={option}>{option}</option>)}</select></label>
           </div>
         </div>
         <div className="form-section" data-demo="modal-property-structure">
