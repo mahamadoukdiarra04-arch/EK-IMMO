@@ -15,6 +15,12 @@ $user = require_user($pdo);
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
 if ($method === 'GET') {
+    $requestedId = trim((string) ($_GET['id'] ?? ''));
+    $requestedPath = trim((string) ($_GET['path'] ?? ''));
+    if ($requestedId !== '' || $requestedPath !== '') {
+        serve_upload_file($pdo, $user, $requestedId, $requestedPath);
+    }
+
     $module = normalize_upload_module((string) ($_GET['module'] ?? 'Docs'));
     if (!user_can_access_state_module($pdo, $user, $module, 'read')) {
         json_response(['ok' => false, 'code' => 'forbidden', 'message' => 'Consultation des fichiers non autorisée.'], 403);
@@ -119,7 +125,7 @@ if (!move_uploaded_file((string) $file['tmp_name'], $targetPath)) {
     json_response(['ok' => false, 'code' => 'move_failed', 'message' => 'Impossible d’enregistrer le fichier.'], 500);
 }
 
-$publicUrl = '/' . $relativeDir . '/' . $storedName;
+$publicUrl = protected_upload_url($uploadId);
 $category = trim((string) ($_POST['category'] ?? ''));
 $linkedType = trim((string) ($_POST['linkedType'] ?? $_POST['linked_type'] ?? ''));
 $linkedId = trim((string) ($_POST['linkedId'] ?? $_POST['linked_id'] ?? ''));
@@ -241,15 +247,9 @@ function ensure_upload_directory(string $baseDir, string $targetDir): void
         json_response(['ok' => false, 'code' => 'directory_failed', 'message' => 'Dossier uploads indisponible.'], 500);
     }
     $htaccess = $baseDir . DIRECTORY_SEPARATOR . '.htaccess';
-    if (!is_file($htaccess)) {
-        @file_put_contents($htaccess, implode("\n", [
-            'Options -Indexes',
-            'RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .phar',
-            '<FilesMatch "\.(php|phtml|phar|cgi|pl|asp|aspx|jsp|sh)$">',
-            'Require all denied',
-            '</FilesMatch>',
-            '',
-        ]));
+    $htaccessContent = upload_htaccess_content();
+    if (!is_file($htaccess) || trim((string) @file_get_contents($htaccess)) !== trim($htaccessContent)) {
+        @file_put_contents($htaccess, $htaccessContent);
     }
     if (!is_dir($targetDir) && !mkdir($targetDir, 0755, true) && !is_dir($targetDir)) {
         json_response(['ok' => false, 'code' => 'directory_failed', 'message' => 'Dossier uploads indisponible.'], 500);
@@ -258,6 +258,7 @@ function ensure_upload_directory(string $baseDir, string $targetDir): void
 
 function upload_public_payload(array $row): array
 {
+    $legacyUrl = (string) ($row['public_url'] ?? '');
     return [
         'id' => (string) $row['id'],
         'module' => (string) ($row['module'] ?? ''),
@@ -266,7 +267,8 @@ function upload_public_payload(array $row): array
         'linkedId' => (string) ($row['linked_id'] ?? ''),
         'originalName' => (string) ($row['original_name'] ?? ''),
         'storedName' => (string) ($row['stored_name'] ?? ''),
-        'url' => (string) ($row['public_url'] ?? ''),
+        'url' => protected_upload_url((string) $row['id']),
+        'legacyUrl' => str_starts_with($legacyUrl, '/uploads/') ? $legacyUrl : '',
         'mimeType' => (string) ($row['mime_type'] ?? ''),
         'size' => (int) ($row['file_size'] ?? 0),
         'createdAt' => isset($row['created_at']) ? (string) $row['created_at'] : '',
@@ -281,18 +283,128 @@ function find_upload(PDO $pdo, string $id): ?array
     return is_array($row) ? $row : null;
 }
 
-function remove_uploaded_file_from_disk(array $upload): bool
+function find_upload_by_path(PDO $pdo, string $path): ?array
+{
+    $normalized = normalize_requested_upload_path($path);
+    if ($normalized === '') {
+        return null;
+    }
+    $statement = $pdo->prepare('SELECT * FROM ekimmo_uploads WHERE relative_path = :path LIMIT 1');
+    $statement->execute(['path' => $normalized]);
+    $row = $statement->fetch();
+    return is_array($row) ? $row : null;
+}
+
+function protected_upload_url(string $id): string
+{
+    return '/api/uploads.php?id=' . rawurlencode($id) . '&file=1';
+}
+
+function normalize_requested_upload_path(string $path): string
+{
+    $path = str_replace('\\', '/', rawurldecode($path));
+    $path = ltrim($path, '/');
+    if ($path === '' || str_contains($path, '..')) {
+        return '';
+    }
+    if (!str_starts_with($path, 'uploads/')) {
+        $path = 'uploads/' . $path;
+    }
+    return $path;
+}
+
+function can_read_upload(PDO $pdo, array $user, array $upload): bool
+{
+    if (($user['role'] ?? '') === 'Administrateur') {
+        return true;
+    }
+    $module = normalize_upload_module((string) ($upload['module'] ?? 'Docs'));
+    if (user_can_access_state_module($pdo, $user, $module, 'read')) {
+        return true;
+    }
+    return (string) ($upload['user_id'] ?? '') === (string) ($user['id'] ?? '');
+}
+
+function serve_upload_file(PDO $pdo, array $user, string $id, string $path): void
+{
+    $upload = $id !== '' ? find_upload($pdo, $id) : find_upload_by_path($pdo, $path);
+    if (!$upload || (string) ($upload['status'] ?? 'Actif') !== 'Actif') {
+        json_response(['ok' => false, 'code' => 'missing_upload', 'message' => 'Fichier introuvable.'], 404);
+    }
+    if (!can_read_upload($pdo, $user, $upload)) {
+        json_response(['ok' => false, 'code' => 'forbidden', 'message' => 'Consultation du fichier non autorisee.'], 403);
+    }
+
+    $filePath = upload_disk_path($upload);
+    if ($filePath === '' || !is_file($filePath)) {
+        json_response(['ok' => false, 'code' => 'missing_file', 'message' => 'Fichier indisponible.'], 404);
+    }
+
+    $mimeType = (string) ($upload['mime_type'] ?? 'application/octet-stream');
+    $fileName = sanitize_upload_name((string) ($upload['original_name'] ?? basename($filePath)));
+    $disposition = isset($_GET['download']) ? 'attachment' : 'inline';
+
+    header('Content-Type: ' . $mimeType);
+    header('Content-Length: ' . (string) filesize($filePath));
+    header('Content-Disposition: ' . $disposition . '; filename="' . addcslashes($fileName, '"\\') . '"');
+    header('Cache-Control: private, no-store, max-age=0');
+    header('X-Content-Type-Options: nosniff');
+    readfile($filePath);
+    exit;
+}
+
+function upload_disk_path(array $upload): string
 {
     $relativePath = (string) ($upload['relative_path'] ?? '');
     if ($relativePath === '' || str_contains($relativePath, '..')) {
+        return '';
+    }
+    $publicRoot = realpath(dirname(__DIR__));
+    if ($publicRoot === false) {
+        return '';
+    }
+    $normalizedRelative = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relativePath);
+    $targetPath = $publicRoot . DIRECTORY_SEPARATOR . $normalizedRelative;
+    $uploadsPrefix = $publicRoot . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR;
+    if (!str_starts_with($targetPath, $uploadsPrefix)) {
+        return '';
+    }
+    return $targetPath;
+}
+
+function upload_htaccess_content(): string
+{
+    return implode("\n", [
+        'Options -Indexes',
+        '',
+        '<IfModule mod_rewrite.c>',
+        '  RewriteEngine On',
+        '  RewriteCond %{REQUEST_FILENAME} -f',
+        '  RewriteRule ^(.+)$ /api/uploads.php?path=$1 [QSA,L]',
+        '</IfModule>',
+        '',
+        '<IfModule !mod_rewrite.c>',
+        '  Require all denied',
+        '</IfModule>',
+        '',
+        'RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .php8 .phar',
+        '<FilesMatch "\.(php|phtml|phar|cgi|pl|asp|aspx|jsp|sh)$">',
+        '  Require all denied',
+        '</FilesMatch>',
+        '',
+    ]);
+}
+
+function remove_uploaded_file_from_disk(array $upload): bool
+{
+    $targetPath = upload_disk_path($upload);
+    if ($targetPath === '') {
         return false;
     }
     $publicRoot = realpath(dirname(__DIR__));
     if ($publicRoot === false) {
         return false;
     }
-    $normalizedRelative = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relativePath);
-    $targetPath = $publicRoot . DIRECTORY_SEPARATOR . $normalizedRelative;
     $realTarget = realpath($targetPath);
     $uploadsPrefix = $publicRoot . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR;
     if ($realTarget !== false && str_starts_with($realTarget, $uploadsPrefix) && is_file($realTarget)) {
