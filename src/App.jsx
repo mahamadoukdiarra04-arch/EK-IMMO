@@ -3316,10 +3316,10 @@ function buildDashboardProfile(currentUser, propertiesList, period, businessData
       ],
       alerts: [
         { title: "Loyers en retard", text: `${formatFCFA(stats.arrearsEstimate)} à suivre`, action: "Relancer", tone: "danger", target: "Loyers en retard" },
+        { title: "Facturation à préparer", text: `${stats.rented} locataire(s) et reversements à traiter`, action: "Générer", tone: "dark", target: "Facturation en masse" },
         { title: "Paiements à contrôler", text: `${stats.rented} dossier(s) locatif(s)`, action: "Voir", tone: "muted", target: "Enregistrer paiement" },
         { title: "États des lieux", text: `${stats.available} bien(s) disponible(s)`, action: "Voir", tone: "dark", target: "Planifier visite" },
         { title: "Interventions", text: `${stats.maintenanceOnly} bien(s) en entretien seul`, action: "Action", tone: "danger", target: "Maintenance urgente" },
-        { title: "Documents manquants", text: "Pièces locataires, reçus ou courriers à compléter", action: "Demander", tone: "muted", target: "Documents manquants" },
       ],
       summaryItems: [
         ["Loyers suivis", formatFCFA(stats.rentAmount), Banknote, "dark"],
@@ -3401,10 +3401,10 @@ function buildDashboardProfile(currentUser, propertiesList, period, businessData
     ],
     alerts: [
       { title: "Loyers en retard", text: `${formatFCFA(stats.arrearsEstimate)} à suivre`, action: "Relancer", tone: "danger", target: "Loyers en retard" },
+      { title: "Facturation à préparer", text: `${stats.rented} facture(s), reçu(s) ou état(s) possibles`, action: "Générer", tone: "dark", target: "Facturation en masse" },
       { title: "Visites du jour", text: `${stats.available} visite(s) possible(s)`, action: "Voir", tone: "muted", target: "Visites du jour" },
       { title: "Contrats à échéance", text: `${stats.rented} contrat(s) actif(s) à suivre`, action: "Gérer", tone: "dark", target: "Contrats à échéance" },
       { title: "Maintenance urgente", text: `${stats.maintenanceOnly} bien(s) en entretien seul`, action: "Action", tone: "danger", target: "Maintenance urgente" },
-      { title: "Documents manquants", text: "Dossiers et justificatifs à compléter", action: "Demander", tone: "muted", target: "Documents manquants" },
     ],
     summaryItems: [
       ["Factures émises", formatFCFA(stats.rentAmount + stats.commissionAmount), FileText, "dark"],
@@ -5485,6 +5485,11 @@ function App() {
 
     if (normalizedAction === "loyers en retard") {
       setModal("Relancer locataires dashboard");
+      return;
+    }
+
+    if (normalizedAction === "facturation en masse") {
+      setModal("Facturation en masse");
       return;
     }
 
@@ -8456,6 +8461,174 @@ function App() {
     });
   };
 
+  const handleBulkDocumentGeneration = ({ tenantSelections = [], reversalSelections = [], options = {}, period = "Période en cours" }) => {
+    const generatedAt = "24/06/2026";
+    const batchArchives = [];
+    const batchTenantReceipts = [];
+    const paymentLinks = [];
+    const historyByProperty = {};
+    const referenceSources = [allPayments, tenantReceiptArchives, propertyDocumentArchives, allReversals, ownerReversements, batchArchives, batchTenantReceipts];
+
+    tenantSelections.forEach((selection) => {
+      const property = propertiesWithArchiveState.find((item) => item.name === selection.property) ?? makeEmptyProperty({ name: selection.property, owner: selection.owner });
+      const tenant = allTenants.find((item) => item.name === selection.tenant) ?? { id: selection.tenant, name: selection.tenant, property: selection.property };
+      const payment = allPayments.find((item) => item.reference === selection.paymentReference)
+        ?? allPayments.find((item) => item.tenant === selection.tenant && item.property === selection.property && item.period === selection.period);
+      const paidAmount = parseFCFA(payment?.paid ?? selection.paid);
+
+      if (options.invoice) {
+        const invoiceReference = getNextDocumentNumber("FAC", referenceSources);
+        const invoiceValues = {
+          numero: invoiceReference,
+          date: generatedAt,
+          client: `${selection.tenant}\nBamako, Mali`,
+          bien: selection.property,
+          periode: selection.period,
+          montant: selection.expected,
+          objet: `Facturation loyer ${selection.period} - ${selection.property}`,
+          mode: "Facturation groupée",
+        };
+        batchArchives.push({
+          id: `bulk-invoice-${invoiceReference}`,
+          category: "Factures, reçus et quittances",
+          reference: invoiceReference,
+          title: `Facture ${selection.period} - ${selection.tenant}`,
+          linked: `${selection.property} · ${selection.tenant} · ${selection.expected}`,
+          date: generatedAt,
+          status: "Généré",
+          module: "Finance",
+          owner: selection.owner,
+          property: property.name,
+          propertyCode: property.code,
+          tenant: tenant.name,
+          documentType: "Facture",
+          fileName: `EKIMMO_Facture_${invoiceReference}_${generatedAt.replaceAll("/", "-")}.pdf`,
+          comment: "Facture générée en masse depuis le tableau de bord.",
+          templateKey: "facture",
+          values: invoiceValues,
+        });
+        historyByProperty[property.name] = [
+          ...(historyByProperty[property.name] ?? []),
+          ["Facture générée", `${invoiceReference} générée en masse pour ${tenant.name}.`, generatedAt],
+        ];
+      }
+
+      if (options.receipt && payment && paidAmount > 0) {
+        const receiptReference = payment.receipt && payment.receipt !== "Non généré"
+          ? payment.receipt
+          : getNextDocumentNumber("REC", referenceSources);
+        const receiptValues = getPaymentReceiptValues({ ...payment, receipt: receiptReference });
+        batchTenantReceipts.push({
+          ...receiptValues,
+          numero: receiptReference,
+          tenantId: tenant.id,
+          tenant: tenant.name,
+          archivedAt: generatedAt,
+          source: payment.reference,
+        });
+        batchArchives.push({
+          id: `bulk-receipt-${receiptReference}-${property.code}`,
+          category: "Factures, reçus et quittances",
+          reference: receiptReference,
+          title: `Reçu ${selection.period} - ${selection.tenant}`,
+          linked: `${selection.property} · ${selection.tenant} · ${payment.reference}`,
+          date: payment.date ?? generatedAt,
+          status: "Archivé",
+          module: "Finance",
+          owner: selection.owner,
+          property: property.name,
+          propertyCode: property.code,
+          tenant: tenant.name,
+          documentType: "Reçu d'encaissement",
+          fileName: `EKIMMO_Recu_${receiptReference}_${generatedAt.replaceAll("/", "-")}.pdf`,
+          comment: "Reçu généré en masse depuis le tableau de bord.",
+          templateKey: "recu",
+          values: receiptValues,
+        });
+        paymentLinks.push({ ...payment, receipt: receiptReference });
+        historyByProperty[property.name] = [
+          ...(historyByProperty[property.name] ?? []),
+          ["Reçu généré", `${receiptReference} lié au paiement ${payment.reference}.`, generatedAt],
+        ];
+      }
+    });
+
+    reversalSelections.forEach((selection) => {
+      if (!options.reversalStatement) return;
+      const reversal = allReversals.find((item) => getReversalKey(item) === selection.key || item.reference === selection.reference) ?? selection;
+      const reference = reversal.reference ?? getNextDocumentNumber("REV", referenceSources);
+      const values = {
+        reference,
+        date: generatedAt,
+        owner: reversal.owner,
+        period: reversal.period ?? period,
+        collected: reversal.collected,
+        commission: reversal.commission,
+        charges: reversal.charges,
+        paid: reversal.paid,
+        balance: reversal.balance,
+        observation: "État de reversement généré en masse depuis le tableau de bord.",
+      };
+      batchArchives.push({
+        id: `bulk-reversal-${reference}`,
+        category: "Finance",
+        reference,
+        title: `État de reversement - ${reversal.owner}`,
+        linked: `${values.period} · ${reversal.balance}`,
+        date: generatedAt,
+        status: "Archivé",
+        module: "Finance",
+        owner: reversal.owner,
+        documentType: "État de reversement",
+        fileName: `EKIMMO_EtatReversement_${reference}_${generatedAt.replaceAll("/", "-")}.pdf`,
+        comment: values.observation,
+        templateKey: "rapport",
+        values,
+      });
+      updateReversalRecord(reversal, { reference, statementArchived: true, statementReference: reference }, `État : ${reference} généré en masse.`);
+    });
+
+    if (batchArchives.length > 0) {
+      setPropertyDocumentArchives((current) => [
+        ...batchArchives,
+        ...current.filter((item) => !batchArchives.some((created) => created.reference === item.reference)),
+      ]);
+    }
+
+    if (batchTenantReceipts.length > 0) {
+      setTenantReceiptArchives((current) => [
+        ...batchTenantReceipts,
+        ...current.filter((item) => !batchTenantReceipts.some((created) => created.numero === item.numero)),
+      ]);
+    }
+
+    if (paymentLinks.length > 0) {
+      setRecordedPayments((current) => {
+        const next = [...current];
+        paymentLinks.forEach((payment) => {
+          const existingIndex = next.findIndex((item) => getPaymentKey(item) === getPaymentKey(payment) || item.reference === payment.reference);
+          if (existingIndex >= 0) next[existingIndex] = payment;
+          else next.unshift(payment);
+        });
+        return next;
+      });
+    }
+
+    if (Object.keys(historyByProperty).length > 0) {
+      setPropertyHistoryOverrides((current) => {
+        const next = { ...current };
+        Object.entries(historyByProperty).forEach(([propertyName, entries]) => {
+          next[propertyName] = [...entries, ...(next[propertyName] ?? [])];
+        });
+        return next;
+      });
+    }
+
+    setContractTab("Archives");
+    setActivePage("Contrats");
+    setModal(null);
+  };
+
   const appendArrearsHistory = (row, entry) => {
     const key = getArrearsKey(row);
     setArrearsHistories((current) => ({
@@ -10150,6 +10323,16 @@ function App() {
           agentOptions={activeAgentOptions}
           currentUserName={currentActorName}
           onSave={handleDashboardRelanceSave}
+          onClose={() => setModal(null)}
+        />
+      ) : modal === "Facturation en masse" ? (
+        <BulkDocumentGenerationModal
+          rentRowsList={allRentRows}
+          paymentsList={allPayments}
+          propertiesList={activeProperties}
+          tenantsList={allTenants}
+          reversalsList={allReversals}
+          onGenerate={handleBulkDocumentGeneration}
           onClose={() => setModal(null)}
         />
       ) : modal === "Relance locataire" ? (
@@ -24383,6 +24566,163 @@ function ArchivePreviewModal({ record, onClose, onAction }) {
           <Button onClick={onClose}>Fermer</Button>
           {draftAvailable && <Button onClick={() => onAction("Reprendre brouillon", { archive: record })}><Pencil size={17} /> Reprendre</Button>}
           <Button variant="primary" onClick={() => onAction(`Télécharger archive ${record.reference}`)}><Download size={17} /> Télécharger</Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function BulkDocumentGenerationModal({ rentRowsList = [], paymentsList = [], propertiesList = [], tenantsList = [], reversalsList = [], onGenerate, onClose }) {
+  const periodOptions = useMemo(() => {
+    const periods = uniqueValues([
+      ...rentRowsList.map((row) => row.period),
+      ...reversalsList.map((reversal) => reversal.period),
+    ]);
+    return periods.length ? periods : ["Période en cours"];
+  }, [rentRowsList, reversalsList]);
+  const [period, setPeriod] = useState(periodOptions[0]);
+  const [options, setOptions] = useState({
+    invoice: true,
+    receipt: true,
+    reversalStatement: true,
+  });
+
+  const tenantCandidates = useMemo(() => rentRowsList
+    .filter((row) => (!period || period === "Période en cours" || row.period === period) && parseFCFA(row.expected) > 0)
+    .filter((row) => isAgencyCollectedProperty(row.property, propertiesList))
+    .map((row) => {
+      const payment = paymentsList.find((item) => item.tenant === row.tenant && item.property === row.property && item.period === row.period);
+      const property = getPropertyByName(row.property, propertiesList) ?? makeEmptyProperty({ name: row.property, owner: row.owner });
+      const tenant = tenantsList.find((item) => item.name === row.tenant) ?? { id: row.tenant, name: row.tenant };
+      return {
+        key: `tenant-${row.period}-${row.tenant}-${row.property}`,
+        tenant: row.tenant,
+        tenantId: tenant.id,
+        property: row.property,
+        propertyCode: property.code,
+        owner: row.owner ?? property.owner,
+        period: row.period,
+        expected: row.expected,
+        paid: payment?.paid ?? row.paid,
+        balance: row.balance,
+        paymentReference: payment?.reference ?? "",
+        receiptPossible: Boolean(payment && parseFCFA(payment.paid) > 0),
+      };
+    }), [paymentsList, period, propertiesList, rentRowsList, tenantsList]);
+
+  const reversalCandidates = useMemo(() => reversalsList
+    .filter((reversal) => (!period || period === "Période en cours" || reversal.period === period) && parseFCFA(reversal.balance) > 0)
+    .map((reversal) => ({
+      key: getReversalKey(reversal),
+      reference: reversal.reference ?? "",
+      owner: reversal.owner,
+      period: reversal.period ?? period,
+      collected: reversal.collected,
+      commission: reversal.commission,
+      charges: reversal.charges,
+      paid: reversal.paid,
+      balance: reversal.balance,
+      status: reversal.status,
+    })), [period, reversalsList]);
+
+  const [selectedTenantKeys, setSelectedTenantKeys] = useState(() => tenantCandidates.map((item) => item.key));
+  const [selectedReversalKeys, setSelectedReversalKeys] = useState(() => reversalCandidates.map((item) => item.key));
+
+  useEffect(() => {
+    setSelectedTenantKeys(tenantCandidates.map((item) => item.key));
+  }, [tenantCandidates]);
+
+  useEffect(() => {
+    setSelectedReversalKeys(reversalCandidates.map((item) => item.key));
+  }, [reversalCandidates]);
+
+  const selectedTenants = tenantCandidates.filter((item) => selectedTenantKeys.includes(item.key));
+  const selectedReversals = reversalCandidates.filter((item) => selectedReversalKeys.includes(item.key));
+  const receiptEligibleCount = selectedTenants.filter((item) => item.receiptPossible).length;
+  const documentCount =
+    (options.invoice ? selectedTenants.length : 0) +
+    (options.receipt ? receiptEligibleCount : 0) +
+    (options.reversalStatement ? selectedReversals.length : 0);
+  const ineligibleReceipts = options.receipt ? selectedTenants.length - receiptEligibleCount : 0;
+  const toggleTenant = (key) => setSelectedTenantKeys((current) => (
+    current.includes(key) ? current.filter((item) => item !== key) : [...current, key]
+  ));
+  const toggleReversal = (key) => setSelectedReversalKeys((current) => (
+    current.includes(key) ? current.filter((item) => item !== key) : [...current, key]
+  ));
+  const toggleOption = (key) => (event) => setOptions((current) => ({ ...current, [key]: event.target.checked }));
+  const canGenerate = documentCount > 0 && (options.invoice || options.receipt || options.reversalStatement);
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="modal-card wide-modal bulk-document-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <div className="payment-modal-head">
+          <div>
+            <span>Facturation groupée</span>
+            <h2>Générer en masse</h2>
+            <p>Sélectionnez les tiers et les documents à produire pour la période.</p>
+          </div>
+          <Badge label={`${documentCount} document${documentCount > 1 ? "s" : ""}`} />
+        </div>
+
+        <div className="form-grid compact-form">
+          <label>Période<select value={period} onChange={(event) => setPeriod(event.target.value)}>{periodOptions.map((item) => <option key={item}>{item}</option>)}</select></label>
+          <label className="checkbox-line"><input type="checkbox" checked={options.invoice} onChange={toggleOption("invoice")} /><span>Factures loyers</span></label>
+          <label className="checkbox-line"><input type="checkbox" checked={options.receipt} onChange={toggleOption("receipt")} /><span>Reçus paiements encaissés</span></label>
+          <label className="checkbox-line"><input type="checkbox" checked={options.reversalStatement} onChange={toggleOption("reversalStatement")} /><span>États de reversement</span></label>
+        </div>
+
+        <div className="summary-strip compact-summary">
+          <Info label="Locataires sélectionnés" value={selectedTenants.length} />
+          <Info label="Reçus possibles" value={receiptEligibleCount} />
+          <Info label="Propriétaires sélectionnés" value={selectedReversals.length} />
+          <Info label="Documents à créer" value={documentCount} />
+        </div>
+
+        {ineligibleReceipts > 0 && (
+          <p className="form-alert">{ineligibleReceipts} reçu{ineligibleReceipts > 1 ? "s" : ""} ne seront pas générés car aucun paiement encaissé n'est lié.</p>
+        )}
+
+        <div className="form-section">
+          <h3>Locataires à facturer</h3>
+          <DataTable
+            columns={["Sélection", "Locataire", "Bien", "Période", "Loyer", "Payé", "Reçu"]}
+            rows={tenantCandidates.map((item) => [
+              <input type="checkbox" checked={selectedTenantKeys.includes(item.key)} onChange={() => toggleTenant(item.key)} aria-label={`Sélectionner ${item.tenant}`} />,
+              item.tenant,
+              item.property,
+              item.period,
+              item.expected,
+              item.paid,
+              <Badge label={item.receiptPossible ? "Possible" : "Sans paiement"} />,
+            ])}
+          />
+          {tenantCandidates.length === 0 && <p className="muted">Aucun loyer facturable pour cette période.</p>}
+        </div>
+
+        <div className="form-section">
+          <h3>Propriétaires à reverser</h3>
+          <DataTable
+            columns={["Sélection", "Propriétaire", "Période", "Encaissé", "Commissions", "Charges", "Solde"]}
+            rows={reversalCandidates.map((item) => [
+              <input type="checkbox" checked={selectedReversalKeys.includes(item.key)} onChange={() => toggleReversal(item.key)} aria-label={`Sélectionner ${item.owner}`} />,
+              item.owner,
+              item.period,
+              item.collected,
+              item.commission,
+              item.charges,
+              item.balance,
+            ])}
+          />
+          {reversalCandidates.length === 0 && <p className="muted">Aucun reversement à produire pour cette période.</p>}
+        </div>
+
+        <div className="action-row compact-row">
+          <Button onClick={onClose}>Annuler</Button>
+          <Button variant="primary" disabled={!canGenerate} onClick={() => onGenerate({ tenantSelections: selectedTenants, reversalSelections: selectedReversals, options, period })}>
+            <FileText size={17} /> Générer les documents sélectionnés
+          </Button>
         </div>
       </section>
     </div>
