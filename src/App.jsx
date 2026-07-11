@@ -3461,37 +3461,42 @@ function getPercentNumber(value) {
 }
 
 function getPropertyEntryCommissionRate(property = {}) {
-  if (property.entryCommissionRate) return getPercentValue(property.entryCommissionRate, "50%");
-  const text = String(property.commission ?? "");
+  const source = property ?? {};
+  if (source.entryCommissionRate) return getPercentValue(source.entryCommissionRate, "50%");
+  const text = String(source.commission ?? "");
   if (text.includes("50") || normalizeSearch(text).includes("mise en location")) return getPercentValue(text, "50%");
   return "50%";
 }
 
 function getPropertyRecurringCommissionRate(property = {}) {
-  if (property.recurringCommissionRate) return getPercentValue(property.recurringCommissionRate, "5%");
-  const text = String(property.commission ?? "");
+  const source = property ?? {};
+  if (source.recurringCommissionRate) return getPercentValue(source.recurringCommissionRate, "5%");
+  const text = String(source.commission ?? "");
   if (text.includes("%") && !text.includes("50")) return getPercentValue(text, "5%");
   return "5%";
 }
 
 function buildPropertyCommissionSummary(values = {}) {
-  const entryRate = values.entryCommissionRate ?? "50%";
-  const entryBase = values.entryCommissionBase ?? "Premier loyer";
-  const recurringRate = values.recurringCommissionRate ?? "5%";
-  const recurringBase = values.recurringCommissionBase ?? "Loyer encaissé";
+  const source = values ?? {};
+  const entryRate = source.entryCommissionRate ?? "50%";
+  const entryBase = source.entryCommissionBase ?? "Premier loyer";
+  const recurringRate = source.recurringCommissionRate ?? "5%";
+  const recurringBase = source.recurringCommissionBase ?? "Loyer encaissé";
   return `Entrée locataire : ${entryRate} sur ${entryBase} · Gestion récurrente : ${recurringRate} sur ${recurringBase}`;
 }
 
 function getCommissionTypeLabel(commission = {}) {
-  if (commission.commissionType) return commission.commissionType;
-  const text = normalizeSearch(`${commission.operation ?? ""} ${commission.calculationBase ?? ""}`);
+  const source = commission ?? {};
+  if (source.commissionType) return source.commissionType;
+  const text = normalizeSearch(`${source.operation ?? ""} ${source.calculationBase ?? ""}`);
   if (text.includes("vente")) return "Vente";
   if (text.includes("mandat") || text.includes("premier loyer") || text.includes("entree")) return "Entrée locataire";
   return "Gestion récurrente";
 }
 
 function getCommissionBaseLabel(commission = {}) {
-  return commission.appliedOn || commission.calculationBase || "Montant encaissé";
+  const source = commission ?? {};
+  return source.appliedOn || source.calculationBase || "Montant encaissé";
 }
 
 function makeEntryCommissionRecord({ property, tenant, sequence = 1 }) {
@@ -11325,11 +11330,11 @@ function PropertySummary({ property, propertiesList = [], onOpenProperty, visits
             </p>
             <p>
               <span>Commission d'entrée</span>
-              <strong>{getPropertyEntryCommissionRate(property)} sur {property.entryCommissionBase ?? "Premier loyer"}</strong>
+              <strong>{getPropertyEntryCommissionRate(property)} sur {property?.entryCommissionBase ?? "Premier loyer"}</strong>
             </p>
             <p>
               <span>Commission permanente</span>
-              <strong>{getPropertyRecurringCommissionRate(property)} sur {property.recurringCommissionBase ?? "Loyer encaissé"}</strong>
+              <strong>{getPropertyRecurringCommissionRate(property)} sur {property?.recurringCommissionBase ?? "Loyer encaissé"}</strong>
             </p>
             <p>
               <span>Prochaine révision</span>
