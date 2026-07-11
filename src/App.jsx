@@ -1742,17 +1742,65 @@ const documentTemplates = [
   },
 ];
 
-function makeDocumentNumber(prefix, sequence, year = 2026) {
+function makeDocumentNumber(prefix, sequence, year = new Date().getFullYear()) {
   return `${prefix}-${year}-${String(sequence).padStart(3, "0")}`;
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function collectReferenceStrings(source, depth = 0) {
+  if (source == null || depth > 5) return [];
+  if (typeof source === "string" || typeof source === "number") return [String(source)];
+  if (Array.isArray(source)) return source.flatMap((item) => collectReferenceStrings(item, depth + 1));
+  if (typeof source !== "object") return [];
+  return Object.entries(source)
+    .filter(([key]) => !["image", "file", "href", "src", "content", "payload_json"].includes(key))
+    .flatMap(([, value]) => collectReferenceStrings(value, depth + 1));
+}
+
+function getNextDocumentSequence(prefix, sources = [], year = new Date().getFullYear(), minSequence = 1) {
+  const pattern = new RegExp(`\\b${escapeRegExp(prefix)}-${year}-(\\d{3,})\\b`, "i");
+  const maxSequence = collectReferenceStrings(sources)
+    .reduce((max, value) => {
+      const match = String(value).match(pattern);
+      return match ? Math.max(max, Number(match[1]) || 0) : max;
+    }, Math.max(0, minSequence - 1));
+  return maxSequence + 1;
+}
+
+function getNextDocumentNumber(prefix, sources = [], year = new Date().getFullYear(), minSequence = 1) {
+  return makeDocumentNumber(prefix, getNextDocumentSequence(prefix, sources, year, minSequence), year);
+}
+
+function makePropertyCode(sequence) {
+  return `EKM-BIE-${String(sequence).padStart(3, "0")}`;
+}
+
+function getNextPropertyCode(propertiesList = [], year = new Date().getFullYear()) {
+  const patterns = [
+    /\bEKM-[A-Z]{2,}-(\d{3,})\b/i,
+    new RegExp(`\\bBIE-${year}-(\\d{3,})\\b`, "i"),
+  ];
+  const maxSequence = collectReferenceStrings(propertiesList)
+    .reduce((max, value) => {
+      const text = String(value);
+      const match = patterns.map((pattern) => text.match(pattern)).find(Boolean);
+      return match ? Math.max(max, Number(match[1]) || 0) : max;
+    }, 0);
+  return makePropertyCode(maxSequence + 1);
+}
+
 function getDocumentPrefix(type) {
-  if (type === "Reçu") return "REC";
-  if (type === "Quittance") return "QUI";
-  if (type === "Bordereau") return "BOR";
-  if (type === "Courrier commission") return "COU";
-  if (type?.includes("État des lieux")) return "EDL";
-  if (type === "Contrat") return "CON";
+  const label = normalizeSearch(type ?? "");
+  if (label.includes("recu")) return "REC";
+  if (label.includes("quittance")) return "QUI";
+  if (label.includes("bordereau")) return "BOR";
+  if (label.includes("courrier commission")) return "COU";
+  if (label.includes("etat des lieux bail commercial")) return "EDL-COM";
+  if (label.includes("etat des lieux")) return "EDL-HAB";
+  if (label.includes("contrat") || label.includes("bail")) return "CON";
   return "FAC";
 }
 
@@ -3736,6 +3784,7 @@ function getCommissionAmountForProperty(property, payment) {
 
 function buildCommissionRecords(propertiesList = [], paymentsList = [], baseCommissions = [], overrides = {}) {
   const basePaymentReferences = new Set(baseCommissions.map((commission) => commission.paymentReference).filter(Boolean));
+  const commissionStartSequence = getNextDocumentSequence("COM", baseCommissions);
   const generatedCommissions = paymentsList
     .filter((payment) => parseFCFA(payment.paid) > 0 && !basePaymentReferences.has(payment.reference))
     .map((payment, index) => {
@@ -3746,7 +3795,7 @@ function buildCommissionRecords(propertiesList = [], paymentsList = [], baseComm
       const recurringRate = getPropertyRecurringCommissionRate(property);
 
       return applyCommissionBusinessFields({
-        id: makeDocumentNumber("COM", 300 + index + 1),
+        id: makeDocumentNumber("COM", commissionStartSequence + index),
         operation: `Encaissement ${payment.property}`,
         commissionType: "Gestion récurrente",
         trigger: "Paiement loyer",
@@ -3928,7 +3977,7 @@ function makeMaintenanceCharge(maintenance, sequence = 1, propertiesList = []) {
   const payer = maintenance.payer === "À déterminer" ? "À valider" : maintenance.payer;
 
   return {
-    id: makeDocumentNumber("CHG", 200 + sequence),
+    id: getNextDocumentNumber("CHG", [maintenance, charges, propertiesList], undefined, sequence),
     date: maintenance.date,
     type: maintenance.type,
     category: "Entretien",
@@ -4007,7 +4056,7 @@ function getDocumentDataForProperty(property, paymentsList = paymentRecords, inc
   const payment = paymentsList.find((item) => item.property === property.name)
     ?? (includeDemoRecords ? paymentRecords.find((item) => item.property === property.name) ?? paymentRecords[0] : null);
   const invoice = (includeDemoRecords ? invoices.find((item) => item.property === property.name) : null) ?? {
-    number: makeDocumentNumber("FAC", 90),
+    number: getNextDocumentNumber("FAC", [invoices, paymentsList, property]),
     type: "Facture",
     client: tenant.name,
     property: property.name,
@@ -6882,7 +6931,7 @@ function App() {
       archivedAt: "25/06/2026",
     }, `Archivage : ${values.reason}. ${values.comment}`);
 
-    const reference = nextReversal.reference ?? makeDocumentNumber("REV", 900 + propertyDocumentArchives.length + 1);
+    const reference = nextReversal.reference ?? getNextDocumentNumber("REV", [allReversals, ownerReversements, propertyDocumentArchives]);
     setPropertyDocumentArchives((current) => [
       {
         id: `reversal-archive-${reference}`,
@@ -6916,7 +6965,7 @@ function App() {
   };
 
   const handleReversalStatementArchive = ({ reversal, values }) => {
-    const reference = reversal.reference ?? makeDocumentNumber("REV", 940 + propertyDocumentArchives.length + 1);
+    const reference = reversal.reference ?? getNextDocumentNumber("REV", [allReversals, ownerReversements, propertyDocumentArchives]);
     setPropertyDocumentArchives((current) => [
       {
         id: `reversal-statement-${reference}`,
@@ -7168,7 +7217,7 @@ function App() {
     const existingProspect = allProspects.find((item) => item.name === visit.prospectName);
     const prospectName = (visit.clientMode === "new" ? visit.newProspectName : visit.prospectName) || prospect?.name || "Nouveau prospect";
     const targetProspect = existingProspect ?? prospect ?? {
-      id: makeDocumentNumber("PRS", allProspects.length + 1),
+      id: getNextDocumentNumber("PRS", allProspects),
       name: prospectName,
       initials: getInitials(prospectName),
       phone: visit.phone,
@@ -7180,7 +7229,7 @@ function App() {
       next: visit.nextAction,
     };
     const nextVisit = {
-      id: makeDocumentNumber("VIS", allVisits.length + 1),
+      id: getNextDocumentNumber("VIS", allVisits),
       client: prospectName,
       phone: visit.phone,
       need: visit.need,
@@ -7476,10 +7525,11 @@ function App() {
 
   const handleDashboardRelanceSave = ({ rows, values, markAsRelanced = false }) => {
     const selectedRows = rows.length ? rows : getDashboardOverdueRows(allRentRows);
+    const relanceStartSequence = getNextDocumentSequence("REL", [tenantRelances, rentRows]);
     const createdRelances = selectedRows.map((row, index) => {
       const tenant = allTenants.find((item) => item.name === row.tenant) ?? tenants.find((item) => item.name === row.tenant);
       return {
-        reference: makeDocumentNumber("REL", 300 + tenantRelances.length + index + 1),
+        reference: makeDocumentNumber("REL", relanceStartSequence + index),
         tenantId: tenant?.id ?? `REL-TENANT-${index + 1}`,
         tenant: row.tenant,
         property: row.property,
@@ -7698,7 +7748,7 @@ function App() {
   };
 
   const handleContractDraftSave = ({ values, property, owner, tenant }) => {
-    const reference = values.contratNo || makeDocumentNumber("CON", allContracts.length + propertyDocumentArchives.length + 1);
+    const reference = values.contratNo || getNextDocumentNumber("CON", [allContracts, generatedContracts, propertyDocumentArchives]);
     const draftArchive = {
       id: `contract-draft-${reference}`,
       category: "Brouillons",
@@ -7825,7 +7875,7 @@ function App() {
   };
 
   const handleContractRenewalSave = ({ contract, values }) => {
-    const amendmentReference = values.generateAmendment === "Oui" ? makeDocumentNumber("AVN", allContracts.length + 1) : "";
+    const amendmentReference = values.generateAmendment === "Oui" ? getNextDocumentNumber("AVN", [allContracts, contractOverrides, propertyDocumentArchives]) : "";
     updateContract(contract, {
       status: "Renouvelé",
       start: values.newStart,
@@ -7895,7 +7945,7 @@ function App() {
   };
 
   const handleContractTerminationSave = ({ contract, values }) => {
-    const terminationReference = values.generateDocument === "Oui" ? makeDocumentNumber("RES", allContracts.length + 1) : "";
+    const terminationReference = values.generateDocument === "Oui" ? getNextDocumentNumber("RES", [allContracts, contractOverrides, propertyDocumentArchives]) : "";
     const property = propertiesWithArchiveState.find((item) => item.name === contract.property);
     const tenant = allTenants.find((item) => item.name === contract.client);
     const detachTenant = values.detachTenant === "Oui";
@@ -8348,7 +8398,7 @@ function App() {
     const tenant = allTenants.find((item) => item.name === payment.tenant);
     const property = propertiesWithArchiveState.find((item) => item.name === payment.property);
     if (!tenant || !property) return;
-    const receiptNumber = values.numero || payment.receipt || makeDocumentNumber("REC", allPayments.length + 140);
+    const receiptNumber = values.numero || (payment.receipt && payment.receipt !== "Non généré" ? payment.receipt : "") || getNextDocumentNumber("REC", [allPayments, tenantReceiptArchives, propertyDocumentArchives]);
 
     if (action === "archive-tenant") {
       setTenantReceiptArchives((current) => [
@@ -8470,7 +8520,7 @@ function App() {
   const handleArrearsStatementArchive = ({ row, values }) => {
     const property = propertiesWithArchiveState.find((item) => item.name === row.property);
     if (!property) return;
-    const reference = makeDocumentNumber("IMP", 500 + Object.keys(arrearsHistories).length + 1);
+    const reference = getNextDocumentNumber("IMP", [arrearsHistories, propertyDocumentArchives]);
     setPropertyDocumentArchives((current) => [
       {
         id: `arrears-statement-${reference}`,
@@ -8567,7 +8617,7 @@ function App() {
   };
 
   const handleCommissionArchive = ({ commission, values }) => {
-    const reference = makeDocumentNumber("COM", 700 + Object.keys(commissionOverrides).length + propertyDocumentArchives.length + 1);
+    const reference = getNextDocumentNumber("COM", [allCommissions, commissionOverrides, propertyDocumentArchives]);
     setPropertyDocumentArchives((current) => [
       {
         id: `commission-export-${reference}`,
@@ -8617,7 +8667,7 @@ function App() {
     const sequence = scheduledMaintenances.length + 1;
     const nextMaintenance = {
       ...maintenance,
-      reference: maintenance.reference ?? makeDocumentNumber("ENT", 80 + sequence),
+      reference: maintenance.reference ?? getNextDocumentNumber("ENT", [allMaintenances, scheduledMaintenances], undefined, sequence),
     };
 
     setScheduledMaintenances((current) => [nextMaintenance, ...current]);
@@ -8781,7 +8831,7 @@ function App() {
   };
 
   const archiveMaintenanceReport = (maintenance, values = {}) => {
-    const reference = makeDocumentNumber("RAP", 800 + propertyDocumentArchives.length + 1);
+    const reference = getNextDocumentNumber("RAP", [propertyDocumentArchives, allMaintenances]);
     const property = getPropertyByName(maintenance.property, propertiesWithArchiveState) ?? selectedProperty;
     const archive = {
       id: `maintenance-report-${reference}`,
@@ -9082,7 +9132,7 @@ function App() {
   };
 
   const handlePropertySave = ({ property, mode = "create", draft = false }) => {
-    const fallbackCode = makeDocumentNumber("BIE", properties.length + createdProperties.length + 1);
+    const fallbackCode = getNextPropertyCode(propertiesWithArchiveState);
     const nextProperty = {
       ...property,
       code: property.code?.trim() || fallbackCode,
@@ -9848,6 +9898,7 @@ function App() {
           intent={reversalActionContext?.intent ?? "preview"}
           paymentsList={allPayments}
           chargesList={allCharges}
+          reversalsList={allReversals}
           onArchive={handleReversalStatementArchive}
           onClose={closeReversalAction}
         />
@@ -9953,6 +10004,7 @@ function App() {
         <FinanceReceiptModal
           payment={paymentActionContext?.payment ?? allPayments[0]}
           printOnOpen={paymentActionContext?.printOnOpen}
+          paymentsList={allPayments}
           onReceiptAction={handleFinanceReceiptAction}
           onClose={() => {
             setPaymentActionContext(null);
@@ -10106,6 +10158,7 @@ function App() {
           property={tenantActionContext?.property}
           row={tenantActionContext?.row}
           propertiesList={activeProperties}
+          relancesList={tenantRelances}
           onSave={handleTenantRelanceSave}
           onClose={() => {
             setTenantActionContext(null);
@@ -10183,7 +10236,7 @@ function App() {
       ) : modal === "Terminer entretien" ? (
         <MaintenanceCompletionModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onUpload={handleFileUpload} onSave={handleMaintenanceCompletionSave} onClose={closeMaintenanceAction} />
       ) : modal === "Rapport entretien" ? (
-        <MaintenanceReportModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} propertiesList={propertiesWithArchiveState} onArchive={handleMaintenanceReportArchive} onClose={closeMaintenanceAction} />
+        <MaintenanceReportModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} propertiesList={propertiesWithArchiveState} maintenancesList={allMaintenances} onArchive={handleMaintenanceReportArchive} onClose={closeMaintenanceAction} />
       ) : modal === "Annuler entretien" ? (
         <MaintenanceCancelModal maintenance={maintenanceActionContext?.maintenance ?? allMaintenances[0]} onSave={handleMaintenanceCancelSave} onClose={closeMaintenanceAction} />
       ) : modal === "Ajouter entretien" ? (
@@ -10208,6 +10261,7 @@ function App() {
           contractsList={allContracts}
           chargesList={allCharges}
           maintenancesList={allMaintenances}
+          documentArchivesList={[propertyDocumentArchives, propertyPdfArchives]}
           sequence={propertyDocumentArchives.length + propertyPdfArchives.length + 1}
           onUpload={handleFileUpload}
           onImport={handlePropertyDocumentImport}
@@ -13911,9 +13965,10 @@ function DocumentGeneration({
   const firstTenant = tenantsList.find((item) => item.name === firstProperty.tenant || item.property === firstProperty.name) ?? tenantsList[0] ?? neutralTenant;
   const firstPayment = paymentsList.find((item) => item.property === firstProperty.name || item.tenant === firstTenant.name) ?? paymentsList[0];
   const firstCommission = commissionsList.find((item) => item.property === firstProperty.name || item.owner === firstOwner.name) ?? commissionsList[0] ?? { operation: "", property: firstProperty.name, owner: firstOwner.name, commission: "0 FCFA", rate: "0%" };
+  const referenceSources = [propertiesList, ownersList, tenantsList, paymentsList, commissionsList, invoices, contracts];
   const defaultInvoice = firstPayment
     ? {
-      number: firstPayment.receipt && firstPayment.receipt !== "Non généré" ? firstPayment.receipt : makeDocumentNumber("FAC", 55),
+      number: firstPayment.receipt && firstPayment.receipt !== "Non généré" ? firstPayment.receipt : getNextDocumentNumber("FAC", referenceSources),
       type: "Facture",
       client: firstPayment.tenant ?? firstTenant.name,
       property: firstPayment.property ?? firstProperty.name,
@@ -13952,6 +14007,7 @@ function DocumentGeneration({
       onArchiveDocument={onArchiveDocument}
       documentArchiveSequence={documentArchiveSequence}
       data={defaultData}
+      referenceSources={referenceSources}
     />
   );
 }
@@ -14453,7 +14509,7 @@ function ArchivesView({
   );
 }
 
-function DocumentStudio({ initialTemplate = "facture", lockedTemplate, title, data, onAction, onArchiveDocument, documentArchiveSequence = 1, autoOpen = false, availableTemplates = documentTemplates, onArchiveTemplate }) {
+function DocumentStudio({ initialTemplate = "facture", lockedTemplate, title, data, onAction, onArchiveDocument, documentArchiveSequence = 1, autoOpen = false, availableTemplates = documentTemplates, onArchiveTemplate, referenceSources = [] }) {
   const templates = availableTemplates.length > 0 ? availableTemplates : [];
   const [templateKey, setTemplateKey] = useState(lockedTemplate ?? initialTemplate);
   const [editingKey, setEditingKey] = useState(lockedTemplate ?? (autoOpen ? initialTemplate : null));
@@ -14530,6 +14586,7 @@ function DocumentStudio({ initialTemplate = "facture", lockedTemplate, title, da
       onAction={onAction}
       onArchiveDocument={onArchiveDocument}
       documentArchiveSequence={documentArchiveSequence}
+      referenceSources={referenceSources}
       onBack={lockedTemplate ? null : () => setEditingKey(null)}
       onArchiveTemplate={onArchiveTemplate ? (payload) => {
         onArchiveTemplate(payload);
@@ -14541,12 +14598,15 @@ function DocumentStudio({ initialTemplate = "facture", lockedTemplate, title, da
   );
 }
 
-function DocumentEditor({ compact = false, data, onAction, onArchiveDocument, documentArchiveSequence = 1, onBack, onArchiveTemplate, template, title }) {
+function DocumentEditor({ compact = false, data, onAction, onArchiveDocument, documentArchiveSequence = 1, referenceSources = [], onBack, onArchiveTemplate, template, title }) {
   const relatedFiles = getRelatedDocumentFiles(template.key);
   const defaults = useMemo(() => ({
-    ...getDocumentDefaults(template.key, data),
+    ...getDocumentDefaults(template.key, {
+      ...data,
+      autoReference: getNextDocumentNumber(getDocumentPrefix(template.label), referenceSources, undefined, documentArchiveSequence),
+    }),
     ...(data?.draftValues ?? {}),
-  }), [template.key, data]);
+  }), [documentArchiveSequence, referenceSources, template.key, template.label, data]);
   const [values, setValues] = useState(defaults);
   const [previewIntent, setPreviewIntent] = useState(null);
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -17107,6 +17167,7 @@ function getDocumentDefaults(key, data = {}) {
   const tenant = data.tenant ?? { name: invoice.client || property.tenant || "Locataire à renseigner", phone: "", email: "", rent: property.price || "0 FCFA", deposit: property.deposit || "0 FCFA", property: property.name };
   const commission = data.commission ?? { operation: "", property: property.name, owner: owner.name, client: tenant.name, commission: "0 FCFA", rate: "0%" };
   const draftReference = data.draftReference;
+  const autoReference = data.autoReference;
   const draftText = data.draftText;
   const draftAmount = data.amount ? String(data.amount).replace(" FCFA", "").trim() : "";
   const specialConditions = data.specialConditions || draftText;
@@ -17116,7 +17177,7 @@ function getDocumentDefaults(key, data = {}) {
 
   if (key === "recu") {
     return {
-      numero: draftReference ?? invoice.number.replace("FAC", "REC").replace("QUI", "REC"),
+      numero: draftReference ?? autoReference ?? invoice.number.replace("FAC", "REC").replace("QUI", "REC"),
       date: invoice.date,
       nom: invoice.client,
       structure: tenant.id ?? "Locataire",
@@ -17135,7 +17196,7 @@ function getDocumentDefaults(key, data = {}) {
 
   if (key === "bordereau") {
     return {
-      numero: draftReference ?? "BOR-2026-017",
+      numero: draftReference ?? autoReference ?? makeDocumentNumber("BOR", 1),
       date: "05/06/2026",
       partenaire: owner.name,
       periode: "Janvier 2026 à mars 2026",
@@ -17176,7 +17237,7 @@ function getDocumentDefaults(key, data = {}) {
     const commissionTotal = rawCommissionTotal.toUpperCase().includes("FCFA") ? rawCommissionTotal : `${rawCommissionTotal} FCFA`;
 
     return {
-      reference: draftReference ?? "COU-LAF-2026-017",
+      reference: draftReference ?? autoReference ?? makeDocumentNumber("COU", 1),
       date: "05/06/2026",
       ville: "Bamako",
       destinataireCivilite: "Madame la Directrice Générale",
@@ -17207,10 +17268,10 @@ function getDocumentDefaults(key, data = {}) {
     const contract = data.contract ?? null;
 
     return {
-      reference: draftReference ?? makeDocumentNumber(isCommercial ? "EDL-COM" : "EDL-HAB", isCommercial ? 22 : 18),
+      reference: draftReference ?? autoReference ?? makeDocumentNumber(isCommercial ? "EDL-COM" : "EDL-HAB", 1),
       date: "24/06/2026",
       typeLogement: isCommercial ? "Bail commercial - local professionnel" : property.type || "Appartement / maison",
-      contractNo: contract?.number ?? makeDocumentNumber("CON", 46),
+      contractNo: contract?.number ?? getNextDocumentNumber("CON", [data, contracts]),
       operation: "État des lieux d'entrée",
       bien: property.name,
       adresse: property.address ?? property.district,
@@ -17233,7 +17294,7 @@ function getDocumentDefaults(key, data = {}) {
     const rentTtc = property.price;
 
     return {
-      contratNo: draftReference ?? makeDocumentNumber("CON", 46),
+      contratNo: draftReference ?? autoReference ?? getNextDocumentNumber("CON", [data, contracts]),
       souscritLe: "05/06/2026",
       objet: "CONTRAT DE BAIL À USAGE PROFESSIONNEL",
       bailleur: "E.K immo SAS",
@@ -17272,7 +17333,7 @@ function getDocumentDefaults(key, data = {}) {
   }
 
   return {
-    numero: draftReference ?? invoice.number,
+    numero: draftReference ?? autoReference ?? invoice.number,
     date: invoice.date,
     client: `${invoice.client}\nBamako, Mali`,
     bien: property.name,
@@ -18588,7 +18649,7 @@ function FinanceReversalPrepareModal({ owner, ownersList = owners, paymentsList 
     end: "2026-06-30",
     amount: calculation.balanceLabel,
     mode: "Virement bancaire",
-    reference: makeDocumentNumber("REV", 120 + sequence),
+    reference: getNextDocumentNumber("REV", [reversalsList], undefined, sequence),
     date: "2026-06-28",
     proof: "",
     proofUpload: null,
@@ -18812,12 +18873,12 @@ function ReversalPartialModal({ reversal, onSave, onClose }) {
   );
 }
 
-function ReversalStatementModal({ reversal, intent = "preview", paymentsList = paymentRecords, chargesList = charges, onArchive, onClose }) {
+function ReversalStatementModal({ reversal, intent = "preview", paymentsList = paymentRecords, chargesList = charges, reversalsList = [], onArchive, onClose }) {
   const calculation = getReversalCalculationFromRecord(reversal, paymentsList, chargesList, [reversal]);
   const [preview, setPreview] = useState(intent !== "pdf" && intent !== "print");
   const [archived, setArchived] = useState(Boolean(reversal.statementArchived));
   const values = {
-    reference: reversal.reference ?? makeDocumentNumber("REV", 901),
+    reference: reversal.reference ?? getNextDocumentNumber("REV", [reversalsList, reversal, paymentsList, chargesList]),
     date: "25/06/2026",
     observation: reversal.note ?? "État de reversement généré depuis Finance.",
   };
@@ -19117,8 +19178,8 @@ function PaymentForm({ onAction, paymentsList = paymentRecords, rentRowsList = r
 
   useEffect(() => {
     if (!activePayment) return;
-    setReceiptNumber(activePayment.receipt === "Non généré" ? makeDocumentNumber("REC", 92) : activePayment.receipt);
-  }, [activePayment]);
+    setReceiptNumber(activePayment.receipt === "Non généré" ? getNextDocumentNumber("REC", [paymentsList, activePayment]) : activePayment.receipt);
+  }, [activePayment, paymentsList]);
 
   useEffect(() => {
     if (!paymentRequest?.reference) return;
@@ -22596,7 +22657,7 @@ function ChargeFormModal({ title, context = null, propertiesList = [], maintenan
     (context?.property ? propertyOptions.find((property) => property.code === context.property.code || property.name === context.property.name) : null) ??
     propertyOptions[0] ??
     makeEmptyProperty({ name: "" });
-  const suggestedId = editedCharge?.id ?? makeDocumentNumber("CHG", chargesList.length + 301);
+  const suggestedId = editedCharge?.id ?? getNextDocumentNumber("CHG", [chargesList, maintenancesList]);
   const [message, setMessage] = useState("");
   const [values, setValues] = useState({
     id: suggestedId,
@@ -23222,10 +23283,10 @@ function PaymentProofModal({ payment, onUpload, onSave, onClose }) {
   );
 }
 
-function FinanceReceiptModal({ payment, printOnOpen = false, onReceiptAction, onClose }) {
+function FinanceReceiptModal({ payment, printOnOpen = false, paymentsList = paymentRecords, onReceiptAction, onClose }) {
   const receiptValues = getPaymentReceiptValues({
     ...payment,
-    receipt: payment.receipt && payment.receipt !== "Non généré" ? payment.receipt : makeDocumentNumber("REC", 145),
+    receipt: payment.receipt && payment.receipt !== "Non généré" ? payment.receipt : getNextDocumentNumber("REC", [paymentsList, payment]),
   });
   const [values, setValues] = useState(receiptValues);
   const [notice, setNotice] = useState("");
@@ -23376,7 +23437,7 @@ function ArrearsStatementModal({ row, relancesList = [], promise, history = [], 
   const [archived, setArchived] = useState(false);
   const update = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
   const pdfValues = {
-    reference: makeDocumentNumber("IMP", 501),
+    reference: getNextDocumentNumber("IMP", [row, relancesList, history]),
     date: "24/06/2026",
     locataire: row.tenant,
     bien: row.property,
@@ -23847,13 +23908,13 @@ function TenantPaymentModal({ tenant, property, row, payment, paymentsList = pay
   const selectedProperty = propertyOptions.find((item) => item.name === values.property) ?? linkedProperty;
   const receiptNumber = initialPayment?.receipt && initialPayment.receipt !== "Non généré"
     ? initialPayment.receipt
-    : makeDocumentNumber("REC", paymentsList.length + 111);
+    : getNextDocumentNumber("REC", paymentsList);
   const update = (key, value) => setValues((current) => ({ ...current, [key]: value }));
 
   const submit = (forceReceipt = false) => {
     const shouldGenerateReceipt = forceReceipt || values.receiptChoice === "Oui";
     onSave({
-      reference: initialPayment?.reference ?? makeDocumentNumber("PAY", paymentsList.length + 111),
+      reference: initialPayment?.reference ?? getNextDocumentNumber("PAY", paymentsList),
       period: values.period,
       tenant: values.tenant,
       property: values.property,
@@ -23923,7 +23984,7 @@ function TenantReceiptModal({ tenant, property, payment, paymentsList = paymentR
     ?? makeEmptyProperty({ name: tenant.property ?? "Aucun bien selectionne", owner: tenant.owner ?? "" });
   const fallbackRow = rentRowsList.find((row) => row.tenant === tenant.name && row.property === linkedProperty.name) ?? rentRowsList.find((row) => row.tenant === tenant.name);
   const fallbackPayment = useMemo(() => ({
-    reference: makeDocumentNumber("PAY", 211),
+    reference: getNextDocumentNumber("PAY", paymentsList),
     period: fallbackRow?.period ?? "Mai 2026",
     tenant: tenant.name,
     property: fallbackRow?.property ?? linkedProperty.name,
@@ -23935,10 +23996,10 @@ function TenantReceiptModal({ tenant, property, payment, paymentsList = paymentR
     mode: "Orange Money",
     paymentRef: "OM-2026-REC",
     date: "19/06/2026",
-    receipt: makeDocumentNumber("REC", 211),
+    receipt: getNextDocumentNumber("REC", paymentsList),
     status: fallbackRow?.status ?? "Payé",
     note: "Reçu généré depuis la fiche locataire.",
-  }), [fallbackRow, linkedProperty.name, linkedProperty.owner, tenant.name, tenant.rent]);
+  }), [fallbackRow, linkedProperty.name, linkedProperty.owner, paymentsList, tenant.name, tenant.rent]);
   const tenantPayments = paymentsList.filter((item) => item.tenant === tenant.name);
   const paymentOptions = tenantPayments.length ? tenantPayments : [payment ?? fallbackPayment];
   const initialPayment = payment ?? paymentOptions[0] ?? fallbackPayment;
@@ -23970,7 +24031,7 @@ function TenantReceiptModal({ tenant, property, payment, paymentsList = paymentR
     paid: values.amount,
     amountNow: values.amount,
     mode: values.mode,
-    receipt: selectedPayment.receipt && selectedPayment.receipt !== "Non généré" ? selectedPayment.receipt : makeDocumentNumber("REC", paymentsList.length + 121),
+    receipt: selectedPayment.receipt && selectedPayment.receipt !== "Non généré" ? selectedPayment.receipt : getNextDocumentNumber("REC", [paymentsList, selectedPayment, archivedReceipts]),
   });
 
   const archiveReceipt = () => {
@@ -24104,7 +24165,7 @@ function MissingDocumentModal({ request, agentOptions = defaultAgentNames, curre
   );
 }
 
-function PropertyDocumentImportModal({ context = null, propertiesList = [], contractsList = contracts, chargesList = charges, maintenancesList = maintenances, sequence = 1, onUpload, onImport, onClose }) {
+function PropertyDocumentImportModal({ context = null, propertiesList = [], contractsList = contracts, chargesList = charges, maintenancesList = maintenances, documentArchivesList = [], sequence = 1, onUpload, onImport, onClose }) {
   const documentTypes = ["Titre foncier", "Mandat", "Contrat signé", "Facture", "Reçu", "Photo", "Justificatif", "Rapport d’entretien", "Autre"];
   const importStatuses = ["Actif", "Archivé", "Brouillon"];
   const propertyOptions = propertiesList.filter((property) => !property.archived);
@@ -24162,7 +24223,7 @@ function PropertyDocumentImportModal({ context = null, propertiesList = [], cont
     }
 
     const referencePrefix = values.status === "Brouillon" ? "BRO-DOC" : "DOC";
-    const reference = makeDocumentNumber(referencePrefix, 300 + sequence);
+    const reference = getNextDocumentNumber(referencePrefix, [documentArchivesList, propertiesList, contractsList, chargesList, maintenancesList], undefined, sequence);
     const title = values.name.trim();
     const linkedParts = [
       selectedProperty.name,
@@ -24415,7 +24476,7 @@ function DashboardRentReminderModal({ rows = [], relancesList = [], agentOptions
   );
 }
 
-function TenantReminderModal({ tenant, property, row, propertiesList = [], onSave, onClose }) {
+function TenantReminderModal({ tenant, property, row, propertiesList = [], relancesList = [], onSave, onClose }) {
   const propertyOptions = getActiveProperties(propertiesList);
   const linkedProperty = property
     ?? propertyOptions.find((item) => item.name === row?.property || item.name === tenant.property)
@@ -24436,7 +24497,7 @@ function TenantReminderModal({ tenant, property, row, propertiesList = [], onSav
     onSave({
       tenant,
       relance: {
-        reference: makeDocumentNumber("REL", Math.max(100, parseFCFA(tenant.id) % 900)),
+        reference: getNextDocumentNumber("REL", [relancesList, tenant, property, row]),
         tenantId: tenant.id,
         tenant: tenant.name,
         property: values.property,
@@ -24854,12 +24915,12 @@ function PaymentRegistrationModal({ context, paymentsList = paymentRecords, rent
   const tenant = tenantsList.find((item) => item.name === initialTenant);
   const receiptNumber = initialPayment?.receipt && initialPayment.receipt !== "Non généré"
     ? initialPayment.receipt
-    : makeDocumentNumber("REC", paymentsList.length + 101);
+    : getNextDocumentNumber("REC", [paymentsList, initialPayment]);
 
   const submit = (forceReceipt = false) => {
     const shouldGenerateReceipt = forceReceipt || autoReceipt;
     const payment = {
-      reference: initialPayment?.reference ?? makeDocumentNumber("PAY", paymentsList.length + 101),
+      reference: initialPayment?.reference ?? getNextDocumentNumber("PAY", [paymentsList, initialPayment]),
       period,
       tenant: initialTenant,
       property: initialProperty.name,
@@ -25400,13 +25461,13 @@ function MaintenanceCompletionModal({ maintenance, onUpload, onSave, onClose }) 
   );
 }
 
-function MaintenanceReportModal({ maintenance, propertiesList = [], onArchive, onClose }) {
+function MaintenanceReportModal({ maintenance, propertiesList = [], maintenancesList = [], onArchive, onClose }) {
   const property = getPropertyByName(maintenance.property, propertiesList)
     ?? makeEmptyProperty({ name: maintenance.property ?? "Aucun bien selectionne" });
   const [preview, setPreview] = useState(false);
   const [archived, setArchived] = useState(Boolean(maintenance.reportArchived));
   const values = {
-    reference: maintenance.reportReference ?? makeDocumentNumber("RAP", 801),
+    reference: maintenance.reportReference ?? getNextDocumentNumber("RAP", [maintenance, maintenancesList, propertiesList]),
     date: "25/06/2026",
     bien: maintenance.property,
     proprietaire: property.owner,
@@ -26540,7 +26601,7 @@ function PropertyFormModal({
   onClose,
 }) {
   const isEditMode = title === "Modifier le bien";
-  const nextCode = `EKM-NEW-${String((propertiesList?.length ?? 0) + 1).padStart(3, "0")}`;
+  const nextCode = getNextPropertyCode(propertiesList);
   const ownerName = ownerPrefill || property?.owner || ownersList[0]?.name || "Propriétaire à renseigner";
   const tenantName = property?.tenant ?? "Libre";
   const parentOptions = getActiveProperties(propertiesList).filter(isBuildingProperty);
@@ -26752,7 +26813,7 @@ function PropertyFormModal({
         <div className="form-section" data-demo="modal-property-main">
           <h3>Informations générales</h3>
           <div className="form-grid compact-form">
-            <label>Code du bien<input value={formValues.code} onChange={updateValue("code")} /></label>
+            <label>Code du bien<input value={formValues.code} onChange={updateValue("code")} readOnly={!isEditMode} /><small>Numéro généré automatiquement selon l'ordre d'enregistrement.</small></label>
             <label>Type de bien<select value={formValues.type} onChange={updateValue("type")}><option>Immeuble collectif</option><option>Appartement rattaché</option><option>Appartement individuel</option><option>Maison</option><option>Villa</option><option>Terrain</option><option>Bureau</option><option>Boutique</option></select></label>
             <label>Nom ou désignation<input value={formValues.name} onChange={updateValue("name")} /></label>
             <label>Quartier<input value={formValues.district} onChange={updateValue("district")} /></label>
