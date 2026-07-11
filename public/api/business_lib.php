@@ -390,10 +390,96 @@ function ek_business_commission_amount($rule, int $collected): int
     return $fixed > 0 ? $fixed : (int) round($collected * 0.05);
 }
 
-function ek_business_commissions(array $properties, array $payments): array
+function ek_business_commission_key(array $commission): string
 {
-    $result = [];
+    $id = ek_business_text($commission['id'] ?? '');
+    if ($id !== '') {
+        return $id;
+    }
+    return ek_business_normalize(
+        ek_business_text($commission['operation'] ?? 'commission') . '-' .
+        ek_business_text($commission['property'] ?? 'bien') . '-' .
+        ek_business_text($commission['owner'] ?? 'proprietaire')
+    );
+}
+
+function ek_business_commission_type(array $commission): string
+{
+    $type = ek_business_text($commission['commissionType'] ?? '');
+    if ($type !== '') {
+        return $type;
+    }
+    $text = ek_business_normalize(ek_business_text($commission['operation'] ?? '') . ' ' . ek_business_text($commission['calculationBase'] ?? ''));
+    if (str_contains($text, 'vente')) {
+        return 'Vente';
+    }
+    if (str_contains($text, 'mandat') || str_contains($text, 'premier loyer') || str_contains($text, 'entree')) {
+        return 'Entrée locataire';
+    }
+    return 'Gestion récurrente';
+}
+
+function ek_business_commission_payer(array $commission): string
+{
+    $payer = ek_business_text($commission['commissionPayer'] ?? ($commission['payer'] ?? ''));
+    if ($payer === 'Propriétaire' || $payer === 'Locataire') {
+        return $payer;
+    }
+    return ek_business_commission_type($commission) === 'Entrée locataire' ? 'Locataire' : 'Propriétaire';
+}
+
+function ek_business_commission_collection_status(array $commission): string
+{
+    $status = ek_business_text($commission['collectionStatus'] ?? '');
+    if ($status !== '') {
+        return $status;
+    }
+    if (!empty($commission['collectionConfirmed']) || !empty($commission['encaissementConfirmed'])) {
+        return 'Encaissée';
+    }
+    $text = ek_business_normalize(ek_business_text($commission['status'] ?? ''));
+    foreach (['encaissee', 'integree', 'associee', 'payee', 'validee'] as $word) {
+        if (str_contains($text, $word)) {
+            return 'Encaissée';
+        }
+    }
+    return 'À encaisser';
+}
+
+function ek_business_commission_collected(array $commission): bool
+{
+    return ek_business_commission_collection_status($commission) === 'Encaissée';
+}
+
+function ek_business_commission_owner_charged(array $commission): bool
+{
+    return ek_business_commission_payer($commission) === 'Propriétaire';
+}
+
+function ek_business_apply_commission_business_fields(array $commission): array
+{
+    $payer = ek_business_commission_payer($commission);
+    $status = ek_business_commission_collection_status($commission);
+    $baseAmount = ek_business_money_to_int($commission['collected'] ?? 0);
+    $commissionAmount = ek_business_money_to_int($commission['commission'] ?? 0);
+    $ownerNet = $payer === 'Propriétaire' ? max($baseAmount - $commissionAmount, 0) : $baseAmount;
+
+    $commission['commissionPayer'] = $payer;
+    $commission['collectionStatus'] = $status;
+    $commission['collectionConfirmed'] = $status === 'Encaissée';
+    $commission['collectionMode'] = ek_business_text($commission['collectionMode'] ?? '') ?: ($payer === 'Propriétaire' ? 'Déduction reversement' : '');
+    $commission['ownerNet'] = ek_business_format_fcfa($ownerNet);
+    $commission['ownerNetValue'] = $ownerNet;
+    $commission['commissionValue'] = $commissionAmount;
+
+    return $commission;
+}
+
+function ek_business_commissions(array $state, array $properties, array $payments): array
+{
+    $generated = [];
     $index = 1;
+    $overrides = ek_business_array($state['commissionOverrides'] ?? []);
 
     foreach ($payments as $payment) {
         $paid = ek_business_money_to_int($payment['paid'] ?? 0);
@@ -406,9 +492,11 @@ function ek_business_commissions(array $properties, array $payments): array
         }
         $rule = $property['commission'] ?? '5%';
         $commission = ek_business_commission_amount($rule, $paid);
-        $result[] = [
+        $generated[] = ek_business_apply_commission_business_fields([
             'id' => sprintf('COM-SRV-%03d', $index++),
             'operation' => 'Encaissement ' . ek_business_text($payment['property'] ?? ''),
+            'commissionType' => 'Gestion récurrente',
+            'trigger' => 'Paiement loyer',
             'property' => ek_business_text($payment['property'] ?? ''),
             'owner' => ek_business_text($payment['owner'] ?? ($property['owner'] ?? '')),
             'client' => ek_business_text($payment['tenant'] ?? ''),
@@ -419,14 +507,38 @@ function ek_business_commissions(array $properties, array $payments): array
             'rate' => ek_business_text($rule) ?: '5%',
             'fixedAmount' => str_contains(ek_business_text($rule), '%') ? '' : ek_business_text($rule),
             'calculationBase' => 'Paiement encaisse',
+            'appliedOn' => 'Paiement encaisse',
             'commission' => ek_business_format_fcfa($commission),
             'ownerNet' => ek_business_format_fcfa(max($paid - $commission, 0)),
-            'status' => 'Calculée serveur',
+            'commissionPayer' => 'Propriétaire',
+            'collectionStatus' => 'À encaisser',
+            'collectionConfirmed' => false,
+            'collectionMode' => 'Déduction reversement',
+            'status' => 'À confirmer',
             'paymentReference' => ek_business_text($payment['reference'] ?? ''),
             'integratedInOwnerStatement' => false,
             'commissionValue' => $commission,
             'ownerNetValue' => max($paid - $commission, 0),
-        ];
+        ]);
+    }
+
+    $result = [];
+    $existing = [];
+    foreach ($generated as $commission) {
+        $key = ek_business_commission_key($commission);
+        if (isset($overrides[$key]) && is_array($overrides[$key])) {
+            $commission = array_replace($commission, $overrides[$key]);
+        }
+        $commission = ek_business_apply_commission_business_fields($commission);
+        $existing[ek_business_commission_key($commission)] = true;
+        $result[] = $commission;
+    }
+
+    foreach ($overrides as $key => $commission) {
+        if (!is_array($commission) || empty($commission['__created']) || isset($existing[(string) $key])) {
+            continue;
+        }
+        $result[] = ek_business_apply_commission_business_fields($commission);
     }
 
     return $result;
@@ -464,7 +576,7 @@ function ek_business_reversals(array $state, array $owners, array $properties, a
     foreach (ek_business_owner_names($owners, $properties, $payments) as $ownerName) {
         $ownerPayments = array_values(array_filter($payments, static fn(array $payment): bool => ek_business_text($payment['owner'] ?? '') === $ownerName && !empty($payment['serverValid'])));
         $ownerCharges = array_values(array_filter($charges, static fn(array $charge): bool => ek_business_text($charge['owner'] ?? '') === $ownerName && ek_business_owner_deductible_charge($charge)));
-        $ownerCommissions = array_values(array_filter($commissions, static fn(array $commission): bool => ek_business_text($commission['owner'] ?? '') === $ownerName));
+        $ownerCommissions = array_values(array_filter($commissions, static fn(array $commission): bool => ek_business_text($commission['owner'] ?? '') === $ownerName && ek_business_commission_owner_charged($commission) && ek_business_commission_collected($commission)));
         $ownerManual = array_values(array_filter($manual, static fn($reversal): bool => is_array($reversal) && ek_business_text($reversal['owner'] ?? '') === $ownerName));
 
         $collected = array_reduce($ownerPayments, static fn(int $sum, array $payment): int => $sum + ek_business_money_to_int($payment['paid'] ?? 0), 0);
@@ -534,7 +646,7 @@ function ek_business_dashboard_totals(array $properties, array $rentRows, array 
     $rentPaid = array_reduce($rentRows, static fn(int $sum, array $row): int => $sum + ek_business_money_to_int($row['paid'] ?? 0), 0);
     $arrears = array_reduce($rentRows, static fn(int $sum, array $row): int => $sum + ek_business_money_to_int($row['balance'] ?? 0), 0);
     $paymentsPaid = array_reduce($payments, static fn(int $sum, array $payment): int => $sum + ek_business_money_to_int($payment['paid'] ?? 0), 0);
-    $commissionTotal = array_reduce($commissions, static fn(int $sum, array $commission): int => $sum + ek_business_money_to_int($commission['commission'] ?? 0), 0);
+    $commissionTotal = array_reduce($commissions, static fn(int $sum, array $commission): int => ek_business_commission_collected($commission) ? $sum + ek_business_money_to_int($commission['commission'] ?? 0) : $sum, 0);
     $chargeTotal = array_reduce($charges, static function (int $sum, array $charge): int {
         $status = ek_business_normalize(ek_business_text($charge['status'] ?? ''));
         return str_contains($status, 'annul') ? $sum : $sum + ek_business_money_to_int($charge['amount'] ?? 0);
@@ -608,7 +720,7 @@ function ek_business_payload(array $state, array $user = [], bool $includeFinanc
     $payments = ek_business_normalized_payments($state, $properties, $tenants);
     $rentRows = ek_business_rent_rows($properties, $tenants, $payments);
     $charges = ek_business_charges($state);
-    $commissions = ek_business_commissions($properties, $payments);
+    $commissions = ek_business_commissions($state, $properties, $payments);
     $reversals = ek_business_reversals($state, $owners, $properties, $payments, $charges, $commissions);
     $totals = ek_business_dashboard_totals($properties, $rentRows, $payments, $charges, $commissions, $reversals);
 

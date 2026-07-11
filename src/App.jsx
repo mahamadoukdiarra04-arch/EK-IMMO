@@ -3182,7 +3182,9 @@ function getDashboardPropertyStats(propertiesList = [], period = "Mois", rentRow
   const rentPaid = rentRowsList.reduce((sum, row) => sum + parseFCFA(row.paid), 0);
   const arrearsAmount = rentRowsList.reduce((sum, row) => sum + parseFCFA(row.balance), 0);
   const paymentAmount = paymentsList.reduce((sum, payment) => sum + parseFCFA(payment.paid), 0);
-  const commissionAmount = commissionsList.reduce((sum, commission) => sum + parseFCFA(commission.commission), 0);
+  const commissionAmount = commissionsList
+    .filter(isCommissionCollected)
+    .reduce((sum, commission) => sum + parseFCFA(commission.commission), 0);
   const chargeAmount = chargesList
     .filter((charge) => !["Annulée", "Annulé"].includes(charge.status))
     .reduce((sum, charge) => sum + parseFCFA(charge.amount), 0);
@@ -3448,6 +3450,9 @@ const commissionTriggers = ["Nouveau locataire", "Paiement loyer", "Vente signé
 const commissionBaseOptions = ["Loyer mensuel", "Loyer encaissé", "Premier loyer", "Prix de vente", "Caution", "Montant manuel"];
 const recurringCommissionBases = ["Loyer encaissé", "Loyer mensuel", "Montant manuel"];
 const entryCommissionBases = ["Premier loyer", "Loyer mensuel", "Caution", "Montant manuel"];
+const commissionPayers = ["Propriétaire", "Locataire"];
+const commissionCollectionStatuses = ["À encaisser", "Encaissée"];
+const commissionCollectionModes = ["Déduction reversement", "Espèces", "Chèque", "Virement", "Orange Money", "Moov Money", "Autre"];
 
 function getPercentValue(value, fallback = "0%") {
   const match = String(value ?? "").match(/(\d+(?:[.,]\d+)?)\s*%/);
@@ -3499,11 +3504,56 @@ function getCommissionBaseLabel(commission = {}) {
   return source.appliedOn || source.calculationBase || "Montant encaissé";
 }
 
+function getCommissionPayerLabel(commission = {}) {
+  const source = commission ?? {};
+  if (source.commissionPayer) return source.commissionPayer;
+  if (source.payer && ["Propriétaire", "Locataire"].includes(source.payer)) return source.payer;
+  const type = getCommissionTypeLabel(source);
+  return type === "Entrée locataire" ? "Locataire" : "Propriétaire";
+}
+
+function getCommissionCollectionStatus(commission = {}) {
+  const source = commission ?? {};
+  if (source.collectionStatus) return source.collectionStatus;
+  if (source.collectionConfirmed === true || source.encaissementConfirmed === true) return "Encaissée";
+  const status = normalizeSearch(source.status ?? "");
+  if (["encaissee", "integree", "associee", "payee", "validee"].some((word) => status.includes(word))) return "Encaissée";
+  return "À encaisser";
+}
+
+function isCommissionCollected(commission = {}) {
+  return getCommissionCollectionStatus(commission) === "Encaissée";
+}
+
+function isCommissionOwnerCharged(commission = {}) {
+  return getCommissionPayerLabel(commission) === "Propriétaire";
+}
+
+function getCommissionOwnerNetAmount(commission = {}) {
+  const baseAmount = parseFCFA(commission?.collected);
+  const commissionAmount = parseFCFA(commission?.commission);
+  return isCommissionOwnerCharged(commission) ? Math.max(baseAmount - commissionAmount, 0) : baseAmount;
+}
+
+function applyCommissionBusinessFields(commission = {}) {
+  const source = commission ?? {};
+  const commissionPayer = getCommissionPayerLabel(source);
+  const collectionStatus = getCommissionCollectionStatus(source);
+  return {
+    ...source,
+    commissionPayer,
+    collectionStatus,
+    collectionConfirmed: collectionStatus === "Encaissée",
+    collectionMode: source.collectionMode ?? (commissionPayer === "Propriétaire" ? "Déduction reversement" : ""),
+    ownerNet: formatFCFA(getCommissionOwnerNetAmount({ ...source, commissionPayer })),
+  };
+}
+
 function makeEntryCommissionRecord({ property, tenant, sequence = 1 }) {
   const baseAmount = parseFCFA(tenant?.rent ?? property?.price);
   const rate = getPropertyEntryCommissionRate(property);
   const commissionAmount = Math.round(baseAmount * getPercentNumber(rate) / 100);
-  return {
+  return applyCommissionBusinessFields({
     __created: true,
     id: makeDocumentNumber("COM", 800 + sequence),
     operation: `Entrée locataire ${tenant?.name ?? ""}`.trim(),
@@ -3521,12 +3571,16 @@ function makeEntryCommissionRecord({ property, tenant, sequence = 1 }) {
     calculationBase: property?.entryCommissionBase ?? "Premier loyer",
     appliedOn: property?.entryCommissionBase ?? "Premier loyer",
     commission: formatFCFA(commissionAmount),
-    ownerNet: formatFCFA(Math.max(baseAmount - commissionAmount, 0)),
-    status: "À facturer",
+    ownerNet: formatFCFA(baseAmount),
+    commissionPayer: "Locataire",
+    collectionStatus: "À encaisser",
+    collectionConfirmed: false,
+    collectionMode: "",
+    status: "À encaisser",
     contractNumber: tenant?.contract?.startsWith("CON") ? tenant.contract : "",
     paymentReference: "",
     integratedInOwnerStatement: false,
-  };
+  });
 }
 
 function uniqueValues(values) {
@@ -3691,7 +3745,7 @@ function buildCommissionRecords(propertiesList = [], paymentsList = [], baseComm
       const commissionAmount = getCommissionAmountForProperty(property, payment);
       const recurringRate = getPropertyRecurringCommissionRate(property);
 
-      return {
+      return applyCommissionBusinessFields({
         id: makeDocumentNumber("COM", 300 + index + 1),
         operation: `Encaissement ${payment.property}`,
         commissionType: "Gestion récurrente",
@@ -3709,22 +3763,26 @@ function buildCommissionRecords(propertiesList = [], paymentsList = [], baseComm
         appliedOn: property?.recurringCommissionBase ?? "Loyer encaissé",
         commission: formatFCFA(commissionAmount),
         ownerNet: formatFCFA(Math.max(paidAmount - commissionAmount, 0)),
-        status: "Calculée",
+        commissionPayer: "Propriétaire",
+        collectionStatus: "À encaisser",
+        collectionConfirmed: false,
+        collectionMode: "Déduction reversement",
+        status: "À confirmer",
         contractNumber: payment.contract ?? property?.activeContractNumber ?? "",
         paymentReference: payment.reference,
         integratedInOwnerStatement: false,
-      };
+      });
     })
     .filter(Boolean);
 
-  const mergedCommissions = [...generatedCommissions, ...baseCommissions].map((commission) => ({
+  const mergedCommissions = [...generatedCommissions, ...baseCommissions].map((commission) => applyCommissionBusinessFields({
     ...commission,
     ...(overrides[getCommissionKey(commission)] ?? {}),
   }));
   const existingKeys = new Set(mergedCommissions.map(getCommissionKey));
   const createdCommissions = Object.entries(overrides)
     .filter(([key, commission]) => commission?.__created && !existingKeys.has(key))
-    .map(([, commission]) => commission);
+    .map(([, commission]) => applyCommissionBusinessFields(commission));
   return [...createdCommissions, ...mergedCommissions];
 }
 
@@ -3735,7 +3793,7 @@ function buildReversalRecords(ownersList = [], paymentsList = [], chargesList = 
     .map((owner) => {
       const ownerPayments = paymentsList.filter((payment) => payment.owner === owner.name && parseFCFA(payment.paid) > 0);
       const ownerCharges = chargesList.filter((charge) => charge.owner === owner.name && isOwnerDeductibleCharge(charge));
-      const ownerCommissions = commissionsList.filter((commission) => commission.owner === owner.name);
+      const ownerCommissions = commissionsList.filter((commission) => commission.owner === owner.name && isCommissionOwnerCharged(commission) && isCommissionCollected(commission));
       const collected = ownerPayments.reduce((sum, payment) => sum + parseFCFA(payment.paid), 0);
       const commission = ownerCommissions.reduce((sum, item) => sum + parseFCFA(item.commission), 0);
       const chargeTotal = ownerCharges.reduce((sum, charge) => sum + parseFCFA(charge.amount), 0);
@@ -4222,15 +4280,16 @@ function calculateOwnerReversal(ownerName, paymentsList = paymentRecords, charge
   const ownerPayments = paymentsList.filter((payment) => payment.owner === ownerName);
   const ownerCharges = chargesList.filter((charge) => charge.owner === ownerName && isOwnerDeductibleCharge(charge));
   const ownerReversals = reversalsList.filter((reversal) => reversal.owner === ownerName && !["Annulé", "Annulée", "Archivé"].includes(reversal.status));
-  const ownerCommissions = commissionsList.filter((commission) => commission.owner === ownerName);
+  const ownerCommissions = commissionsList.filter((commission) => commission.owner === ownerName && isCommissionOwnerCharged(commission) && isCommissionCollected(commission));
+  const hasOwnerCommissionRecords = commissionsList.some((commission) => commission.owner === ownerName);
   const collectedFromPayments = ownerPayments.reduce((sum, payment) => sum + parseFCFA(payment.paid), 0);
   const collected = collectedFromPayments || parseFCFA(ownerData?.rent);
   const fallbackCommission = ownerData?.commissionRate
     ? Math.round(collected * getPercentNumber(ownerData.commissionRate) / 100)
     : getCommissionAmountFromRule(ownerData?.commission, collected);
-  const commissions = ownerCommissions.reduce((sum, commission) => sum + parseFCFA(commission.commission), 0)
-    || fallbackCommission
-    || (collected > 0 ? Math.round(collected * 0.05) : 0);
+  const explicitCommissionAmount = ownerCommissions.reduce((sum, commission) => sum + parseFCFA(commission.commission), 0);
+  const commissions = explicitCommissionAmount
+    || (!hasOwnerCommissionRecords ? fallbackCommission || (collected > 0 ? Math.round(collected * 0.05) : 0) : 0);
   const chargesAmount = ownerCharges.reduce((sum, charge) => sum + parseFCFA(charge.amount ?? charge.charges), 0)
     || parseFCFA(ownerData?.charges);
   const alreadyPaid = ownerReversals.reduce((sum, reversal) => sum + parseFCFA(reversal.paid), 0);
@@ -4839,10 +4898,20 @@ function App() {
     [activeProperties, allTenants, demoBaseRentRows]
   );
   const allRentRows = useMemo(() => serverRentRows ?? mergeRentRowsWithPayments(operationalRentRows, recordedPayments), [operationalRentRows, recordedPayments, serverRentRows]);
-  const allCommissions = useMemo(
-    () => serverCommissions ?? buildCommissionRecords(activeProperties, allPayments, demoBaseCommissions, commissionOverrides),
-    [activeProperties, allPayments, demoBaseCommissions, commissionOverrides, serverCommissions]
-  );
+  const allCommissions = useMemo(() => {
+    if (serverCommissions) {
+      const mergedServerCommissions = serverCommissions.map((commission) => applyCommissionBusinessFields({
+        ...commission,
+        ...(commissionOverrides[getCommissionKey(commission)] ?? {}),
+      }));
+      const existingKeys = new Set(mergedServerCommissions.map(getCommissionKey));
+      const createdCommissions = Object.entries(commissionOverrides)
+        .filter(([key, commission]) => commission?.__created && !existingKeys.has(key))
+        .map(([, commission]) => applyCommissionBusinessFields(commission));
+      return [...createdCommissions, ...mergedServerCommissions];
+    }
+    return buildCommissionRecords(activeProperties, allPayments, demoBaseCommissions, commissionOverrides);
+  }, [activeProperties, allPayments, commissionOverrides, demoBaseCommissions, serverCommissions]);
   const allProspects = useMemo(() => {
     const applyOverride = (prospect) => ({ ...prospect, ...(prospectOverrides[getProspectKey(prospect)] ?? {}) });
     return [...createdProspects.map(applyOverride), ...demoBaseProspects.map(applyOverride)];
@@ -8439,6 +8508,8 @@ function App() {
     const rateAmount = values.mode === "Montant fixe"
       ? parseFCFA(values.fixedAmount)
       : Math.round(baseAmount * getPercentNumber(values.rate) / 100);
+    const commissionAmount = rateAmount || parseFCFA(commission.commission);
+    const collectionStatus = values.collectionConfirmed === "Oui" ? "Encaissée" : "À encaisser";
     const nextCommission = {
       ...commission,
       commissionType: values.commissionType,
@@ -8449,18 +8520,25 @@ function App() {
       calculationBase: values.calculationBase,
       appliedOn: values.appliedOn,
       collected: values.calculationBaseAmount || commission.collected,
-      commission: formatFCFA(rateAmount || parseFCFA(commission.commission)),
-      ownerNet: formatFCFA(Math.max(baseAmount - (rateAmount || parseFCFA(commission.commission)), 0)),
+      commission: formatFCFA(commissionAmount),
+      commissionPayer: values.commissionPayer,
+      collectionStatus,
+      collectionConfirmed: collectionStatus === "Encaissée",
+      collectionMode: values.collectionMode,
+      collectionDate: values.collectionDate,
+      collectionReference: values.collectionReference,
+      ownerNet: formatFCFA(values.commissionPayer === "Propriétaire" ? Math.max(baseAmount - commissionAmount, 0) : baseAmount),
       modificationReason: values.reason,
       modificationComment: values.comment,
-      status: commission.integratedInOwnerStatement ? "Modifiée" : commission.status,
+      status: collectionStatus,
     };
 
+    const normalizedCommission = applyCommissionBusinessFields(nextCommission);
     setCommissionOverrides((current) => ({
       ...current,
-      [getCommissionKey(commission)]: nextCommission,
+      [getCommissionKey(commission)]: normalizedCommission,
     }));
-    setCommissionActionContext({ commission: nextCommission });
+    setCommissionActionContext({ commission: normalizedCommission });
     setModal(null);
   };
 
@@ -17440,7 +17518,8 @@ function CommissionsView({ onAction, commissionsList = commissions }) {
   };
   const commissionTotals = useMemo(() => ({
     collected: commissionsList.reduce((sum, commission) => sum + parseFCFA(commission.collected), 0),
-    agency: commissionsList.reduce((sum, commission) => sum + parseFCFA(commission.commission), 0),
+    agency: commissionsList.filter(isCommissionCollected).reduce((sum, commission) => sum + parseFCFA(commission.commission), 0),
+    pending: commissionsList.filter((commission) => !isCommissionCollected(commission)).reduce((sum, commission) => sum + parseFCFA(commission.commission), 0),
     ownerNet: commissionsList.reduce((sum, commission) => sum + parseFCFA(commission.ownerNet), 0),
     entryCount: commissionsList.filter((commission) => getCommissionTypeLabel(commission) === "Entrée locataire").length,
     recurringCount: commissionsList.filter((commission) => getCommissionTypeLabel(commission) === "Gestion récurrente").length,
@@ -17458,8 +17537,9 @@ function CommissionsView({ onAction, commissionsList = commissions }) {
     <section className="client-list-workspace" data-demo="finance-commissions-workspace">
       <div>
         <div className="summary-strip finance-summary">
-          <Info label="Total encaissé" value={formatFCFA(commissionTotals.collected)} />
-          <Info label="Commission agence" value={formatFCFA(commissionTotals.agency)} />
+          <Info label="Base suivie" value={formatFCFA(commissionTotals.collected)} />
+          <Info label="Commissions encaissées" value={formatFCFA(commissionTotals.agency)} />
+          <Info label="À encaisser" value={formatFCFA(commissionTotals.pending)} />
           <Info label="Net propriétaires" value={formatFCFA(commissionTotals.ownerNet)} />
           <Info label="Entrées locataires" value={String(commissionTotals.entryCount)} />
           <Info label="Récurrentes" value={String(commissionTotals.recurringCount)} />
@@ -17476,11 +17556,13 @@ function CommissionsView({ onAction, commissionsList = commissions }) {
                 row.rate || row.fixedAmount || row.mode,
                 row.collected,
                 row.commission,
+                getCommissionPayerLabel(row),
+                <Badge label={getCommissionCollectionStatus(row)} />,
                 row.ownerNet,
                 <Badge label={row.status ?? "Généré"} />,
                 <Button compact onClick={() => openCommission(row)}><Eye size={16} /> Fiche</Button>,
               ])}
-              columns={["Opération", "Type", "Bien", "Propriétaire", "Élément appliqué", "Taux / forfait", "Base", "Commission", "Net propriétaire", "Statut", "Action"]}
+              columns={["Opération", "Type", "Bien", "Propriétaire", "Élément appliqué", "Taux / forfait", "Base", "Commission", "À régler par", "Encaissement", "Net propriétaire", "Statut", "Action"]}
             />
           ) : (
             <div className="empty-state compact-empty">
@@ -17504,7 +17586,8 @@ function CommissionProfilePanel({ commission, onAction }) {
           ["Montant encaissé", commission.collected],
           ["Commission agence", commission.commission],
           ["Net propriétaire", commission.ownerNet],
-          ["Type", getCommissionTypeLabel(commission)],
+          ["À régler par", getCommissionPayerLabel(commission)],
+          ["Encaissement", getCommissionCollectionStatus(commission)],
         ]}
       />
       <div className="simple-list">
@@ -17517,6 +17600,11 @@ function CommissionProfilePanel({ commission, onAction }) {
         <p><span>Élément appliqué</span><strong>{getCommissionBaseLabel(commission)}</strong></p>
         <p><span>Taux ou montant fixe</span><strong>{commission.rate || commission.fixedAmount || commission.mode}</strong></p>
         <p><span>Commission calculée</span><strong>{commission.commission}</strong></p>
+        <p><span>À régler par</span><strong>{getCommissionPayerLabel(commission)}</strong></p>
+        <p><span>Encaissement</span><Badge label={getCommissionCollectionStatus(commission)} /></p>
+        <p><span>Mode d'encaissement</span><strong>{commission.collectionMode || "À préciser"}</strong></p>
+        <p><span>Date d'encaissement</span><strong>{commission.collectionDate || "Non renseignée"}</strong></p>
+        <p><span>Référence d'encaissement</span><strong>{commission.collectionReference || "Non renseignée"}</strong></p>
         <p><span>Montant net à reverser</span><strong>{commission.ownerNet}</strong></p>
         <p><span>Date</span><strong>{commission.date}</strong></p>
         <p><span>Client / locataire</span><strong>{commission.client}</strong></p>
@@ -17524,7 +17612,7 @@ function CommissionProfilePanel({ commission, onAction }) {
       </div>
       <div className="stack-actions">
         <Button variant="primary" onClick={() => onAction("Détail commission", { commission })}><Eye size={17} /> Détail</Button>
-        <Button onClick={() => onAction("Modifier commission", { commission })}><Pencil size={17} /> Modifier</Button>
+        <Button onClick={() => onAction("Modifier commission", { commission })}><Pencil size={17} /> Modifier / encaisser</Button>
         <Button onClick={() => onAction("Paiement commission", { commission })}><Banknote size={17} /> Paiement</Button>
         <Button onClick={() => onAction("Contrat commission", { commission })}><FileText size={17} /> Contrat</Button>
         <Button onClick={() => onAction("Situation commission", { commission })}><HandCoins size={17} /> Situation</Button>
@@ -17580,6 +17668,11 @@ function CommissionDetailModal({ commission, payment, contract, onClose }) {
           <p><span>Élément appliqué</span><strong>{getCommissionBaseLabel(commission)}</strong></p>
           <p><span>Taux ou montant fixe</span><strong>{commission.rate || commission.fixedAmount || commission.mode}</strong></p>
           <p><span>Commission calculée</span><strong>{commission.commission}</strong></p>
+          <p><span>À régler par</span><strong>{getCommissionPayerLabel(commission)}</strong></p>
+          <p><span>Encaissement</span><Badge label={getCommissionCollectionStatus(commission)} /></p>
+          <p><span>Mode d'encaissement</span><strong>{commission.collectionMode || "À préciser"}</strong></p>
+          <p><span>Date d'encaissement</span><strong>{commission.collectionDate || "Non renseignée"}</strong></p>
+          <p><span>Référence d'encaissement</span><strong>{commission.collectionReference || "Non renseignée"}</strong></p>
           <p><span>Montant net propriétaire</span><strong>{commission.ownerNet}</strong></p>
           <p><span>Date</span><strong>{commission.date}</strong></p>
           <p><span>Statut</span><Badge label={commission.status ?? "Généré"} /></p>
@@ -17604,8 +17697,13 @@ function CommissionEditModal({ commission, onSave, onClose }) {
     calculationBase: commission.calculationBase ?? "Loyer encaissé",
     appliedOn: getCommissionBaseLabel(commission),
     calculationBaseAmount: commission.collected,
+    commissionPayer: getCommissionPayerLabel(commission),
+    collectionConfirmed: isCommissionCollected(commission) ? "Oui" : "Non",
+    collectionMode: commission.collectionMode ?? (getCommissionPayerLabel(commission) === "Propriétaire" ? "Déduction reversement" : ""),
+    collectionDate: toDateInputValue(commission.collectionDate ?? commission.date, "2026-06-24"),
+    collectionReference: commission.collectionReference ?? commission.paymentReference ?? "",
     comment: commission.modificationComment ?? "",
-    reason: commission.modificationReason ?? "",
+    reason: commission.modificationReason ?? "Mise à jour prise en charge et encaissement",
     confirmation: "Non",
   });
   const [error, setError] = useState("");
@@ -17622,6 +17720,10 @@ function CommissionEditModal({ commission, onSave, onClose }) {
       setError("Confirmez l'impact sur la situation propriétaire avant d'enregistrer.");
       return;
     }
+    if (values.collectionConfirmed === "Oui" && !values.collectionMode) {
+      setError("Précisez le mode d'encaissement avant de confirmer.");
+      return;
+    }
     onSave({ commission, values });
   };
   const estimatedCommission = values.mode === "Montant fixe"
@@ -17634,7 +17736,7 @@ function CommissionEditModal({ commission, onSave, onClose }) {
         <button className="modal-close" onClick={onClose}>×</button>
         <div className="payment-modal-head">
           <div>
-            <span>Modifier commission</span>
+            <span>Modifier / encaisser commission</span>
             <h2>{commission.operation}</h2>
             <p>{commission.commission} actuellement · {commission.ownerNet} net propriétaire</p>
           </div>
@@ -17650,6 +17752,11 @@ function CommissionEditModal({ commission, onSave, onClose }) {
           <label>Base de calcul<select value={values.calculationBase} onChange={update("calculationBase")}><option>Loyer encaissé</option><option>Prix de vente</option><option>Mandat de gestion</option><option>Montant manuel</option></select></label>
           <label>Montant de base<MoneyInput value={values.calculationBaseAmount} onChange={(value) => update("calculationBaseAmount")({ target: { value } })} /></label>
           <label>Commission estimée<MoneyInput value={estimatedCommission} readOnly /></label>
+          <label>Commission à régler par<select value={values.commissionPayer} onChange={update("commissionPayer")}>{commissionPayers.map((option) => <option key={option}>{option}</option>)}</select></label>
+          <label>Encaissement confirmé<select value={values.collectionConfirmed} onChange={update("collectionConfirmed")}><option>Non</option><option>Oui</option></select></label>
+          <label>Mode d'encaissement<select value={values.collectionMode} onChange={update("collectionMode")}><option value="">À préciser</option>{commissionCollectionModes.map((option) => <option key={option}>{option}</option>)}</select></label>
+          <label>Date d'encaissement<input type="date" value={values.collectionDate} onChange={update("collectionDate")} /></label>
+          <label className="full">Référence d'encaissement<input value={values.collectionReference} onChange={update("collectionReference")} placeholder="Référence reçu, virement ou note interne" /></label>
           <label className="full">Commentaire<textarea value={values.comment} onChange={update("comment")} /></label>
           <label className="full">Motif de modification<input value={values.reason} onChange={update("reason")} placeholder="Correction taux, accord propriétaire..." /></label>
           {commission.integratedInOwnerStatement && (
@@ -17712,6 +17819,11 @@ function CommissionExportModal({ commission, payment, contract, onArchive, onClo
     appliedOn: getCommissionBaseLabel(commission),
     rate: commission.rate || commission.mode,
     commission: commission.commission,
+    commissionPayer: getCommissionPayerLabel(commission),
+    collectionStatus: getCommissionCollectionStatus(commission),
+    collectionMode: commission.collectionMode || "À préciser",
+    collectionDate: commission.collectionDate || "Non renseignée",
+    collectionReference: commission.collectionReference || "Non renseignée",
     ownerNet: commission.ownerNet,
     date: commission.date,
     status: commission.status ?? "Généré",
@@ -17751,6 +17863,11 @@ function CommissionExportModal({ commission, payment, contract, onArchive, onClo
               <label>Statut<input value={values.status} onChange={update("status")} /></label>
               <label>Type<input value={values.commissionType} onChange={update("commissionType")} /></label>
               <label>Élément appliqué<select value={values.appliedOn} onChange={update("appliedOn")}>{commissionBaseOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+              <label>À régler par<select value={values.commissionPayer} onChange={update("commissionPayer")}>{commissionPayers.map((option) => <option key={option}>{option}</option>)}</select></label>
+              <label>Encaissement<select value={values.collectionStatus} onChange={update("collectionStatus")}>{commissionCollectionStatuses.map((option) => <option key={option}>{option}</option>)}</select></label>
+              <label>Mode d'encaissement<select value={values.collectionMode} onChange={update("collectionMode")}><option>À préciser</option>{commissionCollectionModes.map((option) => <option key={option}>{option}</option>)}</select></label>
+              <label>Date d'encaissement<input value={values.collectionDate} onChange={update("collectionDate")} /></label>
+              <label>Référence<input value={values.collectionReference} onChange={update("collectionReference")} /></label>
               <label className="full">Observation<textarea value={values.observation} onChange={update("observation")} /></label>
             </div>
           </Panel>
@@ -17794,8 +17911,8 @@ function CommissionExportDocument({ values }) {
       <section className="document-block">
         <h3>Calcul de commission</h3>
         <table className="document-table">
-          <thead><tr><th>Élément appliqué</th><th>Montant de base</th><th>Mode de calcul</th><th>Taux / fixe</th><th>Commission E.K immo</th><th>Net propriétaire</th></tr></thead>
-          <tbody><tr><td>{values.appliedOn}</td><td>{values.collected}</td><td>{values.mode}</td><td>{values.rate}</td><td>{values.commission}</td><td>{values.ownerNet}</td></tr></tbody>
+          <thead><tr><th>Élément appliqué</th><th>Montant de base</th><th>Mode de calcul</th><th>Taux / fixe</th><th>Commission E.K immo</th><th>À régler par</th><th>Encaissement</th><th>Net propriétaire</th></tr></thead>
+          <tbody><tr><td>{values.appliedOn}</td><td>{values.collected}</td><td>{values.mode}</td><td>{values.rate}</td><td>{values.commission}</td><td>{values.commissionPayer}</td><td>{values.collectionStatus}</td><td>{values.ownerNet}</td></tr></tbody>
         </table>
       </section>
       <section className="document-block">
@@ -17803,6 +17920,9 @@ function CommissionExportDocument({ values }) {
         <div className="document-info-grid">
           <p><span>Paiement lié</span><strong>{values.paymentReference}</strong></p>
           <p><span>Contrat lié</span><strong>{values.contractNumber}</strong></p>
+          <p><span>Mode d'encaissement</span><strong>{values.collectionMode}</strong></p>
+          <p><span>Date d'encaissement</span><strong>{values.collectionDate}</strong></p>
+          <p><span>Référence encaissement</span><strong>{values.collectionReference}</strong></p>
           <p><span>Observation</span><strong>{values.observation}</strong></p>
         </div>
       </section>
@@ -19220,7 +19340,13 @@ function buildReportRows(selected, { propertiesList, ownersList, tenantsList, co
       contract: contractsList.find((contract) => contract.number === commission.contractNumber)
         ?? contractsList.find((contract) => contract.property === commission.property)
         ?? contractsList[0],
-      cells: [commission.property, commission.owner, commission.client, commission.commission, commission.status],
+      cells: [
+        commission.property,
+        commission.owner,
+        commission.client,
+        `${commission.commission} · ${getCommissionPayerLabel(commission)}`,
+        `${getCommissionCollectionStatus(commission)} · ${commission.status ?? "Généré"}`,
+      ],
     }));
   }
 
