@@ -26813,7 +26813,7 @@ function PropertyFormModal({
         <div className="form-section" data-demo="modal-property-main">
           <h3>Informations générales</h3>
           <div className="form-grid compact-form">
-            <label>Code du bien<input value={formValues.code} onChange={updateValue("code")} readOnly={!isEditMode} /><small>Numéro généré automatiquement selon l'ordre d'enregistrement.</small></label>
+            <label>Code du bien<input value={formValues.code} onChange={updateValue("code")} readOnly /><small>Numéro généré automatiquement selon l'ordre d'enregistrement.</small></label>
             <label>Type de bien<select value={formValues.type} onChange={updateValue("type")}><option>Immeuble collectif</option><option>Appartement rattaché</option><option>Appartement individuel</option><option>Maison</option><option>Villa</option><option>Terrain</option><option>Bureau</option><option>Boutique</option></select></label>
             <label>Nom ou désignation<input value={formValues.name} onChange={updateValue("name")} /></label>
             <label>Quartier<input value={formValues.district} onChange={updateValue("district")} /></label>
