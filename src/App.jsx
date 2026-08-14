@@ -3218,32 +3218,143 @@ const financeSummaryByPeriod = {
   "Période personnalisée": ["54.2M FCFA", "43.8M FCFA", "10.4M FCFA", "6.3M FCFA", "18.9M FCFA"],
 };
 
-function getDashboardPropertyStats(propertiesList = [], period = "Mois", rentRowsList = [], paymentsList = [], chargesList = [], commissionsList = [], reversalsList = []) {
-  const multiplier = periodWeight[period] ?? 1;
-  const maintenanceOnly = propertiesList.filter((property) => property.status === "Entretien seul" || property.financialMode === "Contrat entretien seul");
-  const available = propertiesList.filter((property) => property.status === "Disponible");
+function parseDashboardDate(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return new Date(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()));
+  }
+
+  const text = String(value ?? "").trim();
+  let match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+
+  match = text.match(/^(\d{2})[\/.\-](\d{2})[\/.\-](\d{4})/);
+  if (match) return new Date(Date.UTC(Number(match[3]), Number(match[2]) - 1, Number(match[1])));
+
+  const normalized = normalizeSearch(text);
+  const monthNames = ["janvier", "fevrier", "mars", "avril", "mai", "juin", "juillet", "aout", "septembre", "octobre", "novembre", "decembre"];
+  const monthIndex = monthNames.findIndex((month) => normalized.includes(month));
+  const yearMatch = normalized.match(/\b(20\d{2})\b/);
+  if (monthIndex >= 0 && yearMatch) return new Date(Date.UTC(Number(yearMatch[1]), monthIndex, 1));
+
+  return null;
+}
+
+function getDashboardPreciseRecordDate(record, linkedPayments = []) {
+  const directDate = parseDashboardDate(record?.date ?? record?.paymentDate ?? record?.createdAt ?? record?.updatedAt);
+  if (directDate) return directDate;
+
+  const linkedPayment = linkedPayments.find((payment) => getPaymentKey(payment) === getPaymentKey(record));
+  return parseDashboardDate(linkedPayment?.date);
+}
+
+function getDashboardRecordDate(record, linkedPayments = []) {
+  return getDashboardPreciseRecordDate(record, linkedPayments) ?? parseDashboardDate(record?.period ?? record?.month);
+}
+
+function getDashboardPeriodWindow(period, referenceDate, customStart = "", customEnd = "") {
+  const normalizedPeriod = normalizeSearch(period);
+  if (normalizedPeriod.includes("personnalise")) {
+    const start = parseDashboardDate(customStart);
+    const end = parseDashboardDate(customEnd);
+    if (!start || !end || start > end) return null;
+    return { start, end };
+  }
+
+  const reference = referenceDate ?? new Date();
+  const year = reference.getUTCFullYear();
+  const month = reference.getUTCMonth();
+  const day = reference.getUTCDate();
+  if (normalizedPeriod.startsWith("jour")) {
+    const date = new Date(Date.UTC(year, month, day));
+    return { start: date, end: date };
+  }
+  if (normalizedPeriod.startsWith("semaine")) {
+    const date = new Date(Date.UTC(year, month, day));
+    const mondayOffset = (date.getUTCDay() + 6) % 7;
+    const start = new Date(date);
+    start.setUTCDate(start.getUTCDate() - mondayOffset);
+    const end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 6);
+    return { start, end };
+  }
+  if (normalizedPeriod.includes("annee")) {
+    return { start: new Date(Date.UTC(year, 0, 1)), end: new Date(Date.UTC(year, 11, 31)) };
+  }
+  return { start: new Date(Date.UTC(year, month, 1)), end: new Date(Date.UTC(year, month + 1, 0)) };
+}
+
+function isDashboardDateInWindow(date, window) {
+  if (!date || !window) return false;
+  return date >= window.start && date <= window.end;
+}
+
+function getLatestDashboardDate(records = [], linkedPayments = [], preciseOnly = false) {
+  const dates = records.map((record) => preciseOnly
+    ? getDashboardPreciseRecordDate(record, linkedPayments)
+    : getDashboardRecordDate(record, linkedPayments)).filter(Boolean);
+  return dates.reduce((latest, date) => (!latest || date > latest ? date : latest), null);
+}
+
+function isDashboardAgencyProperty(property, propertiesList = []) {
+  const linkedProperty = typeof property === "string" ? getPropertyByName(property, propertiesList) : property;
+  return isPropertyAgencyCollected(linkedProperty);
+}
+
+function getDashboardPeriodRecords({ propertiesList = [], period = "Mois", startDate = "", endDate = "", rentRowsList = [], paymentsList = [], chargesList = [], commissionsList = [], reversalsList = [] }) {
+  const agencyPayments = paymentsList.filter((payment) => payment.serverValid !== false && isDashboardAgencyProperty(payment.property, propertiesList));
+  const agencyRentRows = rentRowsList.filter((row) => isDashboardAgencyProperty(row.property, propertiesList));
+  const recordsForReference = [...agencyPayments, ...agencyRentRows, ...chargesList, ...commissionsList, ...reversalsList];
+  const normalizedPeriod = normalizeSearch(period);
+  const precisePeriod = normalizedPeriod.startsWith("jour") || normalizedPeriod.startsWith("semaine");
+  const rentReferenceDate = getLatestDashboardDate([...agencyPayments, ...agencyRentRows], agencyPayments, precisePeriod);
+  const referenceDate = rentReferenceDate ?? getLatestDashboardDate(recordsForReference, agencyPayments, precisePeriod) ?? new Date();
+  const window = getDashboardPeriodWindow(period, referenceDate, startDate, endDate);
+  if (!window) {
+    return { window: null, rentRows: [], payments: [], charges: [], commissions: [], reversals: [] };
+  }
+
+  const filterRecords = (records, linkedPayments = []) => records.filter((record) => {
+    const date = precisePeriod
+      ? getDashboardPreciseRecordDate(record, linkedPayments)
+      : getDashboardRecordDate(record, linkedPayments);
+    return isDashboardDateInWindow(date, window);
+  });
+  return {
+    window,
+    rentRows: filterRecords(agencyRentRows, agencyPayments),
+    payments: filterRecords(agencyPayments),
+    charges: filterRecords(chargesList.filter((charge) => !["Annulée", "Annulé"].includes(charge.status))),
+    commissions: filterRecords(commissionsList.filter(isCommissionCollected)),
+    reversals: filterRecords(reversalsList),
+  };
+}
+
+function getDashboardPropertyStats(propertiesList = [], period = "Mois", rentRowsList = [], paymentsList = [], chargesList = [], commissionsList = [], reversalsList = [], periodOptions = {}) {
+  const periodRecords = getDashboardPeriodRecords({
+    propertiesList,
+    period,
+    startDate: periodOptions.startDate,
+    endDate: periodOptions.endDate,
+    rentRowsList,
+    paymentsList,
+    chargesList,
+    commissionsList,
+    reversalsList,
+  });
+  const maintenanceOnly = propertiesList.filter(isMaintenanceOnlyProperty);
+  const available = propertiesList.filter((property) => normalizeSearch(property.status) === "disponible");
   const rented = propertiesList.filter(isRentBearingProperty);
-  const sale = propertiesList.filter((property) => property.period?.includes("vente") || property.status === "Vendu");
-  const reserved = propertiesList.filter((property) => property.status === "Réservé");
-  const maintenanceAmount = maintenanceOnly.reduce((sum, property) => sum + parseFCFA(property.price), 0);
-  const rentExpected = rentRowsList.reduce((sum, row) => sum + parseFCFA(row.expected), 0);
-  const rentPaid = rentRowsList.reduce((sum, row) => sum + parseFCFA(row.paid), 0);
-  const arrearsAmount = rentRowsList.reduce((sum, row) => sum + parseFCFA(row.balance), 0);
-  const paymentAmount = paymentsList.reduce((sum, payment) => sum + parseFCFA(payment.paid), 0);
-  const commissionAmount = commissionsList
-    .filter(isCommissionCollected)
-    .reduce((sum, commission) => sum + parseFCFA(commission.commission), 0);
-  const chargeAmount = chargesList
-    .filter((charge) => !["Annulée", "Annulé"].includes(charge.status))
-    .reduce((sum, charge) => sum + parseFCFA(charge.amount), 0);
-  const reversalBalance = reversalsList.reduce((sum, reversal) => sum + parseFCFA(reversal.balance), 0);
-  const periodRentAmount = Math.round(rentExpected * multiplier);
-  const periodPaidAmount = Math.round((paymentAmount || rentPaid) * multiplier);
-  const periodMaintenanceAmount = Math.round(maintenanceAmount * multiplier);
-  const periodCommissionAmount = Math.round(commissionAmount * multiplier);
-  const periodArrearsAmount = Math.round(arrearsAmount * multiplier);
-  const periodChargeAmount = Math.round(chargeAmount * multiplier);
-  const ownerNet = reversalBalance || Math.max(0, periodPaidAmount - periodCommissionAmount - periodChargeAmount);
+  const sale = propertiesList.filter((property) => normalizeSearch(property.period).includes("vente") || normalizeSearch(property.status) === "vendu");
+  const reserved = propertiesList.filter((property) => normalizeSearch(property.status) === "reserve");
+  const rentExpected = periodRecords.rentRows.reduce((sum, row) => sum + parseFCFA(row.expected), 0);
+  const rentPaid = periodRecords.rentRows.reduce((sum, row) => sum + parseFCFA(row.paid), 0);
+  const arrearsAmount = periodRecords.rentRows.reduce((sum, row) => sum + parseFCFA(row.balance), 0);
+  const paymentAmount = periodRecords.payments.reduce((sum, payment) => sum + parseFCFA(payment.paid), 0);
+  const commissionAmount = periodRecords.commissions.reduce((sum, commission) => sum + parseFCFA(commission.commission), 0);
+  const chargeAmount = periodRecords.charges.reduce((sum, charge) => sum + parseFCFA(charge.amount), 0);
+  const reversalBalance = periodRecords.reversals.reduce((sum, reversal) => sum + parseFCFA(reversal.balance), 0);
+  const overdueCount = periodRecords.rentRows.filter((row) => parseFCFA(row.balance) > 0 && normalizeSearch(row.status) !== "paye").length;
+  const ownerNet = reversalBalance || Math.max(0, (paymentAmount || rentPaid) - commissionAmount - chargeAmount);
 
   return {
     total: propertiesList.length,
@@ -3254,13 +3365,18 @@ function getDashboardPropertyStats(propertiesList = [], period = "Mois", rentRow
     maintenanceOnly: maintenanceOnly.length,
     rentalManaged: Math.max(0, propertiesList.length - maintenanceOnly.length),
     toPublish: available.length + reserved.length,
-    rentAmount: periodRentAmount,
-    paidAmount: periodPaidAmount,
-    maintenanceAmount: periodMaintenanceAmount,
-    commissionAmount: periodCommissionAmount,
-    arrearsEstimate: periodArrearsAmount,
-    chargeEstimate: periodChargeAmount,
+    rentAmount: rentExpected,
+    paidAmount: paymentAmount || rentPaid,
+    maintenanceAmount: periodRecords.charges.filter((charge) => normalizeSearch(`${charge.type ?? ""} ${charge.description ?? ""}`).includes("entretien")).reduce((sum, charge) => sum + parseFCFA(charge.amount), 0),
+    commissionAmount,
+    arrearsEstimate: arrearsAmount,
+    chargeEstimate: chargeAmount,
     ownerNet,
+    overdueCount,
+    paymentCount: periodRecords.payments.length,
+    chargeCount: periodRecords.charges.length,
+    reversalCount: periodRecords.reversals.length,
+    periodRecords,
   };
 }
 
@@ -3282,10 +3398,11 @@ function buildDashboardProfile(currentUser, propertiesList, period, businessData
     businessData.paymentsList,
     businessData.chargesList,
     businessData.commissionsList,
-    businessData.reversalsList
+    businessData.reversalsList,
+    { startDate: businessData.startDate, endDate: businessData.endDate }
   );
   const zeroAmount = "0 FCFA";
-  const overdueFiles = stats.arrearsEstimate ? Math.max(1, Math.ceil(stats.rented * 0.08)) : 0;
+  const overdueFiles = stats.overdueCount;
   const otherPortfolio = Math.max(0, stats.total - stats.available - stats.rented - stats.reserved - stats.maintenanceOnly - stats.sale);
 
   if (role === "Gestion locative & recouvrement") {
@@ -3293,7 +3410,7 @@ function buildDashboardProfile(currentUser, propertiesList, period, businessData
       chartTitle: "Suivi des loyers",
       pipelineData: createDashboardPipeline("Pipeline loyers, relances & interventions", [
         ["À encaisser", Math.max(0, stats.rentalManaged - stats.rented), "pale"],
-        ["Paiements à contrôler", stats.rented, "soft"],
+        ["Paiements à contrôler", stats.paymentCount, "soft"],
         ["Relances ouvertes", overdueFiles, "purple"],
         ["En retard", overdueFiles, "red"],
         ["Interventions", stats.maintenanceOnly, "silver"],
@@ -3307,7 +3424,7 @@ function buildDashboardProfile(currentUser, propertiesList, period, businessData
       kpis: [
         { label: "Biens en gestion locative", value: String(stats.rentalManaged), icon: Building2, tone: "purple", details: [["Loués", String(stats.rented)], ["Réservés", String(stats.reserved)]], demoTarget: "dashboard-kpi-portfolio" },
         { label: "Loyers à suivre", value: stats.rentAmount ? formatFCFA(stats.rentAmount) : zeroAmount, icon: Banknote, tone: "gray", details: [["Biens concernés", String(stats.rentalManaged)], ["Période", period]], demoTarget: "dashboard-kpi-cashflow" },
-        { label: "Paiements à contrôler", value: String(stats.rented), icon: CheckCircle2, tone: "purple", details: [["Locataires actifs", String(stats.rented)], ["Disponibles", String(stats.available)]], demoTarget: "dashboard-kpi-rental" },
+        { label: "Paiements à contrôler", value: String(stats.paymentCount), icon: CheckCircle2, tone: "purple", details: [["Paiements de la période", String(stats.paymentCount)], ["Locataires actifs", String(stats.rented)]], demoTarget: "dashboard-kpi-rental" },
         { label: "Impayés constatés", value: stats.arrearsEstimate ? formatFCFA(stats.arrearsEstimate) : zeroAmount, icon: AlertTriangle, tone: "danger", details: [["Dossiers à relancer", String(overdueFiles)], ["Priorité", stats.arrearsEstimate ? "À suivre" : "RAS"]], demoTarget: "dashboard-kpi-arrears" },
         { label: "Dossiers locataires", value: String(stats.rented), icon: UserRound, tone: "gray", details: [["Actifs", String(stats.rented)], ["À rattacher", String(Math.max(0, stats.available - stats.reserved))]], demoTarget: "dashboard-kpi-fees" },
         { label: "Courriers et reçus", value: String(stats.rented + stats.reserved), icon: FileText, tone: "gray", details: [["À produire", String(stats.rented)], ["Archives", "À jour"]], demoTarget: "dashboard-kpi-charges" },
@@ -10940,11 +11057,24 @@ function Topbar({ activePage, globalQuery, onQueryChange, onNav, onAction, onLog
 function DashboardPage({ currentUser = users[0], onAction, onOpenProperty, propertiesList = [], rentRowsList = [], paymentsList = [], chargesList = [], commissionsList = [], reversalsList = [] }) {
   const [kpiPeriod, setKpiPeriod] = useState("Mois");
   const [dashboardState, setDashboardState] = useState("Données");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
   const hasDashboardData = propertiesList.length > 0;
   const effectiveDashboardState = hasDashboardData || ["Chargement", "Erreur"].includes(dashboardState) ? dashboardState : "Vide";
+  const customPeriodError = kpiPeriod === "Période personnalisée" && customStartDate && customEndDate && customStartDate > customEndDate
+    ? "La date de fin doit être postérieure ou égale à la date de début."
+    : "";
   const dashboardProfile = useMemo(
-    () => buildDashboardProfile(currentUser, propertiesList, kpiPeriod, { rentRowsList, paymentsList, chargesList, commissionsList, reversalsList }),
-    [chargesList, commissionsList, currentUser, kpiPeriod, paymentsList, propertiesList, rentRowsList, reversalsList]
+    () => buildDashboardProfile(currentUser, propertiesList, kpiPeriod, {
+      rentRowsList,
+      paymentsList,
+      chargesList,
+      commissionsList,
+      reversalsList,
+      startDate: customStartDate,
+      endDate: customEndDate,
+    }),
+    [chargesList, commissionsList, currentUser, customEndDate, customStartDate, kpiPeriod, paymentsList, propertiesList, rentRowsList, reversalsList]
   );
   const selectedPipeline = dashboardProfile.pipelineData;
   const kpis = dashboardProfile.kpis;
@@ -10961,6 +11091,11 @@ function DashboardPage({ currentUser = users[0], onAction, onOpenProperty, prope
             onPeriod={setKpiPeriod}
             state={dashboardState}
             onState={setDashboardState}
+            customStartDate={customStartDate}
+            customEndDate={customEndDate}
+            onCustomStartDate={setCustomStartDate}
+            onCustomEndDate={setCustomEndDate}
+            customPeriodError={customPeriodError}
           />
         }
       />
@@ -10988,7 +11123,14 @@ function DashboardPage({ currentUser = users[0], onAction, onOpenProperty, prope
 
       <section className="two-grid" data-demo="dashboard-charts">
         <Panel title={dashboardProfile.chartTitle}>
-          <RentBars rentRowsList={rentRowsList} period={kpiPeriod} />
+          <RentBars
+            rentRowsList={rentRowsList}
+            paymentsList={paymentsList}
+            propertiesList={propertiesList}
+            period={kpiPeriod}
+            startDate={customStartDate}
+            endDate={customEndDate}
+          />
         </Panel>
         <Panel title={selectedPipeline.title}>
           <PipelineChart data={selectedPipeline} />
@@ -21211,7 +21353,7 @@ function StatCard({ item }) {
   );
 }
 
-function DashboardFilterBar({ period, onPeriod, state, onState }) {
+function DashboardFilterBar({ period, onPeriod, state, onState, customStartDate = "", customEndDate = "", onCustomStartDate, onCustomEndDate, customPeriodError = "" }) {
   return (
     <section className="dashboard-filter-bar">
       <Filter size={17} />
@@ -21219,8 +21361,23 @@ function DashboardFilterBar({ period, onPeriod, state, onState }) {
       <DashboardSelect value={state} onChange={onState} options={["Données", "Chargement", "Vide", "Erreur"]} ariaLabel="État du tableau de bord" />
       {period === "Période personnalisée" && (
         <div className="custom-period">
-          <input type="date" aria-label="Date de début" />
-          <input type="date" aria-label="Date de fin" />
+          <input
+            type="date"
+            aria-label="Date de début"
+            value={customStartDate}
+            max={customEndDate || undefined}
+            onChange={(event) => onCustomStartDate?.(event.target.value)}
+            onInput={(event) => onCustomStartDate?.(event.currentTarget.value)}
+          />
+          <input
+            type="date"
+            aria-label="Date de fin"
+            value={customEndDate}
+            min={customStartDate || undefined}
+            onChange={(event) => onCustomEndDate?.(event.target.value)}
+            onInput={(event) => onCustomEndDate?.(event.currentTarget.value)}
+          />
+          {customPeriodError && <small className="custom-period-error">{customPeriodError}</small>}
         </div>
       )}
     </section>
@@ -21328,24 +21485,41 @@ function getMonthShortLabel(period) {
   return months.find(([key]) => normalized.includes(key))?.[1] ?? String(period || "Période");
 }
 
-function buildRentMonthlyEvolution(rentRowsList = []) {
-  const rows = rentRowsList.filter((row) => parseFCFA(row.expected) > 0);
+function getDashboardBucketLabel(date, period, fallbackPeriod = "") {
+  if (!date) return getMonthShortLabel(fallbackPeriod);
+  const normalizedPeriod = normalizeSearch(period);
+  if (normalizedPeriod.startsWith("jour") || normalizedPeriod.startsWith("semaine")) {
+    return `${String(date.getUTCDate()).padStart(2, "0")}/${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+  }
+  if (normalizedPeriod.includes("personnalise") && date.getTime() !== new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)).getTime()) {
+    return `${String(date.getUTCDate()).padStart(2, "0")}/${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+  }
+  const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+  return getMonthShortLabel(`${monthNames[date.getUTCMonth()]} ${date.getUTCFullYear()}`);
+}
+
+function buildDashboardRentBars({ propertiesList = [], rentRowsList = [], paymentsList = [], period = "Mois", startDate = "", endDate = "" }) {
+  const periodRecords = getDashboardPeriodRecords({ propertiesList, period, startDate, endDate, rentRowsList, paymentsList });
+  const rows = periodRecords.rentRows.filter((row) => parseFCFA(row.expected) > 0 || parseFCFA(row.paid) > 0 || parseFCFA(row.balance) > 0);
   if (!rows.length) return [];
 
   const grouped = rows.reduce((acc, row) => {
-    const label = getMonthShortLabel(row.period);
-    const current = acc[label] ?? { month: label, expected: 0, collected: 0 };
+    const date = getDashboardRecordDate(row, periodRecords.payments);
+    const bucketKey = date ? `${date.getUTCFullYear()}-${date.getUTCMonth()}-${date.getUTCDate()}` : String(row.period);
+    const label = getDashboardBucketLabel(date, period, row.period);
+    const linkedPayment = periodRecords.payments.find((payment) => getPaymentKey(payment) === getPaymentKey(row));
+    const current = acc[bucketKey] ?? { month: label, expected: 0, collected: 0, sortKey: date?.getTime() ?? 0 };
     current.expected += parseFCFA(row.expected);
-    current.collected += parseFCFA(row.paid);
-    acc[label] = current;
+    current.collected += Math.max(parseFCFA(row.paid), parseFCFA(linkedPayment?.paid));
+    acc[bucketKey] = current;
     return acc;
   }, {});
 
-  return Object.values(grouped).slice(-6);
+  return Object.values(grouped).sort((a, b) => a.sortKey - b.sortKey || a.month.localeCompare(b.month, "fr")).slice(-12);
 }
 
-function RentBars({ rentRowsList = [] }) {
-  const monthlyEvolution = buildRentMonthlyEvolution(rentRowsList);
+function RentBars({ propertiesList = [], rentRowsList = [], paymentsList = [], period = "Mois", startDate = "", endDate = "" }) {
+  const monthlyEvolution = buildDashboardRentBars({ propertiesList, rentRowsList, paymentsList, period, startDate, endDate });
 
   if (!monthlyEvolution.length) {
     return (
@@ -21374,10 +21548,10 @@ function RentBars({ rentRowsList = [] }) {
   return (
     <div className="rent-chart" data-demo="dashboard-rent-chart">
       <div className="bars">
-        {bars.map((bar) => (
+        {bars.map((bar, index) => (
           <button
             className="bar-button"
-            key={bar.month}
+            key={`${bar.month}-${index}`}
             style={{ "--height": `${bar.value}%` }}
             aria-label={`${bar.month}: ${bar.expectedLabel} attendus, ${bar.collectedLabel} encaissés, ${bar.unpaidLabel} impayés, ${bar.collectionRate}% d'encaissement`}
           >
@@ -21393,8 +21567,8 @@ function RentBars({ rentRowsList = [] }) {
         ))}
       </div>
       <div className="months">
-        {bars.map((bar) => (
-          <span key={bar.month}>{bar.month}</span>
+        {bars.map((bar, index) => (
+          <span key={`${bar.month}-${index}`}>{bar.month}</span>
         ))}
       </div>
     </div>

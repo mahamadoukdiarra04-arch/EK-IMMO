@@ -1182,6 +1182,13 @@ a {
   padding-right: 10px;
 }
 
+.custom-period-error {
+  color: #b42318;
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .rent-chart {
   position: relative;
   min-height: 218px;
