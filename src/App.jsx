@@ -11089,8 +11089,6 @@ function DashboardPage({ currentUser = users[0], onAction, onOpenProperty, prope
           <DashboardFilterBar
             period={kpiPeriod}
             onPeriod={setKpiPeriod}
-            state={dashboardState}
-            onState={setDashboardState}
             customStartDate={customStartDate}
             customEndDate={customEndDate}
             onCustomStartDate={setCustomStartDate}
@@ -21353,12 +21351,11 @@ function StatCard({ item }) {
   );
 }
 
-function DashboardFilterBar({ period, onPeriod, state, onState, customStartDate = "", customEndDate = "", onCustomStartDate, onCustomEndDate, customPeriodError = "" }) {
+function DashboardFilterBar({ period, onPeriod, customStartDate = "", customEndDate = "", onCustomStartDate, onCustomEndDate, customPeriodError = "" }) {
   return (
     <section className="dashboard-filter-bar">
       <Filter size={17} />
       <DashboardSelect value={period} onChange={onPeriod} options={periodOptions} ariaLabel="Période des blocs du dashboard" />
-      <DashboardSelect value={state} onChange={onState} options={["Données", "Chargement", "Vide", "Erreur"]} ariaLabel="État du tableau de bord" />
       {period === "Période personnalisée" && (
         <div className="custom-period">
           <input
