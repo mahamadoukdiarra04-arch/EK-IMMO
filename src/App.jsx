@@ -5377,7 +5377,7 @@ function App() {
         if (payload.user) setServerUser(payload.user);
         if (payload.admin) setServerAdmin(payload.admin);
         if (payload.permissions) setServerPermissions(payload.permissions);
-        setServerBusiness(payload.business ?? null);
+        if (payload.business) setServerBusiness(payload.business);
         lastPersistedSignatureRef.current = stringifyState(data);
         applyPersistedState(data);
         setPersistenceRevision(Number(payload.revision) || 0);
@@ -5411,7 +5411,6 @@ function App() {
     if (!signature || signature === lastPersistedSignatureRef.current) return;
 
     setPersistenceStatus("saving");
-    setServerBusiness(null);
     if (persistenceSaveTimerRef.current) {
       clearTimeout(persistenceSaveTimerRef.current);
     }
@@ -5424,7 +5423,7 @@ function App() {
         if (payload.user) setServerUser(payload.user);
         if (payload.admin) setServerAdmin(payload.admin);
         if (payload.permissions) setServerPermissions(payload.permissions);
-        setServerBusiness(payload.business ?? null);
+        if (payload.business) setServerBusiness(payload.business);
         const nextSignature = stringifyState(nextData);
         lastPersistedSignatureRef.current = nextSignature;
         setPersistenceRevision(Number(payload.revision) || persistenceRevision);
@@ -5448,7 +5447,7 @@ function App() {
         if (payload.user) setServerUser(payload.user);
         if (payload.admin) setServerAdmin(payload.admin);
         if (payload.permissions) setServerPermissions(payload.permissions);
-        setServerBusiness(payload.business ?? null);
+        if (payload.business) setServerBusiness(payload.business);
         const remoteRevision = Number(payload.revision) || 0;
         if (remoteRevision > persistenceRevision) {
           const data = payload.data ?? {};
