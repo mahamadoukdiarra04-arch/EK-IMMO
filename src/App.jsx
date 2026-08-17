@@ -3322,11 +3322,23 @@ function isDashboardDateInWindow(date, window) {
   return date >= window.start && date <= window.end;
 }
 
-function getLatestDashboardDate(records = [], linkedPayments = [], preciseOnly = false) {
-  const dates = records.map((record) => preciseOnly
-    ? getDashboardPreciseRecordDate(record, linkedPayments)
-    : getDashboardRecordDate(record, linkedPayments)).filter(Boolean);
-  return dates.reduce((latest, date) => (!latest || date > latest ? date : latest), null);
+function getDashboardToday() {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Bamako",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now).reduce((values, part) => {
+    if (part.type !== "literal") values[part.type] = part.value;
+    return values;
+  }, {});
+  const year = Number(parts.year);
+  const month = Number(parts.month);
+  const day = Number(parts.day);
+  return Number.isFinite(year) && Number.isFinite(month) && Number.isFinite(day)
+    ? new Date(Date.UTC(year, month - 1, day))
+    : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
 
 function isDashboardAgencyProperty(property, propertiesList = []) {
@@ -3337,12 +3349,9 @@ function isDashboardAgencyProperty(property, propertiesList = []) {
 function getDashboardPeriodRecords({ propertiesList = [], period = "Mois", startDate = "", endDate = "", rentRowsList = [], paymentsList = [], chargesList = [], commissionsList = [], reversalsList = [] }) {
   const agencyPayments = paymentsList.filter((payment) => payment.serverValid !== false && isDashboardAgencyProperty(payment.property, propertiesList));
   const agencyRentRows = rentRowsList.filter((row) => isDashboardAgencyProperty(row.property, propertiesList));
-  const recordsForReference = [...agencyPayments, ...agencyRentRows, ...chargesList, ...commissionsList, ...reversalsList];
   const normalizedPeriod = normalizeSearch(period);
   const precisePeriod = normalizedPeriod.startsWith("jour") || normalizedPeriod.startsWith("semaine");
-  const rentReferenceDate = getLatestDashboardDate([...agencyPayments, ...agencyRentRows], agencyPayments, precisePeriod);
-  const referenceDate = rentReferenceDate ?? getLatestDashboardDate(recordsForReference, agencyPayments, precisePeriod) ?? new Date();
-  const window = getDashboardPeriodWindow(period, referenceDate, startDate, endDate);
+  const window = getDashboardPeriodWindow(period, getDashboardToday(), startDate, endDate);
   if (!window) {
     return { window: null, rentRows: [], payments: [], charges: [], commissions: [], reversals: [] };
   }
