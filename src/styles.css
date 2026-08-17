@@ -1269,8 +1269,9 @@ a {
   left: 50%;
   bottom: calc(100% + 8px);
   z-index: 8;
+  box-sizing: border-box;
   min-width: max-content;
-  max-width: 220px;
+  max-width: min(300px, calc(100vw - 24px));
   padding: 7px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1291,8 +1292,9 @@ a {
 .chart-flyout.rent-flyout {
   display: grid;
   gap: 7px;
-  min-width: 270px;
-  max-width: min(300px, calc(100vw - 36px));
+  width: min(300px, calc(100vw - 36px));
+  min-width: 0;
+  max-width: calc(100vw - 36px);
   padding: 12px;
   text-align: left;
   white-space: normal;
@@ -1356,6 +1358,32 @@ a {
 
 .bar-button:last-child:hover .rent-flyout,
 .bar-button:last-child:focus-visible .rent-flyout {
+  transform: translate(0, 0);
+}
+
+/* Une seule barre est à la fois la première et la dernière : on l'ancre à gauche
+   pour éviter que les deux règles de bord ne la fassent sortir de l'écran. */
+.bar-button.is-only .rent-flyout {
+  right: auto;
+  left: 0;
+  transform: translate(0, 5px);
+}
+
+.bar-button.is-only:hover .rent-flyout,
+.bar-button.is-only:focus-visible .rent-flyout {
+  transform: translate(0, 0);
+}
+
+/* Les légendes sont proches du bord droit de leur panneau : l'infobulle reste
+   alignée sur ce bord au lieu de se centrer hors de la fenêtre. */
+.legend-list button .chart-flyout {
+  right: 0;
+  left: auto;
+  transform: translate(0, 5px);
+}
+
+.legend-list button:hover .chart-flyout,
+.legend-list button:focus-visible .chart-flyout {
   transform: translate(0, 0);
 }
 

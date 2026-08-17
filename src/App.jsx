@@ -21546,7 +21546,7 @@ function RentBars({ propertiesList = [], rentRowsList = [], paymentsList = [], p
       <div className="bars">
         {bars.map((bar, index) => (
           <button
-            className="bar-button"
+            className={`bar-button ${bars.length === 1 ? "is-only" : ""}`}
             key={`${bar.month}-${index}`}
             style={{ "--height": `${bar.value}%` }}
             aria-label={`${bar.month}: ${bar.expectedLabel} attendus, ${bar.collectedLabel} encaissés, ${bar.unpaidLabel} impayés, ${bar.collectionRate}% d'encaissement`}
