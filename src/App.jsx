@@ -21420,7 +21420,7 @@ function DashboardFilterBar({ period, onPeriod, periodLabel = "", onReset, custo
     <section className="dashboard-filter-bar">
       <Filter size={17} />
       <DashboardSelect value={period} onChange={onPeriod} options={periodOptions} ariaLabel="Période des blocs du dashboard" />
-      <span className="dashboard-period-context" aria-live="polite">{periodLabel}</span>
+      {period !== "Période personnalisée" && <span className="dashboard-period-context" aria-live="polite">{periodLabel}</span>}
       {period === "Période personnalisée" && (
         <div className="custom-period">
           <input
