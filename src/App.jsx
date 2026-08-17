@@ -3276,12 +3276,31 @@ function getOpenArrearsRows(rows = [], tenantName = "") {
 function getTenantArrearsSummary(rows = [], tenantName = "") {
   const openRows = getOpenArrearsRows(rows, tenantName);
   const periods = [...new Set(openRows.map((row) => row.period).filter(Boolean))];
+  const periodsCompactLabel = periods.length === 0
+    ? "Aucun impayé en cours"
+    : periods.length === 1
+      ? periods[0]
+      : `Depuis ${periods[0]} · ${periods.length} périodes`;
   return {
     rows: openRows,
     total: openRows.reduce((sum, row) => sum + parseFCFA(row.balance), 0),
     periods,
     periodsLabel: periods.length ? periods.join(" · ") : "Aucun impayé en cours",
+    periodsCompactLabel,
   };
+}
+
+function ArrearsPeriodsCell({ summary }) {
+  if (!summary?.periods?.length) return "—";
+  return (
+    <span
+      className="arrears-period-summary"
+      title={summary.periodsLabel}
+      aria-label={`Périodes impayées : ${summary.periodsLabel}`}
+    >
+      {summary.periodsCompactLabel}
+    </span>
+  );
 }
 
 function getDashboardPeriodWindow(period, referenceDate, customStart = "", customEnd = "") {
@@ -13308,7 +13327,7 @@ function TenantsView({ tenantsList = tenants, propertiesList = [], onOpenDetail,
               propertiesList.find((property) => property.name === tenant.property)?.owner ?? tenant.owner ?? "-",
               tenant.rent,
               formatFCFA(arrears.total),
-              arrears.periods.length ? arrears.periodsLabel : "—",
+              <ArrearsPeriodsCell summary={arrears} />,
               tenant.contract,
               <Badge label={arrears.total > 0 ? "Impayé" : tenant.paymentStatus} />,
               <Button compact onClick={() => onOpenDetail(tenant)}><Eye size={15} /> Fiche</Button>,
@@ -13411,7 +13430,7 @@ function TenantProfilePanel({ tenant, propertiesList = [], onAction, contractsLi
         <>
           <div className="simple-list">
             <p><span>Montant en retard</span><strong>{formatFCFA(arrearsSummary.total)}</strong></p>
-            <p><span>Période(s) impayée(s)</span><strong>{arrearsSummary.periodsLabel}</strong></p>
+            <p><span>Période(s) impayée(s)</span><strong>{arrearsSummary.periodsCompactLabel}</strong></p>
             <p><span>Ancienneté</span><strong>{arrearsSummary.rows.length ? "À suivre" : "Aucun retard"}</strong></p>
             <p><span>Dernière relance enregistrée</span><strong>{tenantRelances[0] ? `${tenantRelances[0].channel} · ${tenantRelances[0].reason}` : "Aucune relance enregistrée"}</strong></p>
             <p><span>Prochaine action</span><strong>{tenantRelances[0]?.nextDate ?? tenant.nextReminder ?? (arrearsSummary.rows.length ? "Planifier une relance" : "Aucune action requise")}</strong></p>

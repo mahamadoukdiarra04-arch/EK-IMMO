@@ -3286,6 +3286,15 @@ td.nowrap-cell * {
   white-space: nowrap;
 }
 
+.arrears-period-summary {
+  display: inline-block;
+  max-width: 174px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 td .badge,
 td .button,
 td .table-actions {
