@@ -3251,6 +3251,39 @@ function getDashboardRecordDate(record, linkedPayments = []) {
   return getDashboardPreciseRecordDate(record, linkedPayments) ?? parseDashboardDate(record?.period ?? record?.month);
 }
 
+function getArrearsOriginDate(row) {
+  return parseDashboardDate(row?.period ?? row?.month) ?? getDashboardPreciseRecordDate(row);
+}
+
+function isOpenArrearsRow(row) {
+  if (parseFCFA(row?.balance) <= 0) return false;
+  const status = normalizeSearch(row?.status ?? "");
+  return !["paye", "regularise", "abandonne"].includes(status);
+}
+
+function getOpenArrearsRows(rows = [], tenantName = "") {
+  const normalizedTenant = normalizeSearch(tenantName);
+  return rows
+    .filter(isOpenArrearsRow)
+    .filter((row) => !normalizedTenant || normalizeSearch(row.tenant) === normalizedTenant)
+    .sort((left, right) => {
+      const leftDate = getArrearsOriginDate(left)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      const rightDate = getArrearsOriginDate(right)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      return leftDate - rightDate || String(left.period ?? "").localeCompare(String(right.period ?? ""), "fr");
+    });
+}
+
+function getTenantArrearsSummary(rows = [], tenantName = "") {
+  const openRows = getOpenArrearsRows(rows, tenantName);
+  const periods = [...new Set(openRows.map((row) => row.period).filter(Boolean))];
+  return {
+    rows: openRows,
+    total: openRows.reduce((sum, row) => sum + parseFCFA(row.balance), 0),
+    periods,
+    periodsLabel: periods.length ? periods.join(" · ") : "Aucun impayé en cours",
+  };
+}
+
 function getDashboardPeriodWindow(period, referenceDate, customStart = "", customEnd = "") {
   const normalizedPeriod = normalizeSearch(period);
   if (normalizedPeriod.includes("personnalise")) {
@@ -3391,12 +3424,18 @@ function getDashboardPropertyStats(propertiesList = [], period = "Mois", rentRow
   const reserved = propertiesList.filter((property) => normalizeSearch(property.status) === "reserve");
   const rentExpected = periodRecords.rentRows.reduce((sum, row) => sum + parseFCFA(row.expected), 0);
   const rentPaid = periodRecords.rentRows.reduce((sum, row) => sum + parseFCFA(row.paid), 0);
-  const arrearsAmount = periodRecords.rentRows.reduce((sum, row) => sum + parseFCFA(row.balance), 0);
+  const arrearsRows = getOpenArrearsRows(rentRowsList)
+    .filter((row) => isDashboardAgencyProperty(row.property, propertiesList))
+    .filter((row) => {
+      const originDate = getArrearsOriginDate(row);
+      return !originDate || originDate <= periodRecords.window.end;
+    });
+  const arrearsAmount = arrearsRows.reduce((sum, row) => sum + parseFCFA(row.balance), 0);
   const paymentAmount = periodRecords.payments.reduce((sum, payment) => sum + parseFCFA(payment.paid), 0);
   const commissionAmount = periodRecords.commissions.reduce((sum, commission) => sum + parseFCFA(commission.commission), 0);
   const chargeAmount = periodRecords.charges.reduce((sum, charge) => sum + parseFCFA(charge.amount), 0);
   const reversalBalance = periodRecords.reversals.reduce((sum, reversal) => sum + parseFCFA(reversal.balance), 0);
-  const overdueCount = periodRecords.rentRows.filter((row) => parseFCFA(row.balance) > 0 && normalizeSearch(row.status) !== "paye").length;
+  const overdueCount = arrearsRows.length;
   const ownerNet = reversalBalance || Math.max(0, (paymentAmount || rentPaid) - commissionAmount - chargeAmount);
 
   return {
@@ -3419,6 +3458,7 @@ function getDashboardPropertyStats(propertiesList = [], period = "Mois", rentRow
     paymentCount: periodRecords.payments.length,
     chargeCount: periodRecords.charges.length,
     reversalCount: periodRecords.reversals.length,
+    arrearsRows,
     periodRecords,
   };
 }
@@ -8435,7 +8475,9 @@ function App() {
     } : current);
 
     const paymentTenant = allTenants.find((tenant) => tenant.name === payment.tenant) ?? tenants.find((tenant) => tenant.name === payment.tenant);
-    const nextTenantStatus = payment.status === "Payé" ? "À jour" : payment.status;
+    const nextRentRows = mergeRentRowsWithPayments(allRentRows, [payment]);
+    const nextTenantArrears = getTenantArrearsSummary(nextRentRows, payment.tenant);
+    const nextTenantStatus = nextTenantArrears.total > 0 ? "Impayé" : "À jour";
     if (paymentTenant) {
       setTenantOverrides((current) => ({
         ...current,
@@ -12383,12 +12425,14 @@ function ClientsPage({ activeTab, onTab, availableTabs = ["Propriétaires", "Loc
   const filteredTenants = useMemo(() => {
     const search = normalizeSearch(clientSearch);
     return tenantsList.filter((tenant) => {
-      const haystack = normalizeSearch(`${tenant.name} ${tenant.phone} ${tenant.email} ${tenant.property} ${tenant.contract} ${tenant.paymentStatus}`);
-      const statusMatch = clientFilters.tenantStatus === "Tous statuts" || tenant.paymentStatus === clientFilters.tenantStatus;
+      const arrears = getTenantArrearsSummary(rentRowsList, tenant.name);
+      const effectiveStatus = arrears.total > 0 ? "Impayé" : tenant.paymentStatus;
+      const haystack = normalizeSearch(`${tenant.name} ${tenant.phone} ${tenant.email} ${tenant.property} ${tenant.contract} ${effectiveStatus} ${arrears.periodsLabel}`);
+      const statusMatch = clientFilters.tenantStatus === "Tous statuts" || effectiveStatus === clientFilters.tenantStatus;
       const propertyMatch = clientFilters.tenantProperty === "Tous biens" || tenant.property === clientFilters.tenantProperty;
       return (!search || haystack.includes(search)) && statusMatch && propertyMatch;
     });
-  }, [clientFilters.tenantProperty, clientFilters.tenantStatus, clientSearch, tenantsList]);
+  }, [clientFilters.tenantProperty, clientFilters.tenantStatus, clientSearch, rentRowsList, tenantsList]);
 
   const filteredProspects = useMemo(() => {
     const search = normalizeSearch(clientSearch);
@@ -12519,6 +12563,7 @@ function ClientsPage({ activeTab, onTab, availableTabs = ["Propriétaires", "Loc
             onReset={resetClientFilters}
             ownersList={ownersList}
             tenantsList={tenantsList}
+            rentRowsList={rentRowsList}
             prospectsList={prospectsList}
             visitsList={visitsList}
           />
@@ -12549,9 +12594,11 @@ function DetailPageShell({ title, subtitle, onBack, children }) {
   );
 }
 
-function ClientFilterControls({ activeTab, filters, onChange, onReset, ownersList, tenantsList, prospectsList, visitsList }) {
+function ClientFilterControls({ activeTab, filters, onChange, onReset, ownersList, tenantsList, rentRowsList = [], prospectsList, visitsList }) {
   const ownerStatuses = uniqueValues(ownersList.map((owner) => owner.status));
-  const tenantStatuses = uniqueValues(tenantsList.map((tenant) => tenant.paymentStatus));
+  const tenantStatuses = uniqueValues(tenantsList.map((tenant) => (
+    getTenantArrearsSummary(rentRowsList, tenant.name).total > 0 ? "Impayé" : tenant.paymentStatus
+  )));
   const tenantProperties = uniqueValues(tenantsList.map((tenant) => tenant.property));
   const prospectStatuses = uniqueValues(prospectsList.map((prospect) => prospect.status));
   const prospectAgents = uniqueValues(prospectsList.map((prospect) => prospect.agent));
@@ -12696,19 +12743,23 @@ function buildClientExportPayload({ activeTab, filters, search, ownersList, tena
   if (activeTab === "Locataires") {
     return {
       ...basePayload,
-      columns: ["Locataire", "Identifiant", "Téléphone", "Email", "Bien occupé", "Propriétaire", "Loyer", "Impayé", "Contrat actif", "Statut"],
-      rows: tenantsList.map((tenant) => [
-        tenant.name,
-        tenant.id,
-        tenant.phone,
-        tenant.email,
-        tenant.property,
-        tenant.owner ?? "-",
-        tenant.rent,
-        rentRowsList.find((row) => row.tenant === tenant.name)?.balance ?? "0 FCFA",
-        tenant.contract,
-        tenant.paymentStatus,
-      ]),
+      columns: ["Locataire", "Identifiant", "Téléphone", "Email", "Bien occupé", "Propriétaire", "Loyer", "Impayé", "Période(s) impayée(s)", "Contrat actif", "Statut"],
+      rows: tenantsList.map((tenant) => {
+        const arrears = getTenantArrearsSummary(rentRowsList, tenant.name);
+        return [
+          tenant.name,
+          tenant.id,
+          tenant.phone,
+          tenant.email,
+          tenant.property,
+          tenant.owner ?? "-",
+          tenant.rent,
+          formatFCFA(arrears.total),
+          arrears.periodsLabel,
+          tenant.contract,
+          arrears.total > 0 ? "Impayé" : tenant.paymentStatus,
+        ];
+      }),
     };
   }
 
@@ -13244,21 +13295,25 @@ function TenantsView({ tenantsList = tenants, propertiesList = [], onOpenDetail,
     <section className="client-list-workspace" data-demo="tenant-workspace">
       <Panel title="Liste des locataires">
         <DataTable
-          columns={["Locataire", "Téléphone", "Bien occupé", "Propriétaire", "Loyer", "Impayé", "Contrat actif", "Statut", "Action"]}
-          rows={tenantsList.map((tenant) => [
-            <button className="table-person" onClick={() => onOpenDetail(tenant)}>
-              <Avatar name={tenant.name} />
-              <span><strong>{tenant.name}</strong><small>{tenant.id}</small></span>
-            </button>,
-            tenant.phone,
-            tenant.property,
-            propertiesList.find((property) => property.name === tenant.property)?.owner ?? tenant.owner ?? "-",
-            tenant.rent,
-            rentRowsList.find((row) => row.tenant === tenant.name)?.balance ?? (tenant.paymentStatus === "À jour" ? "0 FCFA" : "0 FCFA"),
-            tenant.contract,
-            <Badge label={tenant.paymentStatus} />,
-            <Button compact onClick={() => onOpenDetail(tenant)}><Eye size={15} /> Fiche</Button>,
-          ])}
+          columns={["Locataire", "Téléphone", "Bien occupé", "Propriétaire", "Loyer", "Impayé", "Mois impayé(s)", "Contrat actif", "Statut", "Action"]}
+          rows={tenantsList.map((tenant) => {
+            const arrears = getTenantArrearsSummary(rentRowsList, tenant.name);
+            return [
+              <button className="table-person" onClick={() => onOpenDetail(tenant)}>
+                <Avatar name={tenant.name} />
+                <span><strong>{tenant.name}</strong><small>{tenant.id}</small></span>
+              </button>,
+              tenant.phone,
+              tenant.property,
+              propertiesList.find((property) => property.name === tenant.property)?.owner ?? tenant.owner ?? "-",
+              tenant.rent,
+              formatFCFA(arrears.total),
+              arrears.periods.length ? arrears.periodsLabel : "—",
+              tenant.contract,
+              <Badge label={arrears.total > 0 ? "Impayé" : tenant.paymentStatus} />,
+              <Button compact onClick={() => onOpenDetail(tenant)}><Eye size={15} /> Fiche</Button>,
+            ];
+          })}
         />
       </Panel>
     </section>
@@ -13278,6 +13333,7 @@ function TenantProfilePanel({ tenant, propertiesList = [], onAction, contractsLi
   const tenantContracts = contractsList.filter((item) => item.client === tenant.name);
   const contract = tenantContracts.find((item) => item.number === tenant.contract) ?? tenantContracts[0] ?? null;
   const paymentRows = rentRowsList.filter((row) => row.tenant === tenant.name);
+  const arrearsSummary = getTenantArrearsSummary(paymentRows);
   const tenantPayments = paymentsList.filter((payment) => payment.tenant === tenant.name);
   const tenantRelances = relancesList.filter((relance) => relance.tenantId === tenant.id || relance.tenant === tenant.name);
   const tenantMissingDocuments = [
@@ -13298,7 +13354,7 @@ function TenantProfilePanel({ tenant, propertiesList = [], onAction, contractsLi
       status: "Archivé",
     })),
   ];
-  const primaryRow = paymentRows.find((row) => row.balance !== "0 FCFA") ?? paymentRows[0];
+  const primaryRow = arrearsSummary.rows[0] ?? paymentRows[0];
   const primaryPayment = tenantPayments[0] ?? paymentsList.find((payment) => payment.tenant === tenant.name);
   const tabs = ["Résumé", "Contrat", "Paiements", "Impayés & relances", "Documents"];
 
@@ -13309,8 +13365,8 @@ function TenantProfilePanel({ tenant, propertiesList = [], onAction, contractsLi
         items={[
           ["Bien occupé", tenant.property],
           ["Loyer", tenant.rent],
-          ["Statut", tenant.paymentStatus],
-          ["Solde dû", paymentRows.find((row) => row.balance !== "0 FCFA")?.balance ?? "0 FCFA"],
+          ["Statut", arrearsSummary.total > 0 ? "Impayé" : tenant.paymentStatus],
+          ["Solde dû", formatFCFA(arrearsSummary.total)],
           ["Contrat", contract?.number ?? "À créer"],
         ]}
       />
@@ -13325,7 +13381,7 @@ function TenantProfilePanel({ tenant, propertiesList = [], onAction, contractsLi
           <p><span>Date d'entrée</span><strong>{contract?.start ?? tenant.entryDate ?? "Non renseignée"}</strong></p>
           <p><span>Montant du loyer</span><strong>{tenant.rent}</strong></p>
           <p><span>Caution</span><strong>{tenant.deposit}</strong></p>
-          <p><span>Statut général</span><Badge label={tenant.paymentStatus} /></p>
+          <p><span>Statut général</span><Badge label={arrearsSummary.total > 0 ? "Impayé" : tenant.paymentStatus} /></p>
         </div>
       )}
       {tab === "Contrat" && (
@@ -13352,15 +13408,21 @@ function TenantProfilePanel({ tenant, propertiesList = [], onAction, contractsLi
         />
       )}
       {tab === "Impayés & relances" && (
-        <div className="simple-list">
-          <p><span>Montant en retard</span><strong>{paymentRows.find((row) => row.balance !== "0 FCFA")?.balance ?? "0 FCFA"}</strong></p>
-          <p><span>Ancienneté</span><strong>{tenant.paymentStatus === "À jour" ? "0 jour" : "28 jours"}</strong></p>
-          <p><span>Dernière relance</span><strong>SMS le 24/05</strong></p>
-          <p><span>Promesse de paiement</span><strong>À confirmer</strong></p>
-          <p><span>Litige</span><strong>Aucun</strong></p>
-          <p><span>Dernière relance enregistrée</span><strong>{tenantRelances[0] ? `${tenantRelances[0].channel} · ${tenantRelances[0].reason}` : "SMS le 24/05"}</strong></p>
-          <p><span>Prochaine action</span><strong>{tenantRelances[0]?.nextDate ?? tenant.nextReminder ?? "Appel de suivi"}</strong></p>
-        </div>
+        <>
+          <div className="simple-list">
+            <p><span>Montant en retard</span><strong>{formatFCFA(arrearsSummary.total)}</strong></p>
+            <p><span>Période(s) impayée(s)</span><strong>{arrearsSummary.periodsLabel}</strong></p>
+            <p><span>Ancienneté</span><strong>{arrearsSummary.rows.length ? "À suivre" : "Aucun retard"}</strong></p>
+            <p><span>Dernière relance enregistrée</span><strong>{tenantRelances[0] ? `${tenantRelances[0].channel} · ${tenantRelances[0].reason}` : "Aucune relance enregistrée"}</strong></p>
+            <p><span>Prochaine action</span><strong>{tenantRelances[0]?.nextDate ?? tenant.nextReminder ?? (arrearsSummary.rows.length ? "Planifier une relance" : "Aucune action requise")}</strong></p>
+          </div>
+          {arrearsSummary.rows.length > 0 && (
+            <DataTable
+              columns={["Période impayée", "Bien", "Solde", "Statut"]}
+              rows={arrearsSummary.rows.map((row) => [row.period, row.property, row.balance, <Badge label={row.status} />])}
+            />
+          )}
+        </>
       )}
       {tab === "Documents" && (
         <div className="mini-list">
@@ -17805,7 +17867,7 @@ function FinancePage({ activeTab, onTab, availableTabs = ["Loyers", "Paiements",
   const financeDataCount = {
     Loyers: agencyRentRows.length,
     Paiements: paymentsList.length,
-    Impayés: rentRowsList.filter((row) => parseFCFA(row.balance) > 0).length,
+    Impayés: getOpenArrearsRows(agencyRentRows).length,
     Commissions: commissionsList.length,
     Charges: chargesList.length,
     Entretiens: maintenancesList.length,
@@ -19662,9 +19724,8 @@ function PaymentForm({ onAction, paymentsList = paymentRecords, rentRowsList = r
 }
 
 function ArrearsView({ onAction, rentRowsList = rentRows, propertiesList = [], relancesList = [], arrearsStatuses = {}, arrearsPromises = {}, arrearsHistories = {} }) {
-  const rows = rentRowsList
-    .filter((row) => isAgencyCollectedProperty(row.property, propertiesList))
-    .filter((row) => parseFCFA(row.balance) > 0 && row.status !== "Payé");
+  const rows = getOpenArrearsRows(rentRowsList)
+    .filter((row) => isAgencyCollectedProperty(row.property, propertiesList));
   const [selected, setSelected] = useState(rows[0]);
   const { detailOpen, openDetail, closeDetail } = useDetailNavigation();
 
@@ -19685,11 +19746,12 @@ function ArrearsView({ onAction, rentRowsList = rentRows, propertiesList = [], r
     <section className="client-list-workspace" data-demo="finance-arrears-workspace">
       <Panel title="Impayés & relances">
         <DataTable
-          columns={["Locataire", "Bien", "Propriétaire", "Montant dû", "Ancienneté", "Dernière relance", "Prochaine action", "Statut", "Actions"]}
+          columns={["Période impayée", "Locataire", "Bien", "Propriétaire", "Montant dû", "Ancienneté", "Dernière relance", "Prochaine action", "Statut", "Actions"]}
           rows={rows.map((row, index) => {
             const relance = getLatestRelanceForTenant(relancesList, row.tenant);
             const status = arrearsStatuses[getArrearsKey(row)] ?? relance?.status ?? (row.status === "Partiel" ? "Relancé" : "En retard");
             return [
+              row.period,
               row.tenant,
               row.property,
               row.owner,
@@ -19714,6 +19776,7 @@ function ArrearsProfilePanel({ row, onAction, status, promise, history = [] }) {
       <ProfileHeader person={{ name: row.tenant, id: row.property }} />
       <div className="simple-list">
         <p><span>Locataire</span><strong>{row.tenant}</strong></p>
+        <p><span>Période impayée</span><strong>{row.period}</strong></p>
         <p><span>Montant dû</span><strong>{row.balance}</strong></p>
         <p><span>Date de relance</span><strong>24/05/2026</strong></p>
         <p><span>Canal de relance</span><strong>SMS + appel</strong></p>

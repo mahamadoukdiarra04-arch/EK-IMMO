@@ -57,8 +57,9 @@ function ek_business_period_label(): string
         11 => 'Novembre',
         12 => 'Decembre',
     ];
-    $month = (int) date('n');
-    return ($months[$month] ?? 'Mois en cours') . ' ' . date('Y');
+    $now = new DateTimeImmutable('now', new DateTimeZone('Africa/Bamako'));
+    $month = (int) $now->format('n');
+    return ($months[$month] ?? 'Mois en cours') . ' ' . $now->format('Y');
 }
 
 function ek_business_index_by_name(array $items): array
@@ -250,11 +251,10 @@ function ek_business_normalized_payments(array $state, array $properties, array 
         $property = ek_business_property_by_name($properties, $propertyName);
         $tenantName = ek_business_text($payment['tenant'] ?? ($property['tenant'] ?? ''));
         $period = ek_business_text($payment['period'] ?? '') ?: ek_business_period_label();
-        $expected = $property ? ek_business_expected_rent($property, $tenants) : 0;
         $declaredDue = ek_business_money_to_int($payment['due'] ?? ($payment['expected'] ?? 0));
-        if ($expected <= 0) {
-            $expected = $declaredDue;
-        }
+        $expected = $declaredDue > 0
+            ? $declaredDue
+            : ($property ? ek_business_expected_rent($property, $tenants) : 0);
         $paid = ek_business_money_to_int($payment['paid'] ?? ($payment['amountNow'] ?? 0));
         $balance = max($expected - $paid, 0);
         $status = ek_business_payment_status($expected, $paid);
@@ -289,8 +289,8 @@ function ek_business_normalized_payments(array $state, array $properties, array 
 
 function ek_business_rent_rows(array $properties, array $tenants, array $payments): array
 {
-    $rows = [];
-    $period = ek_business_period_label();
+    $rowsByKey = [];
+    $currentPeriod = ek_business_period_label();
 
     foreach ($properties as $property) {
         if (!ek_business_is_rent_bearing($property)) {
@@ -302,19 +302,49 @@ function ek_business_rent_rows(array $properties, array $tenants, array $payment
             continue;
         }
         $propertyName = ek_business_text($property['name'] ?? '');
-        $relatedPayments = array_values(array_filter($payments, static function (array $payment) use ($propertyName, $tenantName): bool {
-            return ek_business_normalize(ek_business_text($payment['property'] ?? '')) === ek_business_normalize($propertyName)
-                && ek_business_normalize(ek_business_text($payment['tenant'] ?? '')) === ek_business_normalize($tenantName);
-        }));
-        $paid = array_reduce($relatedPayments, static fn(int $sum, array $payment): int => $sum + ek_business_money_to_int($payment['paid'] ?? 0), 0);
-        $rowPeriod = ek_business_text($relatedPayments[0]['period'] ?? '') ?: $period;
-        $balance = max($expected - $paid, 0);
-
-        $rows[] = [
-            'period' => $rowPeriod,
+        $row = [
+            'period' => $currentPeriod,
             'tenant' => $tenantName,
             'property' => $propertyName,
             'owner' => ek_business_text($property['owner'] ?? ''),
+            'expected' => ek_business_format_fcfa($expected),
+            'paid' => ek_business_format_fcfa(0),
+            'balance' => ek_business_format_fcfa($expected),
+            'status' => ek_business_payment_status($expected, 0),
+            'expectedValue' => $expected,
+            'paidValue' => 0,
+            'balanceValue' => $expected,
+        ];
+        $rowsByKey[ek_business_payment_key($row)] = $row;
+    }
+
+    foreach ($payments as $payment) {
+        if (empty($payment['serverValid'])) {
+            continue;
+        }
+
+        $propertyName = ek_business_text($payment['property'] ?? '');
+        $property = ek_business_property_by_name($properties, $propertyName);
+        if (!$property || !ek_business_is_agency_collected($property)) {
+            continue;
+        }
+
+        $tenantName = ek_business_text($payment['tenant'] ?? ($property['tenant'] ?? ''));
+        $period = ek_business_text($payment['period'] ?? '') ?: $currentPeriod;
+        $expected = ek_business_money_to_int($payment['expected'] ?? ($payment['due'] ?? 0));
+        if ($expected <= 0) {
+            $expected = ek_business_expected_rent($property, $tenants);
+        }
+        if ($expected <= 0) {
+            continue;
+        }
+        $paid = ek_business_money_to_int($payment['paid'] ?? 0);
+        $balance = max($expected - $paid, 0);
+        $row = [
+            'period' => $period,
+            'tenant' => $tenantName,
+            'property' => $propertyName,
+            'owner' => ek_business_text($payment['owner'] ?? ($property['owner'] ?? '')),
             'expected' => ek_business_format_fcfa($expected),
             'paid' => ek_business_format_fcfa($paid),
             'balance' => ek_business_format_fcfa($balance),
@@ -323,9 +353,10 @@ function ek_business_rent_rows(array $properties, array $tenants, array $payment
             'paidValue' => $paid,
             'balanceValue' => $balance,
         ];
+        $rowsByKey[ek_business_payment_key($row)] = $row;
     }
 
-    return $rows;
+    return array_values($rowsByKey);
 }
 
 function ek_business_charge_key(array $charge): string
