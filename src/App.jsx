@@ -11097,6 +11097,11 @@ function DashboardPage({ currentUser = users[0], onAction, onOpenProperty, prope
   const customPeriodError = kpiPeriod === "Période personnalisée" && customStartDate && customEndDate && customStartDate > customEndDate
     ? "La date de fin doit être postérieure ou égale à la date de début."
     : "";
+  const resetDashboardPeriod = () => {
+    setKpiPeriod("Mois");
+    setCustomStartDate("");
+    setCustomEndDate("");
+  };
   const dashboardPeriodRecords = useMemo(
     () => getDashboardPeriodRecords({
       propertiesList,
@@ -11138,6 +11143,7 @@ function DashboardPage({ currentUser = users[0], onAction, onOpenProperty, prope
             period={kpiPeriod}
             onPeriod={setKpiPeriod}
             periodLabel={dashboardPeriodLabel}
+            onReset={resetDashboardPeriod}
             customStartDate={customStartDate}
             customEndDate={customEndDate}
             onCustomStartDate={setCustomStartDate}
@@ -21400,7 +21406,7 @@ function StatCard({ item }) {
   );
 }
 
-function DashboardFilterBar({ period, onPeriod, periodLabel = "", customStartDate = "", customEndDate = "", onCustomStartDate, onCustomEndDate, customPeriodError = "" }) {
+function DashboardFilterBar({ period, onPeriod, periodLabel = "", onReset, customStartDate = "", customEndDate = "", onCustomStartDate, onCustomEndDate, customPeriodError = "" }) {
   return (
     <section className="dashboard-filter-bar">
       <Filter size={17} />
@@ -21427,6 +21433,9 @@ function DashboardFilterBar({ period, onPeriod, periodLabel = "", customStartDat
           {customPeriodError && <small className="custom-period-error">{customPeriodError}</small>}
         </div>
       )}
+      <Button compact onClick={onReset} title="Revenir à la période mensuelle par défaut" aria-label="Réinitialiser le filtre du tableau de bord">
+        <RefreshCw size={15} /> Réinitialiser
+      </Button>
     </section>
   );
 }
