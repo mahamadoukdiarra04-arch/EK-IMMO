@@ -86,3 +86,4 @@ jobs:
           password: ${{ secrets.HOSTINGER_FTP_PASSWORD }}
           local-dir: ./dist/
           server-dir: /domains/ekimmo.pro/public_html/
+          timeout: 120000
