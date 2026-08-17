@@ -3283,6 +3283,40 @@ function getDashboardPeriodWindow(period, referenceDate, customStart = "", custo
   return { start: new Date(Date.UTC(year, month, 1)), end: new Date(Date.UTC(year, month + 1, 0)) };
 }
 
+function formatDashboardDate(date, options = {}) {
+  if (!date || Number.isNaN(date.getTime())) return "Date à préciser";
+  return new Intl.DateTimeFormat("fr-FR", { timeZone: "UTC", ...options }).format(date);
+}
+
+function capitalizeDashboardLabel(value) {
+  const text = String(value ?? "");
+  return text ? `${text.charAt(0).toUpperCase()}${text.slice(1)}` : text;
+}
+
+function formatDashboardPeriodLabel(period, window) {
+  if (!window) return `${period} — Dates à compléter`;
+
+  const normalizedPeriod = normalizeSearch(period);
+  if (normalizedPeriod.startsWith("jour")) {
+    return `Jour — ${capitalizeDashboardLabel(formatDashboardDate(window.start, { day: "numeric", month: "long", year: "numeric" }))}`;
+  }
+  if (normalizedPeriod.startsWith("semaine")) {
+    const start = formatDashboardDate(window.start, { day: "numeric", month: "long" });
+    const end = formatDashboardDate(window.end, { day: "numeric", month: "long", year: "numeric" });
+    return `Semaine — du ${start} au ${end}`;
+  }
+  if (normalizedPeriod.includes("annee")) {
+    return `Année — ${window.start.getUTCFullYear()}`;
+  }
+  if (normalizedPeriod.includes("personnalise")) {
+    const start = formatDashboardDate(window.start, { day: "2-digit", month: "2-digit", year: "numeric" });
+    const end = formatDashboardDate(window.end, { day: "2-digit", month: "2-digit", year: "numeric" });
+    return `Période personnalisée — ${start} au ${end}`;
+  }
+
+  return `Mois — ${capitalizeDashboardLabel(formatDashboardDate(window.start, { month: "long", year: "numeric" }))}`;
+}
+
 function isDashboardDateInWindow(date, window) {
   if (!date || !window) return false;
   return date >= window.start && date <= window.end;
@@ -11063,6 +11097,21 @@ function DashboardPage({ currentUser = users[0], onAction, onOpenProperty, prope
   const customPeriodError = kpiPeriod === "Période personnalisée" && customStartDate && customEndDate && customStartDate > customEndDate
     ? "La date de fin doit être postérieure ou égale à la date de début."
     : "";
+  const dashboardPeriodRecords = useMemo(
+    () => getDashboardPeriodRecords({
+      propertiesList,
+      period: kpiPeriod,
+      startDate: customStartDate,
+      endDate: customEndDate,
+      rentRowsList,
+      paymentsList,
+      chargesList,
+      commissionsList,
+      reversalsList,
+    }),
+    [chargesList, commissionsList, customEndDate, customStartDate, kpiPeriod, paymentsList, propertiesList, rentRowsList, reversalsList]
+  );
+  const dashboardPeriodLabel = formatDashboardPeriodLabel(kpiPeriod, dashboardPeriodRecords.window);
   const dashboardProfile = useMemo(
     () => buildDashboardProfile(currentUser, propertiesList, kpiPeriod, {
       rentRowsList,
@@ -11088,6 +11137,7 @@ function DashboardPage({ currentUser = users[0], onAction, onOpenProperty, prope
           <DashboardFilterBar
             period={kpiPeriod}
             onPeriod={setKpiPeriod}
+            periodLabel={dashboardPeriodLabel}
             customStartDate={customStartDate}
             customEndDate={customEndDate}
             onCustomStartDate={setCustomStartDate}
@@ -21350,11 +21400,12 @@ function StatCard({ item }) {
   );
 }
 
-function DashboardFilterBar({ period, onPeriod, customStartDate = "", customEndDate = "", onCustomStartDate, onCustomEndDate, customPeriodError = "" }) {
+function DashboardFilterBar({ period, onPeriod, periodLabel = "", customStartDate = "", customEndDate = "", onCustomStartDate, onCustomEndDate, customPeriodError = "" }) {
   return (
     <section className="dashboard-filter-bar">
       <Filter size={17} />
       <DashboardSelect value={period} onChange={onPeriod} options={periodOptions} ariaLabel="Période des blocs du dashboard" />
+      <span className="dashboard-period-context" aria-live="polite">{periodLabel}</span>
       {period === "Période personnalisée" && (
         <div className="custom-period">
           <input

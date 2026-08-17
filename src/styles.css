@@ -1171,6 +1171,22 @@ a {
   pointer-events: none;
 }
 
+.dashboard-period-context {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  max-width: min(340px, 42vw);
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--muted);
+  background: var(--surface);
+  font-size: 0.82rem;
+  font-weight: 760;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
 .custom-period {
   display: inline-flex;
   align-items: center;
@@ -8334,6 +8350,12 @@ td:last-child {
   .dashboard-filter-bar .dashboard-select {
     width: auto;
     min-width: 154px;
+  }
+
+  .dashboard-period-context {
+    max-width: min(100%, 360px);
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .custom-period input {
