@@ -4226,13 +4226,14 @@ function makeMaintenanceCharge(maintenance, sequence = 1, propertiesList = []) {
 
 function getPaymentReceiptValues(payment) {
   const isMobileMoney = ["Orange Money", "Moov Money"].includes(payment.mode);
+  const linkedTenant = tenants.find((tenant) => tenant.name === payment.tenant);
 
   return {
     numero: payment.receipt,
     date: payment.date,
-    nom: payment.tenant,
+    nom: payment.receiptName ?? payment.nom ?? payment.tenant ?? "",
     structure: payment.property,
-    telephone: tenants.find((tenant) => tenant.name === payment.tenant)?.phone ?? "+223 72 77 71 77",
+    telephone: payment.receiptPhone ?? payment.telephone ?? linkedTenant?.phone ?? "",
     montantChiffres: payment.amountNow ?? payment.paid,
     montantLettres: "Montant encaissé pour loyer en francs CFA",
     espece: payment.mode === "Espèces",
@@ -8665,7 +8666,12 @@ function App() {
     }
 
     if (action === "link") {
-      const linkedPayment = { ...payment, receipt: receiptNumber };
+      const linkedPayment = {
+        ...payment,
+        receipt: receiptNumber,
+        receiptName: values.nom ?? "",
+        receiptPhone: values.telephone ?? "",
+      };
       setRecordedPayments((current) => {
         const existingIndex = current.findIndex((item) => getPaymentKey(item) === getPaymentKey(payment));
         if (existingIndex >= 0) return current.map((item, index) => (index === existingIndex ? linkedPayment : item));
@@ -23837,7 +23843,8 @@ function FinanceReceiptModal({ payment, printOnOpen = false, paymentsList = paym
             <div className="form-grid compact-form">
               <label>Numéro<input value={values.numero} onChange={(event) => update("numero", event.target.value)} /></label>
               <label>Date<input value={values.date} onChange={(event) => update("date", event.target.value)} /></label>
-              <label>Nom<input value={values.nom} onChange={(event) => update("nom", event.target.value)} /></label>
+              <label>Nom et prénom sur le reçu<input value={values.nom} onChange={(event) => update("nom", event.target.value)} /></label>
+              <label>Téléphone sur le reçu<input type="tel" value={values.telephone} onChange={(event) => update("telephone", event.target.value)} /></label>
               <label>Montant<MoneyInput value={values.montantChiffres} onChange={(value) => update("montantChiffres", value)} /></label>
               <label className="full">Objet<textarea value={values.objet} onChange={(event) => update("objet", event.target.value)} /></label>
             </div>
@@ -24404,6 +24411,8 @@ function TenantPaymentModal({ tenant, property, row, payment, paymentsList = pay
     date: toDateInputValue(initialPayment?.date),
     note: initialPayment?.note ?? `Paiement enregistré depuis la fiche locataire ${tenant.name}.`,
     receiptChoice: initialPayment?.receipt && initialPayment.receipt !== "Non généré" ? "Oui" : "Oui",
+    receiptName: initialPayment?.receiptName ?? initialPayment?.nom ?? tenant.name ?? "",
+    receiptPhone: initialPayment?.receiptPhone ?? initialPayment?.telephone ?? tenant.phone ?? "",
   });
   const dueAmount = parseFCFA(values.due);
   const paidAmount = parseFCFA(values.paid);
@@ -24431,6 +24440,8 @@ function TenantPaymentModal({ tenant, property, row, payment, paymentsList = pay
       paymentRef: values.paymentRef,
       date: fromDateInputValue(values.date),
       receipt: shouldGenerateReceipt ? receiptNumber : "Non généré",
+      receiptName: values.receiptName,
+      receiptPhone: values.receiptPhone,
       status,
       note: values.note,
     });
@@ -24462,6 +24473,8 @@ function TenantPaymentModal({ tenant, property, row, payment, paymentsList = pay
             <label>Référence<input value={values.paymentRef} onChange={(event) => update("paymentRef", event.target.value)} /></label>
             <label>Date<input type="date" value={values.date} onChange={(event) => update("date", event.target.value)} /></label>
             <label>Générer reçu<select value={values.receiptChoice} onChange={(event) => update("receiptChoice", event.target.value)}><option>Oui</option><option>Non</option></select></label>
+            <label>Nom et prénom sur le reçu<input value={values.receiptName} onChange={(event) => update("receiptName", event.target.value)} /></label>
+            <label>Téléphone sur le reçu<input type="tel" value={values.receiptPhone} onChange={(event) => update("receiptPhone", event.target.value)} /></label>
             <label className="full">Observation<textarea value={values.note} onChange={(event) => update("note", event.target.value)} /></label>
           </div>
         </div>
@@ -24513,6 +24526,8 @@ function TenantReceiptModal({ tenant, property, payment, paymentsList = paymentR
     period: selectedPayment.period,
     amount: selectedPayment.amountNow ?? selectedPayment.paid,
     mode: selectedPayment.mode,
+    receiptName: selectedPayment.receiptName ?? selectedPayment.nom ?? tenant.name ?? "",
+    receiptPhone: selectedPayment.receiptPhone ?? selectedPayment.telephone ?? tenant.phone ?? "",
     template: "Reçu d'encaissement E.K immo",
   });
   const [preview, setPreview] = useState(false);
@@ -24523,6 +24538,8 @@ function TenantReceiptModal({ tenant, property, payment, paymentsList = paymentR
       period: selectedPayment.period,
       amount: selectedPayment.amountNow ?? selectedPayment.paid,
       mode: selectedPayment.mode,
+      receiptName: selectedPayment.receiptName ?? selectedPayment.nom ?? tenant.name ?? "",
+      receiptPhone: selectedPayment.receiptPhone ?? selectedPayment.telephone ?? tenant.phone ?? "",
       template: "Reçu d'encaissement E.K immo",
     });
     setArchived(archivedReceipts.some((item) => item.numero === selectedPayment.receipt));
@@ -24535,6 +24552,8 @@ function TenantReceiptModal({ tenant, property, payment, paymentsList = paymentR
     paid: values.amount,
     amountNow: values.amount,
     mode: values.mode,
+    receiptName: values.receiptName,
+    receiptPhone: values.receiptPhone,
     receipt: selectedPayment.receipt && selectedPayment.receipt !== "Non généré" ? selectedPayment.receipt : getNextDocumentNumber("REC", [paymentsList, selectedPayment, archivedReceipts]),
   });
 
@@ -24575,6 +24594,8 @@ function TenantReceiptModal({ tenant, property, payment, paymentsList = paymentR
               <label>Période<input value={values.period} onChange={(event) => update("period", event.target.value)} /></label>
               <label>Montant<MoneyInput value={values.amount} onChange={(value) => update("amount", value)} /></label>
               <label>Mode de paiement<select value={values.mode} onChange={(event) => update("mode", event.target.value)}>{paymentModes.map((mode) => <option key={mode}>{mode}</option>)}</select></label>
+              <label>Nom et prénom sur le reçu<input value={values.receiptName} onChange={(event) => update("receiptName", event.target.value)} /></label>
+              <label>Téléphone sur le reçu<input type="tel" value={values.receiptPhone} onChange={(event) => update("receiptPhone", event.target.value)} /></label>
               <label className="full">Modèle de reçu<select value={values.template} onChange={(event) => update("template", event.target.value)}><option>Reçu d'encaissement E.K immo</option><option>Reçu mobile money</option><option>Reçu locatif standard</option></select></label>
             </div>
           </Panel>
@@ -25556,6 +25577,7 @@ function PaymentRegistrationModal({ context, paymentsList = paymentRecords, rent
     };
   const initialPayment = contextPayment
     ?? paymentsList.find((payment) => payment.property === initialRow.property && payment.tenant === initialRow.tenant && payment.period === initialRow.period);
+  const tenant = tenantsList.find((item) => item.name === initialTenant);
   const [period, setPeriod] = useState(initialRow.period);
   const [expected, setExpected] = useState(initialPayment?.due ?? initialRow.expected ?? initialProperty.price);
   const [alreadyPaid, setAlreadyPaid] = useState(initialPayment?.paid ?? initialRow.paid ?? "0 FCFA");
@@ -25565,6 +25587,8 @@ function PaymentRegistrationModal({ context, paymentsList = paymentRecords, rent
   const [paymentDate, setPaymentDate] = useState(initialPayment?.date ?? "18/06/2026");
   const [note, setNote] = useState(initialPayment?.note ?? "Paiement enregistré depuis la fiche métier E.K immo.");
   const [autoReceipt, setAutoReceipt] = useState(true);
+  const [receiptName, setReceiptName] = useState(initialPayment?.receiptName ?? initialPayment?.nom ?? initialTenant ?? "");
+  const [receiptPhone, setReceiptPhone] = useState(initialPayment?.receiptPhone ?? initialPayment?.telephone ?? tenant?.phone ?? "");
   const expectedAmount = parseFCFA(expected);
   const alreadyPaidAmount = parseFCFA(alreadyPaid);
   const paidNowAmount = parseFCFA(paidNow);
@@ -25573,7 +25597,6 @@ function PaymentRegistrationModal({ context, paymentsList = paymentRecords, rent
   const totalPaid = formatFCFA(totalPaidAmount);
   const remaining = formatFCFA(remainingAmount);
   const status = getPaymentStatus(expected, totalPaid);
-  const tenant = tenantsList.find((item) => item.name === initialTenant);
   const receiptNumber = initialPayment?.receipt && initialPayment.receipt !== "Non généré"
     ? initialPayment.receipt
     : getNextDocumentNumber("REC", [paymentsList, initialPayment]);
@@ -25594,6 +25617,8 @@ function PaymentRegistrationModal({ context, paymentsList = paymentRecords, rent
       paymentRef,
       date: paymentDate,
       receipt: shouldGenerateReceipt ? receiptNumber : "Non généré",
+      receiptName,
+      receiptPhone,
       status,
       note,
     };
@@ -25652,6 +25677,12 @@ function PaymentRegistrationModal({ context, paymentsList = paymentRecords, rent
                   <small>{receiptNumber} · avec case Mobile Money pour Orange Money et Moov Money.</small>
                 </span>
               </label>
+              {autoReceipt && (
+                <div className="form-grid compact-form receipt-contact-fields">
+                  <label>Nom et prénom sur le reçu<input value={receiptName} onChange={(event) => setReceiptName(event.target.value)} /></label>
+                  <label>Téléphone sur le reçu<input type="tel" value={receiptPhone} onChange={(event) => setReceiptPhone(event.target.value)} /></label>
+                </div>
+              )}
             </div>
           </>
         )}
