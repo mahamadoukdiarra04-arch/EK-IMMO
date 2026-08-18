@@ -15290,10 +15290,10 @@ function getPdfTextLines(template, values = {}) {
     "",
   ];
   Object.entries(values)
-    .filter(([, value]) => ["string", "number", "boolean"].includes(typeof value))
+    .filter(([, value]) => ["string", "number"].includes(typeof value) || value === true)
     .slice(0, 32)
     .forEach(([key, value]) => {
-      lines.push(`${key}: ${String(value).replace(/\n/g, " / ")}`);
+      lines.push(`${key}: ${value === true ? "Oui" : String(value).replace(/\n/g, " / ")}`);
     });
   return lines;
 }
@@ -15379,11 +15379,11 @@ function getServerPdfTable(values = {}) {
 
 function buildServerPdfPayload(template, values = {}, fileName) {
   const primitiveFields = Object.entries(values)
-    .filter(([, value]) => ["string", "number", "boolean"].includes(typeof value))
+    .filter(([, value]) => ["string", "number"].includes(typeof value) || value === true)
     .slice(0, 42)
     .map(([key, value]) => ({
       label: humanizeDocumentField(key),
-      value: String(value).replace(/\n/g, " / "),
+      value: value === true ? "Oui" : String(value).replace(/\n/g, " / "),
     }));
 
   return {
